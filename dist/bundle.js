@@ -907,6 +907,10 @@
 
     this.store.subscribe(function () { self.dirty = true; self._requestRender(); });
     window.addEventListener('resize', function () { self._resize(); self._requestRender(); });
+    if (typeof ResizeObserver !== 'undefined') {
+      var wrap = this.canvas.parentElement;
+      if (wrap) new ResizeObserver(function () { self._resize(); self._requestRender(); }).observe(wrap);
+    }
     window.addEventListener('keydown', function (e) { self._onKey(e); });
     this._resize();
     this._bindUi();
@@ -950,10 +954,10 @@
     var dpr = window.devicePixelRatio || 1;
     var wrap = this.canvas.parentElement;
     var rect = wrap.getBoundingClientRect();
-    this.canvas.style.width = rect.width + 'px';
-    this.canvas.style.height = rect.height + 'px';
-    this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    var w = Math.max(1, Math.round(rect.width * dpr));
+    var h = Math.max(1, Math.round(rect.height * dpr));
+    if (this.canvas.width !== w) this.canvas.width = w;
+    if (this.canvas.height !== h) this.canvas.height = h;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.view.resize(rect.width, rect.height, dpr);
     if (this.view.scale === 1 && this.view.offset.x === 0 && this.view.offset.y === 0) {

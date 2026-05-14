@@ -59,6 +59,13 @@ export class App {
 
     this.store.subscribe(() => { this.dirty = true; this.requestRender(); });
     window.addEventListener('resize', () => { this.resize(); this.requestRender(); });
+    // ResizeObserver catches container resizes that don't trigger window
+    // resize (e.g. header wrapping on narrow widths). Keeps the canvas buffer
+    // sized to the container so no gap appears below it.
+    if (typeof ResizeObserver !== 'undefined') {
+      const wrap = this.canvas.parentElement;
+      if (wrap) new ResizeObserver(() => { this.resize(); this.requestRender(); }).observe(wrap);
+    }
     window.addEventListener('keydown', (e) => this.onKey(e));
     this.resize();
     this.bindUi();
@@ -116,10 +123,12 @@ export class App {
     const dpr = window.devicePixelRatio || 1;
     const wrap = this.canvas.parentElement as HTMLElement;
     const rect = wrap.getBoundingClientRect();
-    this.canvas.style.width = rect.width + 'px';
-    this.canvas.style.height = rect.height + 'px';
-    this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+    // CSS keeps the canvas display size at 100% of the wrap (inset:0 in
+    // index.html), so we only need to size the bitmap buffer here.
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    if (this.canvas.width !== w) this.canvas.width = w;
+    if (this.canvas.height !== h) this.canvas.height = h;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.view.resize(rect.width, rect.height, dpr);
   }
