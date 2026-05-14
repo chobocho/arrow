@@ -1076,7 +1076,7 @@
       getThickness: function () { return self.thickness; },
       getFontSize: function () { return self.fontSize; },
       onChange: function () { self._requestRender(); },
-      onSelect: function (id) { self.selectedId = id; self._updateSelectionUi(); },
+      onSelect: function (id) { self.selectedId = id; self._updateSelectionUi(); self._syncFontInputToSelection(); },
       onDoubleClickEmpty: function () {
         customPrompt(t('promptCenter'), self.store.get().centerText).then(function (txt) {
           if (txt !== null) self.store.setCenterText(txt);
@@ -1090,7 +1090,7 @@
       onDraftChange: function (d) { self.draftArrow = d; }
     });
 
-    this.store.subscribe(function () { self.dirty = true; self._requestRender(); });
+    this.store.subscribe(function () { self.dirty = true; self._syncFontInputToSelection(); self._requestRender(); });
     window.addEventListener('resize', function () { self._resize(); self._requestRender(); });
     if (typeof ResizeObserver !== 'undefined') {
       var wrap = this.canvas.parentElement;
@@ -1127,6 +1127,23 @@
   App.prototype._syncCenterFontInput = function () {
     var el = document.getElementById('inputCenterFontSize');
     if (el) el.value = String(this.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
+  };
+  App.prototype._getSelectedObject = function () {
+    if (!this.selectedId) return null;
+    var objs = this.store.get().objects;
+    for (var i = 0; i < objs.length; i++) {
+      if (objs[i].id === this.selectedId) return objs[i];
+    }
+    return null;
+  };
+  // Mirror the font-size input to the selected text's size so the user sees
+  // the current value and edits it in place; otherwise show the default.
+  App.prototype._syncFontInputToSelection = function () {
+    var el = document.getElementById('inputFontSize');
+    if (!el) return;
+    var sel = this._getSelectedObject();
+    if (sel && sel.type === 'text') el.value = String(sel.fontSize);
+    else el.value = String(this.fontSize);
   };
   App.prototype._requestRender = function () {
     if (this.renderScheduled) return;
@@ -1194,7 +1211,18 @@
     thickEl.addEventListener('input', function () { self.thickness = parseFloat(thickEl.value) || 4; });
     var fontEl = byId('inputFontSize');
     fontEl.value = String(this.fontSize);
-    fontEl.addEventListener('input', function () { self.fontSize = parseFloat(fontEl.value) || 28; });
+    fontEl.addEventListener('input', function () {
+      var n = parseFloat(fontEl.value);
+      if (!isFinite(n)) return;
+      var sel = self._getSelectedObject();
+      if (sel && sel.type === 'text') {
+        self.store.update(sel.id, function (o) {
+          if (o.type === 'text') o.fontSize = Math.max(8, Math.min(200, n));
+        });
+      } else {
+        self.fontSize = n || 28;
+      }
+    });
     var centerFontEl = byId('inputCenterFontSize');
     centerFontEl.value = String(this.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
     centerFontEl.addEventListener('input', function () {

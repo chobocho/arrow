@@ -43,7 +43,7 @@ export class App {
       getThickness: () => this.thickness,
       getFontSize: () => this.fontSize,
       onChange: () => this.requestRender(),
-      onSelect: (id) => { this.selectedId = id; this.updateSelectionUi(); },
+      onSelect: (id) => { this.selectedId = id; this.updateSelectionUi(); this.syncFontInputToSelection(); },
       onDoubleClickEmpty: () => {
         void customPrompt(t('promptCenter'), this.store.get().centerText).then((txt) => {
           if (txt !== null) this.store.setCenterText(txt);
@@ -57,7 +57,7 @@ export class App {
       onDraftChange: (draft) => { this.draftArrow = draft; },
     });
 
-    this.store.subscribe(() => { this.dirty = true; this.requestRender(); });
+    this.store.subscribe(() => { this.dirty = true; this.syncFontInputToSelection(); this.requestRender(); });
     window.addEventListener('resize', () => { this.resize(); this.requestRender(); });
     // ResizeObserver catches container resizes that don't trigger window
     // resize (e.g. header wrapping on narrow widths). Keeps the canvas buffer
@@ -105,6 +105,22 @@ export class App {
   private syncCenterFontInput(): void {
     const el = document.getElementById('inputCenterFontSize') as HTMLInputElement | null;
     if (el) el.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
+  }
+
+  private getSelectedObject() {
+    if (!this.selectedId) return null;
+    return this.store.get().objects.find((o) => o.id === this.selectedId) || null;
+  }
+
+  // When the selection changes, mirror the font-size input to the selected
+  // text's size so the user sees the current value and edits it in place.
+  // For non-text selections, fall back to the default for new text.
+  private syncFontInputToSelection(): void {
+    const el = document.getElementById('inputFontSize') as HTMLInputElement | null;
+    if (!el) return;
+    const sel = this.getSelectedObject();
+    if (sel && sel.type === 'text') el.value = String(sel.fontSize);
+    else el.value = String(this.fontSize);
   }
 
   // --- Rendering ---
@@ -180,7 +196,17 @@ export class App {
     thickEl.addEventListener('input', () => { this.thickness = parseFloat(thickEl.value) || 4; });
     const fontEl = $('#inputFontSize') as HTMLInputElement;
     fontEl.value = String(this.fontSize);
-    fontEl.addEventListener('input', () => { this.fontSize = parseFloat(fontEl.value) || 28; });
+    fontEl.addEventListener('input', () => {
+      const n = parseFloat(fontEl.value);
+      if (!Number.isFinite(n)) return;
+      const sel = this.getSelectedObject();
+      if (sel && sel.type === 'text') {
+        // Resize the currently selected text instead of changing the default.
+        this.store.update(sel.id, (o) => { if (o.type === 'text') o.fontSize = Math.max(8, Math.min(200, n)); });
+      } else {
+        this.fontSize = n || 28;
+      }
+    });
     const centerFontEl = $('#inputCenterFontSize') as HTMLInputElement;
     centerFontEl.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
     centerFontEl.addEventListener('input', () => {
