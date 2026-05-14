@@ -529,6 +529,7 @@ export class App {
 
   private onKey(e: KeyboardEvent): void {
     if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
+    if (this.worksModalEl) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (this.selectedId) {
         e.preventDefault();
@@ -537,6 +538,9 @@ export class App {
     } else if (e.key === 'Insert') {
       e.preventDefault();
       this.insertArrow();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      this.insertTextAtViewportCenter();
     } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       void this.save();
@@ -544,6 +548,19 @@ export class App {
     else if (e.key === 't') this.setMode('text');
     else if (e.key === 'v') this.setMode('select');
     else if (e.key === 'h') this.setMode('pan');
+  }
+
+  // Opens the text-input modal and places the typed text at the current
+  // viewport center. Bound to Enter for keyboard-driven text entry.
+  private insertTextAtViewportCenter(): void {
+    const center = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });
+    void customPrompt(t('promptText'), '').then((text) => {
+      if (!text || !text.trim()) return;
+      const obj = this.store.addText(center, text.trim(), this.fontSize, this.color);
+      this.selectedId = obj.id;
+      this.input.setSelected(obj.id);
+      this.setMode('select');
+    });
   }
 
   // Adds a horizontal arrow positioned to the upper-right of any existing

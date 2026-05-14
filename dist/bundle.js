@@ -1360,11 +1360,15 @@
   App.prototype._onKey = function (e) {
     var target = e.target;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
+    if (this._worksModalEl) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (this.selectedId) { e.preventDefault(); this._deleteSelected(); }
     } else if (e.key === 'Insert') {
       e.preventDefault();
       this._insertArrow();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      this._insertTextAtViewportCenter();
     } else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       this._save();
@@ -1372,6 +1376,19 @@
     else if (e.key === 't' || e.key === 'T') this.setMode('text');
     else if (e.key === 'v' || e.key === 'V') this.setMode('select');
     else if (e.key === 'h' || e.key === 'H') this.setMode('pan');
+  };
+  // Opens the text-input modal and places the typed text at the current
+  // viewport center. Bound to Enter for keyboard-driven text entry.
+  App.prototype._insertTextAtViewportCenter = function () {
+    var self = this;
+    var center = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });
+    customPrompt(t('promptText'), '').then(function (text) {
+      if (!text || !text.trim()) return;
+      var obj = self.store.addText(center, text.trim(), self.fontSize, self.color);
+      self.selectedId = obj.id;
+      self.input.setSelected(obj.id);
+      self.setMode('select');
+    });
   };
   // Adds a horizontal arrow positioned to the upper-right of any existing
   // arrows so consecutive Insert presses stagger outward. When no arrows
