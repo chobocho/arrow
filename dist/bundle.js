@@ -1157,6 +1157,9 @@
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (this.selectedId) { e.preventDefault(); this._deleteSelected(); }
+    } else if (e.key === 'Insert') {
+      e.preventDefault();
+      this._insertArrowAtViewportCenter();
     } else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       this._save();
@@ -1164,6 +1167,21 @@
     else if (e.key === 't' || e.key === 'T') this.setMode('text');
     else if (e.key === 'v' || e.key === 'V') this.setMode('select');
     else if (e.key === 'h' || e.key === 'H') this.setMode('pan');
+  };
+  // Adds a horizontal arrow at the current viewport center. Length scales with
+  // the visible area so the new arrow is always noticeable regardless of zoom.
+  App.prototype._insertArrowAtViewportCenter = function () {
+    var view = this.view;
+    var centerLogical = view.screenToLogical({ x: view.width / 2, y: view.height / 2 });
+    var visibleLogicalW = view.width / view.scale;
+    var lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
+    var from = { x: centerLogical.x - lengthLogical / 2, y: centerLogical.y };
+    var to = { x: centerLogical.x + lengthLogical / 2, y: centerLogical.y };
+    var created = this.store.addArrow(from, to, this.color, this.thickness);
+    this.selectedId = created.id;
+    this.input.setSelected(created.id);
+    this.setMode('select');
+    this._flashStatus('+ arrow');
   };
   App.prototype._flashStatus = function (msg) {
     var el = document.getElementById('statusBar');

@@ -437,6 +437,9 @@ export class App {
         e.preventDefault();
         this.deleteSelected();
       }
+    } else if (e.key === 'Insert') {
+      e.preventDefault();
+      this.insertArrowAtViewportCenter();
     } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       void this.save();
@@ -444,6 +447,21 @@ export class App {
     else if (e.key === 't') this.setMode('text');
     else if (e.key === 'v') this.setMode('select');
     else if (e.key === 'h') this.setMode('pan');
+  }
+
+  // Adds a horizontal arrow at the current viewport center. Length scales with
+  // the visible area so the new arrow is always noticeable regardless of zoom.
+  private insertArrowAtViewportCenter(): void {
+    const centerLogical = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });
+    const visibleLogicalW = this.view.width / this.view.scale;
+    const lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
+    const from: Vec = { x: centerLogical.x - lengthLogical / 2, y: centerLogical.y };
+    const to: Vec = { x: centerLogical.x + lengthLogical / 2, y: centerLogical.y };
+    const created = this.store.addArrow(from, to, this.color, this.thickness);
+    this.selectedId = created.id;
+    this.input.setSelected(created.id);
+    this.setMode('select');
+    this.flashStatus('+ arrow');
   }
 
   private flashStatus(msg: string): void {
