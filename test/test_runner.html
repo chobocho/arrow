@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>화살표 마인드맵 - 테스트 러너</title>
+<style>
+  body { font-family: monospace; padding: 20px; background: #111; color: #ddd; }
+  h1 { color: #fff; }
+  .test-pass { color: #5cf28b; }
+  .test-fail { color: #ff7a7a; }
+  .summary { margin-top: 18px; padding: 10px; border-top: 1px solid #555; }
+  .summary.ok { color: #5cf28b; }
+  .summary.bad { color: #ff7a7a; }
+  #app, canvas { display: none; }
+</style>
+</head>
+<body>
+<h1>화살표 마인드맵 - 단위 테스트</h1>
+<div id="app">
+  <canvas id="mainCanvas"></canvas>
+  <span id="titleName"></span><span id="worksTitle"></span>
+  <span id="labelColor"></span><span id="labelThickness"></span><span id="labelFontSize"></span>
+  <button id="btnSelect"></button><button id="btnArrow"></button>
+  <button id="btnText"></button><button id="btnPan"></button>
+  <button id="btnSave"></button><button id="btnSaveAs"></button>
+  <button id="btnNew"></button><button id="btnExportPng"></button>
+  <button id="btnExportJson"></button><button id="btnImportJson"></button>
+  <button id="btnLang"></button><button id="btnEditCenter"></button>
+  <button id="btnDelete"></button>
+  <button id="btnZoomIn"></button><button id="btnZoomOut"></button><button id="btnFit"></button>
+  <input id="inputColor" type="color" /><input id="inputThickness" type="number" /><input id="inputFontSize" type="number" />
+  <input id="fileImport" type="file" />
+  <ul id="worksList"></ul>
+  <div id="statusBar"></div>
+</div>
+<pre id="results"></pre>
+<script src="../dist/bundle.js"></script>
+<script src="test_arrow.js"></script>
+</body>
+</html>

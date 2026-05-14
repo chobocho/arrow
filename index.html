@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>화살표 마인드맵</title>
+<style>
+  :root {
+    --bg: #f6f6f9;
+    --panel: #ffffff;
+    --border: #e2e2ea;
+    --accent: #3a7afe;
+    --accent-2: #ffd166;
+    --text: #222;
+    --muted: #777;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+  }
+  #app {
+    display: grid;
+    grid-template-columns: 1fr 240px;
+    grid-template-rows: 48px 1fr;
+    height: 100%;
+    width: 100%;
+  }
+  header {
+    grid-column: 1 / span 2;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  header .title { font-weight: 700; margin-right: 8px; white-space: nowrap; }
+  header .title #titleName { color: var(--muted); font-weight: 500; margin-left: 6px; }
+  header .group { display: flex; gap: 4px; align-items: center; }
+  header .spacer { flex: 1; }
+  button.tool {
+    appearance: none; border: 1px solid var(--border); background: #fff;
+    color: var(--text); padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; white-space: nowrap;
+  }
+  button.tool:hover { background: #f0f3ff; }
+  button.tool.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.tool[disabled] { opacity: 0.4; cursor: not-allowed; }
+  label.field { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+  label.field input[type=number], label.field input[type=color] {
+    width: 56px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;
+  }
+  label.field input[type=color] { width: 30px; height: 26px; padding: 0; }
+  #canvasWrap {
+    position: relative;
+    background: #fafafa;
+    overflow: hidden;
+    touch-action: none;
+  }
+  canvas#mainCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    cursor: crosshair;
+    display: block;
+  }
+  body[data-mode="select"] canvas#mainCanvas { cursor: default; }
+  body[data-mode="pan"] canvas#mainCanvas { cursor: grab; }
+  body[data-mode="text"] canvas#mainCanvas { cursor: text; }
+  aside.sidebar {
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  aside.sidebar h3 { margin: 0; padding: 10px 12px; font-size: 13px; border-bottom: 1px solid var(--border); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  ul#worksList { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; }
+  ul#worksList li {
+    display: flex; align-items: center; gap: 4px;
+    padding: 6px 10px; border-bottom: 1px solid #f1f1f5;
+    font-size: 13px;
+  }
+  ul#worksList li.current { background: #f0f5ff; }
+  ul#worksList .work-name { flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ul#worksList button { background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 2px 6px; font-size: 13px; }
+  ul#worksList button:hover { color: var(--accent); }
+  #statusBar {
+    position: absolute;
+    bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.75); color: #fff;
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+  }
+  #statusBar.visible { opacity: 1; }
+  @media (max-width: 720px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr 140px; }
+    aside.sidebar { border-left: none; border-top: 1px solid var(--border); }
+    aside.sidebar h3 { padding: 6px 12px; }
+    header { flex-wrap: wrap; height: auto; padding: 6px; }
+    button.tool { font-size: 12px; padding: 5px 8px; }
+  }
+</style>
+</head>
+<body data-mode="select">
+<div id="app">
+  <header>
+    <div class="title">🎯 <span id="titleName">새 작업</span></div>
+    <div class="group">
+      <button class="tool active" id="btnSelect" title="V">선택</button>
+      <button class="tool" id="btnArrow" title="A">화살표</button>
+      <button class="tool" id="btnText" title="T">글자</button>
+      <button class="tool" id="btnPan" title="H">이동</button>
+    </div>
+    <div class="group">
+      <label class="field"><span id="labelColor">색상</span><input type="color" id="inputColor" value="#222222"></label>
+      <label class="field"><span id="labelThickness">굵기</span><input type="number" id="inputThickness" min="1" max="40" value="4"></label>
+      <label class="field"><span id="labelFontSize">글자크기</span><input type="number" id="inputFontSize" min="8" max="160" value="28"></label>
+    </div>
+    <div class="group">
+      <button class="tool" id="btnEditCenter">주제 편집</button>
+      <button class="tool" id="btnDelete" disabled>삭제</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="group">
+      <button class="tool" id="btnZoomIn">＋</button>
+      <button class="tool" id="btnZoomOut">－</button>
+      <button class="tool" id="btnFit">맞춤</button>
+    </div>
+    <div class="group">
+      <button class="tool" id="btnNew">새 작업</button>
+      <button class="tool" id="btnSave">저장</button>
+      <button class="tool" id="btnSaveAs">새이름저장</button>
+      <button class="tool" id="btnExportPng">PNG</button>
+      <button class="tool" id="btnExportJson">JSON↓</button>
+      <button class="tool" id="btnImportJson">JSON↑</button>
+      <input type="file" id="fileImport" accept="application/json" style="display:none">
+      <button class="tool" id="btnLang">EN</button>
+    </div>
+  </header>
+  <div id="canvasWrap">
+    <canvas id="mainCanvas"></canvas>
+    <div id="statusBar"></div>
+  </div>
+  <aside class="sidebar">
+    <h3 id="worksTitle">작업 목록</h3>
+    <ul id="worksList"></ul>
+  </aside>
+</div>
+<script src="dist/bundle.js"></script>
+</body>
+</html>
