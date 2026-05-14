@@ -6,6 +6,7 @@ import { InputHandler, EditorMode } from './input/InputHandler.js';
 import { IndexedDBStore, SceneSummary } from './storage/IndexedDBStore.js';
 import { LangCode, getLang, setLang, t } from './i18n/lang.js';
 import { MAX_CANVAS_SIZE, Vec } from './utils/geometry.js';
+import { customPrompt } from './ui/CustomPrompt.js';
 
 // Top-level controller that ties together the renderer, store, input handler,
 // and DOM toolbar/panel. Exposed via window.startApp by the bundled HTML.
@@ -44,12 +45,14 @@ export class App {
       onChange: () => this.requestRender(),
       onSelect: (id) => { this.selectedId = id; this.updateSelectionUi(); },
       onDoubleClickEmpty: () => {
-        const txt = window.prompt(t('promptCenter'), this.store.get().centerText);
-        if (txt !== null) this.store.setCenterText(txt);
+        void customPrompt(t('promptCenter'), this.store.get().centerText).then((txt) => {
+          if (txt !== null) this.store.setCenterText(txt);
+        });
       },
       onDoubleClickText: (obj) => {
-        const txt = window.prompt(t('promptText'), obj.text);
-        if (txt !== null) this.store.update(obj.id, (o) => { if (o.type === 'text') o.text = txt; });
+        void customPrompt(t('promptText'), obj.text).then((txt) => {
+          if (txt !== null) this.store.update(obj.id, (o) => { if (o.type === 'text') o.text = txt; });
+        });
       },
       onDraftChange: (draft) => { this.draftArrow = draft; },
     });
@@ -137,8 +140,9 @@ export class App {
     ($('#fileImport')).addEventListener('change', (e) => this.handleImportFile(e));
     ($('#btnLang')).addEventListener('click', () => this.toggleLang());
     ($('#btnEditCenter')).addEventListener('click', () => {
-      const txt = window.prompt(t('promptCenter'), this.store.get().centerText);
-      if (txt !== null) this.store.setCenterText(txt);
+      void customPrompt(t('promptCenter'), this.store.get().centerText).then((txt) => {
+        if (txt !== null) this.store.setCenterText(txt);
+      });
     });
     ($('#btnFit')).addEventListener('click', () => this.fitToScreen());
     ($('#btnZoomIn')).addEventListener('click', () => {
@@ -237,7 +241,7 @@ export class App {
   private async ensureName(): Promise<string | null> {
     let name = this.store.get().name;
     if (!name || name === '새 작업' || name === 'Untitled') {
-      const input = window.prompt(t('promptName'), '');
+      const input = await customPrompt(t('promptName'), '');
       if (input === null) return null;
       name = input.trim() || t('untitled');
       this.store.setName(name);
@@ -260,7 +264,7 @@ export class App {
   }
 
   private async saveAs(): Promise<void> {
-    const input = window.prompt(t('promptName'), this.store.get().name);
+    const input = await customPrompt(t('promptName'), this.store.get().name);
     if (input === null) return;
     const next: SceneData = JSON.parse(JSON.stringify(this.store.get()));
     next.id = 'scene_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
@@ -380,7 +384,7 @@ export class App {
   }
 
   private async renameWork(w: SceneSummary): Promise<void> {
-    const name = window.prompt(t('promptRename'), w.name);
+    const name = await customPrompt(t('promptRename'), w.name);
     if (name === null) return;
     await this.db.renameScene(w.id, name.trim() || t('untitled'));
     if (w.id === this.store.get().id) {

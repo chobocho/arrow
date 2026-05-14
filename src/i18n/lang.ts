@@ -37,6 +37,8 @@ const strings: Record<LangCode, Dict> = {
     importedCount: '개 가져왔습니다',
     invalidJson: '잘못된 JSON 형식입니다',
     untitled: '제목 없음',
+    ok: '확인',
+    cancel: '취소',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -72,6 +74,8 @@ const strings: Record<LangCode, Dict> = {
     importedCount: ' imported',
     invalidJson: 'Invalid JSON',
     untitled: 'Untitled',
+    ok: 'OK',
+    cancel: 'Cancel',
   },
 };
 

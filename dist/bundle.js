@@ -61,7 +61,8 @@
       untitled: '제목 없음',
       unsavedNew: '변경사항이 있습니다. 새로 만들까요?',
       unsavedLoad: '변경사항이 있습니다. 불러올까요?',
-      placeholderTopic: '주제 / Topic'
+      placeholderTopic: '주제 / Topic',
+      ok: '확인', cancel: '취소'
     },
     en: {
       appTitle: 'Arrow Mind Map',
@@ -82,12 +83,94 @@
       untitled: 'Untitled',
       unsavedNew: 'Unsaved changes. New work?',
       unsavedLoad: 'Unsaved changes. Discard?',
-      placeholderTopic: 'Topic / 주제'
+      placeholderTopic: 'Topic / 주제',
+      ok: 'OK', cancel: 'Cancel'
     }
   };
   var currentLang = 'ko';
   function t(key) {
     return (STRINGS[currentLang] && STRINGS[currentLang][key]) || STRINGS.en[key] || key;
+  }
+
+  // ---------- ui/CustomPrompt ----------
+  // Modal replacement for window.prompt. Returns a Promise resolving to the
+  // entered string or null when the user cancels (Esc / Cancel / backdrop).
+  var customPromptStylesInjected = false;
+  function injectCustomPromptStyles() {
+    if (customPromptStylesInjected) return;
+    customPromptStylesInjected = true;
+    var style = document.createElement('style');
+    style.textContent =
+      '.ap-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.42);' +
+      'display:flex;align-items:center;justify-content:center;z-index:9999;' +
+      'animation:ap-fade 0.12s ease;}' +
+      '@keyframes ap-fade{from{opacity:0;}to{opacity:1;}}' +
+      '.ap-card{background:#fff;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,0.22);' +
+      'padding:18px 18px 14px;min-width:300px;max-width:92vw;font-family:inherit;color:#222;}' +
+      '.ap-title{font-size:14px;color:#444;margin-bottom:10px;word-break:keep-all;}' +
+      '.ap-input{width:100%;box-sizing:border-box;font-size:15px;padding:8px 10px;' +
+      'border:1px solid #d0d0d8;border-radius:6px;outline:none;font-family:inherit;}' +
+      '.ap-input:focus{border-color:#3a7afe;box-shadow:0 0 0 2px rgba(58,122,254,0.15);}' +
+      '.ap-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}' +
+      '.ap-btn{appearance:none;border:1px solid #d0d0d8;background:#fff;padding:6px 14px;' +
+      'border-radius:6px;cursor:pointer;font-size:13px;color:#222;}' +
+      '.ap-btn:hover{background:#f0f3ff;}' +
+      '.ap-btn.primary{background:#3a7afe;border-color:#3a7afe;color:#fff;}' +
+      '.ap-btn.primary:hover{background:#2e6bf0;}';
+    document.head.appendChild(style);
+  }
+  function customPrompt(message, defaultValue) {
+    injectCustomPromptStyles();
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'ap-overlay';
+      var card = document.createElement('div');
+      card.className = 'ap-card';
+      var title = document.createElement('div');
+      title.className = 'ap-title';
+      title.textContent = message;
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'ap-input';
+      input.value = defaultValue == null ? '' : defaultValue;
+      var actions = document.createElement('div');
+      actions.className = 'ap-actions';
+      var cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'ap-btn';
+      cancelBtn.textContent = t('cancel');
+      var okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'ap-btn primary';
+      okBtn.textContent = t('ok');
+      actions.appendChild(cancelBtn);
+      actions.appendChild(okBtn);
+      card.appendChild(title);
+      card.appendChild(input);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+
+      var finished = false;
+      function finish(value) {
+        if (finished) return;
+        finished = true;
+        document.removeEventListener('keydown', onKey, true);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(value);
+      }
+      function onKey(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); finish(input.value); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(null); }
+      }
+      document.addEventListener('keydown', onKey, true);
+      okBtn.addEventListener('click', function () { finish(input.value); });
+      cancelBtn.addEventListener('click', function () { finish(null); });
+      overlay.addEventListener('mousedown', function (ev) {
+        if (ev.target === overlay) finish(null);
+      });
+      requestAnimationFrame(function () { input.focus(); input.select(); });
+    });
   }
 
   // ---------- CanvasView ----------
@@ -665,14 +748,16 @@
       return;
     }
     if (mode === 'text') {
-      var txt = window.prompt(t('promptText'), '');
-      if (txt && txt.trim()) {
-        var created = this.store.addText(logical, txt.trim(), this.cb.getFontSize(), this.cb.getColor());
-        this.selectedId = created.id;
-        this.cb.onSelect(created.id);
-      }
       this.drag = { kind: 'none' };
-      this.cb.onChange();
+      var self = this;
+      customPrompt(t('promptText'), '').then(function (txt) {
+        if (txt && txt.trim()) {
+          var created = self.store.addText(logical, txt.trim(), self.cb.getFontSize(), self.cb.getColor());
+          self.selectedId = created.id;
+          self.cb.onSelect(created.id);
+          self.cb.onChange();
+        }
+      });
       return;
     }
     // select or default
@@ -791,12 +876,14 @@
       onChange: function () { self._requestRender(); },
       onSelect: function (id) { self.selectedId = id; self._updateSelectionUi(); },
       onDoubleClickEmpty: function () {
-        var txt = window.prompt(t('promptCenter'), self.store.get().centerText);
-        if (txt !== null) self.store.setCenterText(txt);
+        customPrompt(t('promptCenter'), self.store.get().centerText).then(function (txt) {
+          if (txt !== null) self.store.setCenterText(txt);
+        });
       },
       onDoubleClickText: function (obj) {
-        var txt = window.prompt(t('promptText'), obj.text);
-        if (txt !== null) self.store.update(obj.id, function (o) { if (o.type === 'text') o.text = txt; });
+        customPrompt(t('promptText'), obj.text).then(function (txt) {
+          if (txt !== null) self.store.update(obj.id, function (o) { if (o.type === 'text') o.text = txt; });
+        });
       },
       onDraftChange: function (d) { self.draftArrow = d; }
     });
@@ -872,8 +959,9 @@
     byId('fileImport').addEventListener('change', function (e) { self._handleImportFile(e); });
     byId('btnLang').addEventListener('click', function () { self._toggleLang(); });
     byId('btnEditCenter').addEventListener('click', function () {
-      var txt = window.prompt(t('promptCenter'), self.store.get().centerText);
-      if (txt !== null) self.store.setCenterText(txt);
+      customPrompt(t('promptCenter'), self.store.get().centerText).then(function (txt) {
+        if (txt !== null) self.store.setCenterText(txt);
+      });
     });
     byId('btnFit').addEventListener('click', function () { self._fitToScreen(); });
     byId('btnZoomIn').addEventListener('click', function () {
@@ -957,41 +1045,46 @@
   App.prototype._ensureName = function () {
     var name = this.store.get().name;
     if (!name || name === '새 작업' || name === 'Untitled' || name === t('untitled')) {
-      var input = window.prompt(t('promptName'), '');
-      if (input === null) return null;
-      name = input.trim() || t('untitled');
-      this.store.setName(name);
+      var self = this;
+      return customPrompt(t('promptName'), '').then(function (input) {
+        if (input === null) return null;
+        var trimmed = input.trim() || t('untitled');
+        self.store.setName(trimmed);
+        return trimmed;
+      });
     }
-    return name;
+    return Promise.resolve(name);
   };
   App.prototype._save = function () {
-    var name = this._ensureName();
-    if (name === null) return;
-    var scene = this.store.get();
-    scene.viewOffsetX = this.view.offset.x;
-    scene.viewOffsetY = this.view.offset.y;
-    scene.viewScale = this.view.scale;
     var self = this;
-    this.db.saveScene(scene)
-      .then(function () { return self.db.setMeta('lastSceneId', scene.id); })
-      .then(function () { self.dirty = false; return self._refreshWorks(); })
-      .then(function () { self._flashStatus(t('saved')); })
-      .catch(function (e) { console.error('save failed', e); window.alert('저장 실패 / Save failed'); });
+    this._ensureName().then(function (name) {
+      if (name === null) return;
+      var scene = self.store.get();
+      scene.viewOffsetX = self.view.offset.x;
+      scene.viewOffsetY = self.view.offset.y;
+      scene.viewScale = self.view.scale;
+      return self.db.saveScene(scene)
+        .then(function () { return self.db.setMeta('lastSceneId', scene.id); })
+        .then(function () { self.dirty = false; return self._refreshWorks(); })
+        .then(function () { self._flashStatus(t('saved')); })
+        .catch(function (e) { console.error('save failed', e); window.alert('저장 실패 / Save failed'); });
+    });
   };
   App.prototype._saveAs = function () {
-    var input = window.prompt(t('promptName'), this.store.get().name);
-    if (input === null) return;
-    var next = JSON.parse(JSON.stringify(this.store.get()));
-    next.id = newId('scene');
-    next.name = input.trim() || t('untitled');
-    next.createdAt = Date.now();
-    next.updatedAt = Date.now();
-    this.store.replace(next);
     var self = this;
-    this.db.saveScene(next)
-      .then(function () { return self.db.setMeta('lastSceneId', next.id); })
-      .then(function () { return self._refreshWorks(); })
-      .then(function () { self._updateTitle(); self._flashStatus(t('saved')); });
+    customPrompt(t('promptName'), this.store.get().name).then(function (input) {
+      if (input === null) return;
+      var next = JSON.parse(JSON.stringify(self.store.get()));
+      next.id = newId('scene');
+      next.name = input.trim() || t('untitled');
+      next.createdAt = Date.now();
+      next.updatedAt = Date.now();
+      self.store.replace(next);
+      self.db.saveScene(next)
+        .then(function () { return self.db.setMeta('lastSceneId', next.id); })
+        .then(function () { return self._refreshWorks(); })
+        .then(function () { self._updateTitle(); self._flashStatus(t('saved')); });
+    });
   };
   App.prototype._newScene = function () {
     if (this.dirty && !window.confirm(t('unsavedNew'))) return;
@@ -1099,13 +1192,14 @@
     });
   };
   App.prototype._renameWork = function (w) {
-    var name = window.prompt(t('promptRename'), w.name);
-    if (name === null) return;
-    var trimmed = name.trim() || t('untitled');
     var self = this;
-    this.db.renameScene(w.id, trimmed).then(function () {
-      if (w.id === self.store.get().id) self.store.setName(trimmed);
-      self._refreshWorks();
+    customPrompt(t('promptRename'), w.name).then(function (name) {
+      if (name === null) return;
+      var trimmed = name.trim() || t('untitled');
+      self.db.renameScene(w.id, trimmed).then(function () {
+        if (w.id === self.store.get().id) self.store.setName(trimmed);
+        self._refreshWorks();
+      });
     });
   };
   App.prototype._deleteWork = function (w) {

@@ -2,6 +2,8 @@ import { Vec, clampToCanvas, vecDist } from '../utils/geometry.js';
 import { CanvasView } from '../canvas/CanvasView.js';
 import { SceneStore, HitHandle } from '../models/SceneStore.js';
 import { ArrowObject, SceneObject, TextObject } from '../models/types.js';
+import { customPrompt } from '../ui/CustomPrompt.js';
+import { t } from '../i18n/lang.js';
 
 export type EditorMode = 'select' | 'arrow' | 'text' | 'pan';
 
@@ -256,14 +258,15 @@ export class InputHandler {
       return;
     }
     if (mode === 'text') {
-      const text = window.prompt('글자 / Text', '');
-      if (text && text.trim()) {
-        const obj = this.store.addText(logical, text.trim(), this.cb.getFontSize(), this.cb.getColor());
-        this.selectedId = obj.id;
-        this.cb.onSelect(obj.id);
-      }
       this.dragging = { kind: 'none', startLogical: logical, startScreen: screen, lastScreen: screen };
-      this.cb.onChange();
+      void customPrompt(t('promptText'), '').then((text) => {
+        if (text && text.trim()) {
+          const obj = this.store.addText(logical, text.trim(), this.cb.getFontSize(), this.cb.getColor());
+          this.selectedId = obj.id;
+          this.cb.onSelect(obj.id);
+          this.cb.onChange();
+        }
+      });
       return;
     }
     // select / pan default: deselect + start a pan

@@ -4,6 +4,22 @@
 
 ## 2026-05-14
 
+### 글자/이름 입력 팝업을 커스텀 모달로 교체
+
+브라우저 기본 `window.prompt` 대화상자를 앱 UI 톤에 맞춘 커스텀 모달로 모두 교체했습니다.
+
+- `src/ui/CustomPrompt.ts` 모듈 신설 — `customPrompt(message, defaultValue)`이 `Promise<string|null>`을 반환.
+  - Enter 키로 확인, Esc / 배경 클릭 / 취소 버튼으로 취소.
+  - 첫 호출 시 전용 스타일을 `<head>`에 한 번만 주입(외부 라이브러리 없음).
+  - 모달이 마운트된 다음 프레임에 input에 포커스 + 전체 선택.
+- 교체된 호출 지점 (모두 `customPrompt`로):
+  - `InputHandler` — 텍스트 모드에서 빈 영역 클릭 시 "글자 입력" 팝업.
+  - `App` — 더블클릭으로 주제/글자 편집, 툴바 "주제 편집" 버튼.
+  - `App` — 저장(이름 입력), 새이름저장, 작업물 이름 변경.
+- i18n에 `ok` / `cancel` 키 추가 (한/영 모두).
+- 동일 변경을 `src/*.ts`와 `dist/bundle.js` 양쪽에 반영, `release/index.html` 재빌드.
+- 기존 노드 테스트 12/12 통과 확인. 모달 자체는 DOM 의존이라 수동 브라우저 검증 필요 (python -m http.server 8001 → 글자/주제/저장/이름변경 흐름).
+
 ### Insert 키로 화살표 추가 (단축키)
 
 - `Insert` 키 누르면 현재 화면 중앙에 가로 방향 화살표가 즉시 추가됩니다.

@@ -1,0 +1,127 @@
+import { t } from '../i18n/lang.js';
+
+// Lightweight modal replacement for window.prompt. Returns the typed string,
+// or null when the user cancels (Esc / Cancel button / clicking the backdrop).
+// Resolves on the same microtask as the user action so the call site stays
+// drop-in compatible aside from being a Promise.
+
+let stylesInjected = false;
+
+function injectStyles(): void {
+  if (stylesInjected) return;
+  stylesInjected = true;
+  const style = document.createElement('style');
+  style.textContent = `
+    .ap-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.42);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999;
+      animation: ap-fade 0.12s ease;
+    }
+    @keyframes ap-fade { from { opacity: 0; } to { opacity: 1; } }
+    .ap-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.22);
+      padding: 18px 18px 14px;
+      min-width: 300px;
+      max-width: 92vw;
+      font-family: inherit;
+      color: #222;
+    }
+    .ap-title {
+      font-size: 14px;
+      color: #444;
+      margin-bottom: 10px;
+      word-break: keep-all;
+    }
+    .ap-input {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 15px;
+      padding: 8px 10px;
+      border: 1px solid #d0d0d8;
+      border-radius: 6px;
+      outline: none;
+      font-family: inherit;
+    }
+    .ap-input:focus { border-color: #3a7afe; box-shadow: 0 0 0 2px rgba(58,122,254,0.15); }
+    .ap-actions {
+      display: flex; justify-content: flex-end; gap: 8px;
+      margin-top: 12px;
+    }
+    .ap-btn {
+      appearance: none; border: 1px solid #d0d0d8; background: #fff;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      color: #222;
+    }
+    .ap-btn:hover { background: #f0f3ff; }
+    .ap-btn.primary { background: #3a7afe; border-color: #3a7afe; color: #fff; }
+    .ap-btn.primary:hover { background: #2e6bf0; }
+  `;
+  document.head.appendChild(style);
+}
+
+export function customPrompt(message: string, defaultValue: string = ''): Promise<string | null> {
+  injectStyles();
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'ap-overlay';
+    const card = document.createElement('div');
+    card.className = 'ap-card';
+    const title = document.createElement('div');
+    title.className = 'ap-title';
+    title.textContent = message;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'ap-input';
+    input.value = defaultValue ?? '';
+    const actions = document.createElement('div');
+    actions.className = 'ap-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ap-btn';
+    cancelBtn.textContent = t('cancel');
+    const okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.className = 'ap-btn primary';
+    okBtn.textContent = t('ok');
+    actions.appendChild(cancelBtn);
+    actions.appendChild(okBtn);
+    card.appendChild(title);
+    card.appendChild(input);
+    card.appendChild(actions);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    let finished = false;
+    const finish = (value: string | null): void => {
+      if (finished) return;
+      finished = true;
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (ev: KeyboardEvent): void => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        finish(input.value);
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        finish(null);
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    okBtn.addEventListener('click', () => finish(input.value));
+    cancelBtn.addEventListener('click', () => finish(null));
+    overlay.addEventListener('mousedown', (ev) => {
+      if (ev.target === overlay) finish(null);
+    });
+
+    // Focus on next frame so the modal is mounted before focus moves.
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+  });
+}
