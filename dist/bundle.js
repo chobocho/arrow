@@ -1253,7 +1253,7 @@
       if (this.selectedId) { e.preventDefault(); this._deleteSelected(); }
     } else if (e.key === 'Insert') {
       e.preventDefault();
-      this._insertArrowAtViewportCenter();
+      this._insertArrow();
     } else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       this._save();
@@ -1262,16 +1262,38 @@
     else if (e.key === 'v' || e.key === 'V') this.setMode('select');
     else if (e.key === 'h' || e.key === 'H') this.setMode('pan');
   };
-  // Adds a horizontal arrow at the current viewport center. Length scales with
-  // the visible area so the new arrow is always noticeable regardless of zoom.
-  App.prototype._insertArrowAtViewportCenter = function () {
+  // Adds a horizontal arrow positioned to the upper-right of any existing
+  // arrows so consecutive Insert presses stagger outward. When no arrows
+  // exist yet, fall back to the current viewport center.
+  App.prototype._insertArrow = function () {
     var view = this.view;
-    var centerLogical = view.screenToLogical({ x: view.width / 2, y: view.height / 2 });
     var visibleLogicalW = view.width / view.scale;
     var lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
-    var from = { x: centerLogical.x - lengthLogical / 2, y: centerLogical.y };
-    var to = { x: centerLogical.x + lengthLogical / 2, y: centerLogical.y };
-    var created = this.store.addArrow(from, to, this.color, this.thickness);
+    var gap = Math.max(20, lengthLogical * 0.2);
+    var objects = this.store.get().objects;
+    var arrows = [];
+    for (var i = 0; i < objects.length; i++) {
+      if (objects[i].type === 'arrow') arrows.push(objects[i]);
+    }
+    var from;
+    if (arrows.length === 0) {
+      var c = view.screenToLogical({ x: view.width / 2, y: view.height / 2 });
+      from = { x: c.x - lengthLogical / 2, y: c.y };
+    } else {
+      var maxX = -Infinity, minY = Infinity;
+      for (var j = 0; j < arrows.length; j++) {
+        var a = arrows[j];
+        if (a.from.x > maxX) maxX = a.from.x;
+        if (a.to.x > maxX) maxX = a.to.x;
+        if (a.from.y < minY) minY = a.from.y;
+        if (a.to.y < minY) minY = a.to.y;
+      }
+      from = { x: maxX + gap, y: minY - gap };
+    }
+    var to = { x: from.x + lengthLogical, y: from.y };
+    var fromC = clampToCanvas(from);
+    var toC = { x: clampToCanvas(to).x, y: fromC.y };
+    var created = this.store.addArrow(fromC, toC, this.color, this.thickness);
     this.selectedId = created.id;
     this.input.setSelected(created.id);
     this.setMode('select');

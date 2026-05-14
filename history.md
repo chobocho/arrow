@@ -4,6 +4,15 @@
 
 ## 2026-05-14
 
+### Insert 키 동작: 기존 화살표 우상단에 새 화살표 추가
+
+- 기존엔 viewport 중앙에 추가되어 연속 입력 시 한곳에 겹쳤음.
+- 변경: 씬 내 화살표들의 bbox를 계산해 (maxX + gap, minY - gap)에 새 화살표 시작점을 둠.
+- 화살표가 없으면 기존처럼 viewport 중앙에 fallback.
+- 캔버스 경계(4096)에 clamp.
+- 함수명 `insertArrowAtViewportCenter` → `insertArrow`로 변경 (`_insertArrowAtViewportCenter` → `_insertArrow`).
+- `src/app.ts` + `dist/bundle.js` 동기화, `release/index.html` 재빌드, 노드 테스트 12/12 통과.
+
 ### 글자/이름 입력 팝업을 커스텀 모달로 교체
 
 브라우저 기본 `window.prompt` 대화상자를 앱 UI 톤에 맞춘 커스텀 모달로 모두 교체했습니다.

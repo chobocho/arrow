@@ -5,7 +5,7 @@ import { ArrowObject, SceneData, emptyScene } from './models/types.js';
 import { InputHandler, EditorMode } from './input/InputHandler.js';
 import { IndexedDBStore, SceneSummary } from './storage/IndexedDBStore.js';
 import { LangCode, getLang, setLang, t } from './i18n/lang.js';
-import { MAX_CANVAS_SIZE, Vec } from './utils/geometry.js';
+import { MAX_CANVAS_SIZE, Vec, clampToCanvas } from './utils/geometry.js';
 import { customPrompt } from './ui/CustomPrompt.js';
 
 // Top-level controller that ties together the renderer, store, input handler,
@@ -443,7 +443,7 @@ export class App {
       }
     } else if (e.key === 'Insert') {
       e.preventDefault();
-      this.insertArrowAtViewportCenter();
+      this.insertArrow();
     } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       void this.save();
@@ -453,15 +453,31 @@ export class App {
     else if (e.key === 'h') this.setMode('pan');
   }
 
-  // Adds a horizontal arrow at the current viewport center. Length scales with
-  // the visible area so the new arrow is always noticeable regardless of zoom.
-  private insertArrowAtViewportCenter(): void {
-    const centerLogical = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });
+  // Adds a horizontal arrow positioned to the upper-right of any existing
+  // arrows so consecutive Insert presses stagger outward. When no arrows
+  // exist yet, fall back to the current viewport center.
+  private insertArrow(): void {
     const visibleLogicalW = this.view.width / this.view.scale;
     const lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
-    const from: Vec = { x: centerLogical.x - lengthLogical / 2, y: centerLogical.y };
-    const to: Vec = { x: centerLogical.x + lengthLogical / 2, y: centerLogical.y };
-    const created = this.store.addArrow(from, to, this.color, this.thickness);
+    const gap = Math.max(20, lengthLogical * 0.2);
+
+    const arrows = this.store.get().objects.filter((o) => o.type === 'arrow') as ArrowObject[];
+    let from: Vec;
+    if (arrows.length === 0) {
+      const c = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });
+      from = { x: c.x - lengthLogical / 2, y: c.y };
+    } else {
+      let maxX = -Infinity, minY = Infinity;
+      for (const a of arrows) {
+        maxX = Math.max(maxX, a.from.x, a.to.x);
+        minY = Math.min(minY, a.from.y, a.to.y);
+      }
+      from = { x: maxX + gap, y: minY - gap };
+    }
+    const to: Vec = { x: from.x + lengthLogical, y: from.y };
+    const fromC = clampToCanvas(from);
+    const toC: Vec = { x: clampToCanvas(to).x, y: fromC.y };
+    const created = this.store.addArrow(fromC, toC, this.color, this.thickness);
     this.selectedId = created.id;
     this.input.setSelected(created.id);
     this.setMode('select');
