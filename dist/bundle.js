@@ -1406,7 +1406,7 @@
     var view = this.view;
     var visibleLogicalW = view.width / view.scale;
     var lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
-    var gap = Math.max(20, lengthLogical * 0.2);
+    var gap = 10;
     var objects = this.store.get().objects;
     var arrows = [];
     for (var i = 0; i < objects.length; i++) {

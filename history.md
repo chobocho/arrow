@@ -4,6 +4,11 @@
 
 ## 2026-05-15
 
+### Insert 화살표 간격을 10px 고정으로
+
+- `_insertArrow`의 gap을 `Math.max(20, lengthLogical * 0.2)` 대신 logical **10px** 상수로 변경.
+- 새 화살표는 기존 bbox 기준 (maxX + 10, minY − 10)에 시작. 가로/세로 모두 10px만 떨어져 더 촘촘하게 배치.
+
 ### 브라우저 축소 시 캔버스가 컨테이너 전체를 채우게
 
 - 기존엔 `resize()`가 `canvas.style.width/height`를 명시 픽셀로 덮어써, 헤더 wrap 등 컨테이너만 변하는 경우 표시 크기와 컨테이너 사이에 빈 공간이 보일 수 있었음.

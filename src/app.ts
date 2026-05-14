@@ -585,7 +585,7 @@ export class App {
   private insertArrow(): void {
     const visibleLogicalW = this.view.width / this.view.scale;
     const lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
-    const gap = Math.max(20, lengthLogical * 0.2);
+    const gap = 10;
 
     const arrows = this.store.get().objects.filter((o) => o.type === 'arrow') as ArrowObject[];
     let from: Vec;
