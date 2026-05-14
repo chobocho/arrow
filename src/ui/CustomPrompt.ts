@@ -137,3 +137,51 @@ export function customPrompt(message: string, defaultValue: string = ''): Promis
     requestAnimationFrame(() => { input.focus(); input.select(); });
   });
 }
+
+// Replacement for window.confirm — resolves true on OK, false on cancel/Esc/backdrop.
+export function customConfirm(message: string): Promise<boolean> {
+  injectStyles();
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'ap-overlay';
+    const card = document.createElement('div');
+    card.className = 'ap-card';
+    const title = document.createElement('div');
+    title.className = 'ap-title';
+    title.textContent = message;
+    const actions = document.createElement('div');
+    actions.className = 'ap-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ap-btn';
+    cancelBtn.textContent = t('cancel');
+    const okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.className = 'ap-btn primary';
+    okBtn.textContent = t('ok');
+    actions.appendChild(cancelBtn);
+    actions.appendChild(okBtn);
+    card.appendChild(title);
+    card.appendChild(actions);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    let finished = false;
+    const finish = (value: boolean): void => {
+      if (finished) return;
+      finished = true;
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (ev: KeyboardEvent): void => {
+      if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); finish(true); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    okBtn.addEventListener('click', () => finish(true));
+    cancelBtn.addEventListener('click', () => finish(false));
+    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) finish(false); });
+    requestAnimationFrame(() => okBtn.focus());
+  });
+}

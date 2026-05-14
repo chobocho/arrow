@@ -4,6 +4,13 @@
 
 ## 2026-05-15
 
+### 확인 팝업도 커스텀 모달로 (삭제/이어작업 등)
+
+- `customConfirm(message): Promise<boolean>`를 CustomPrompt 모듈에 추가.
+- `window.confirm` 4곳 모두 교체: 새 작업 시 미저장 확인, 객체 삭제 확인, 작업 불러올 때 미저장 확인, 작업물 삭제 확인.
+- Enter=확인, Esc/배경 클릭/취소 버튼=취소. 열리면 OK 버튼에 포커스.
+- src i18n에 `unsavedNew`/`unsavedLoad` 키 추가 (기존엔 한·영 혼합 하드코딩 문자열이었음).
+
 ### Insert 화살표 간격을 10px 고정으로
 
 - `_insertArrow`의 gap을 `Math.max(20, lengthLogical * 0.2)` 대신 logical **10px** 상수로 변경.

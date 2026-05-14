@@ -6,7 +6,7 @@ import { InputHandler, EditorMode } from './input/InputHandler.js';
 import { IndexedDBStore, SceneSummary } from './storage/IndexedDBStore.js';
 import { LangCode, getLang, setLang, t } from './i18n/lang.js';
 import { MAX_CANVAS_SIZE, Vec, clampToCanvas } from './utils/geometry.js';
-import { customPrompt } from './ui/CustomPrompt.js';
+import { customPrompt, customConfirm } from './ui/CustomPrompt.js';
 
 // Top-level controller that ties together the renderer, store, input handler,
 // and DOM toolbar/panel. Exposed via window.startApp by the bundled HTML.
@@ -296,8 +296,8 @@ export class App {
     this.flashStatus(t('saved'));
   }
 
-  private newScene(): void {
-    if (this.dirty && !window.confirm('변경사항이 있습니다. 새로 만들까요? / Unsaved changes. New work?')) {
+  private async newScene(): Promise<void> {
+    if (this.dirty && !(await customConfirm(t('unsavedNew')))) {
       return;
     }
     this.adoptScene(emptyScene(t('untitled')));
@@ -306,9 +306,9 @@ export class App {
     this.requestRender();
   }
 
-  private deleteSelected(): void {
+  private async deleteSelected(): Promise<void> {
     if (!this.selectedId) return;
-    if (!window.confirm(t('confirmDeleteSelected'))) return;
+    if (!(await customConfirm(t('confirmDeleteSelected')))) return;
     this.store.remove(this.selectedId);
     this.selectedId = null;
     this.updateSelectionUi();
@@ -476,7 +476,7 @@ export class App {
   }
 
   private async loadWork(id: string): Promise<void> {
-    if (this.dirty && !window.confirm('변경사항이 있습니다. 불러올까요? / Discard changes?')) return;
+    if (this.dirty && !(await customConfirm(t('unsavedLoad')))) return;
     const scene = await this.db.loadScene(id);
     if (!scene) return;
     this.adoptScene(scene);
@@ -503,7 +503,7 @@ export class App {
   }
 
   private async deleteWork(w: SceneSummary): Promise<void> {
-    if (!window.confirm(t('confirmDelete'))) return;
+    if (!(await customConfirm(t('confirmDelete')))) return;
     await this.db.deleteScene(w.id);
     if (w.id === this.store.get().id) {
       this.newScene();

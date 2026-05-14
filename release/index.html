@@ -321,6 +321,52 @@
       requestAnimationFrame(function () { input.focus(); input.select(); });
     });
   }
+  // Replacement for window.confirm — resolves true on OK, false on cancel/Esc/backdrop.
+  function customConfirm(message) {
+    injectCustomPromptStyles();
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'ap-overlay';
+      var card = document.createElement('div');
+      card.className = 'ap-card';
+      var title = document.createElement('div');
+      title.className = 'ap-title';
+      title.textContent = message;
+      var actions = document.createElement('div');
+      actions.className = 'ap-actions';
+      var cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'ap-btn';
+      cancelBtn.textContent = t('cancel');
+      var okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'ap-btn primary';
+      okBtn.textContent = t('ok');
+      actions.appendChild(cancelBtn);
+      actions.appendChild(okBtn);
+      card.appendChild(title);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      var finished = false;
+      function finish(value) {
+        if (finished) return;
+        finished = true;
+        document.removeEventListener('keydown', onKey, true);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(value);
+      }
+      function onKey(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); finish(true); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); }
+      }
+      document.addEventListener('keydown', onKey, true);
+      okBtn.addEventListener('click', function () { finish(true); });
+      cancelBtn.addEventListener('click', function () { finish(false); });
+      overlay.addEventListener('mousedown', function (ev) { if (ev.target === overlay) finish(false); });
+      requestAnimationFrame(function () { okBtn.focus(); });
+    });
+  }
 
   // ---------- CanvasView ----------
   function CanvasView() {
@@ -1247,18 +1293,28 @@
     });
   };
   App.prototype._newScene = function () {
-    if (this.dirty && !window.confirm(t('unsavedNew'))) return;
-    this._adoptScene(emptyScene(t('untitled')));
-    this.view.scale = 1;
-    this.view.centerOn({ x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 });
-    this._requestRender();
+    var self = this;
+    var run = function () {
+      self._adoptScene(emptyScene(t('untitled')));
+      self.view.scale = 1;
+      self.view.centerOn({ x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 });
+      self._requestRender();
+    };
+    if (this.dirty) {
+      customConfirm(t('unsavedNew')).then(function (ok) { if (ok) run(); });
+    } else {
+      run();
+    }
   };
   App.prototype._deleteSelected = function () {
     if (!this.selectedId) return;
-    if (!window.confirm(t('confirmDeleteSelected'))) return;
-    this.store.remove(this.selectedId);
-    this.selectedId = null;
-    this._updateSelectionUi();
+    var self = this;
+    customConfirm(t('confirmDeleteSelected')).then(function (ok) {
+      if (!ok) return;
+      self.store.remove(self.selectedId);
+      self.selectedId = null;
+      self._updateSelectionUi();
+    });
   };
   App.prototype._exportPng = function () {
     var cropped = this.renderer.renderToImage(this.store.get());
@@ -1435,14 +1491,20 @@
     }
   };
   App.prototype._loadWork = function (id) {
-    if (this.dirty && !window.confirm(t('unsavedLoad'))) return;
     var self = this;
-    this.db.loadScene(id).then(function (scene) {
-      if (!scene) return;
-      self._adoptScene(scene);
-      self.db.setMeta('lastSceneId', id);
-      self._closeWorksModal();
-    });
+    var run = function () {
+      self.db.loadScene(id).then(function (scene) {
+        if (!scene) return;
+        self._adoptScene(scene);
+        self.db.setMeta('lastSceneId', id);
+        self._closeWorksModal();
+      });
+    };
+    if (this.dirty) {
+      customConfirm(t('unsavedLoad')).then(function (ok) { if (ok) run(); });
+    } else {
+      run();
+    }
   };
   App.prototype._renameWork = function (w) {
     var self = this;
@@ -1456,11 +1518,13 @@
     });
   };
   App.prototype._deleteWork = function (w) {
-    if (!window.confirm(t('confirmDelete'))) return;
     var self = this;
-    this.db.deleteScene(w.id).then(function () {
-      if (w.id === self.store.get().id) self._newScene();
-      self._refreshWorks();
+    customConfirm(t('confirmDelete')).then(function (ok) {
+      if (!ok) return;
+      self.db.deleteScene(w.id).then(function () {
+        if (w.id === self.store.get().id) self._newScene();
+        self._refreshWorks();
+      });
     });
   };
   App.prototype._fitToScreen = function () {
