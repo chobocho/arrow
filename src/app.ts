@@ -1,7 +1,7 @@
 import { CanvasView } from './canvas/CanvasView.js';
 import { Renderer } from './canvas/Renderer.js';
 import { SceneStore } from './models/SceneStore.js';
-import { ArrowObject, SceneData, emptyScene } from './models/types.js';
+import { ArrowObject, DEFAULT_CENTER_FONT_SIZE, SceneData, emptyScene } from './models/types.js';
 import { InputHandler, EditorMode } from './input/InputHandler.js';
 import { IndexedDBStore, SceneSummary } from './storage/IndexedDBStore.js';
 import { LangCode, getLang, setLang, t } from './i18n/lang.js';
@@ -91,13 +91,20 @@ export class App {
   }
 
   private adoptScene(scene: SceneData): void {
+    if (scene.centerFontSize == null) scene.centerFontSize = DEFAULT_CENTER_FONT_SIZE;
     this.store.replace(scene);
     this.view.offset = { x: scene.viewOffsetX, y: scene.viewOffsetY };
     this.view.scale = scene.viewScale > 0 ? scene.viewScale : 1;
     this.selectedId = null;
     this.dirty = false;
     this.updateTitle();
+    this.syncCenterFontInput();
     this.requestRender();
+  }
+
+  private syncCenterFontInput(): void {
+    const el = document.getElementById('inputCenterFontSize') as HTMLInputElement | null;
+    if (el) el.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
   }
 
   // --- Rendering ---
@@ -174,6 +181,13 @@ export class App {
     const fontEl = $('#inputFontSize') as HTMLInputElement;
     fontEl.value = String(this.fontSize);
     fontEl.addEventListener('input', () => { this.fontSize = parseFloat(fontEl.value) || 28; });
+    const centerFontEl = $('#inputCenterFontSize') as HTMLInputElement;
+    centerFontEl.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
+    centerFontEl.addEventListener('input', () => {
+      const n = parseFloat(centerFontEl.value);
+      if (!Number.isFinite(n)) return;
+      this.store.setCenterFontSize(n);
+    });
 
     this.applyLangToUi();
     this.updateModeUi();
@@ -243,6 +257,7 @@ export class App {
     setText('labelColor', 'selectColor');
     setText('labelThickness', 'thickness');
     setText('labelFontSize', 'fontSize');
+    setText('labelCenterFontSize', 'centerFontSize');
     document.title = t('appTitle');
     this.updateTitle();
     this.renderWorks();

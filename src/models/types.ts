@@ -26,6 +26,7 @@ export interface SceneData {
   id: string;
   name: string;
   centerText: string;
+  centerFontSize?: number;
   objects: SceneObject[];
   createdAt: number;
   updatedAt: number;
@@ -34,6 +35,8 @@ export interface SceneData {
   viewOffsetY: number;
   viewScale: number;
 }
+
+export const DEFAULT_CENTER_FONT_SIZE = 28;
 
 export function newId(prefix: string): ObjectId {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -45,6 +48,7 @@ export function emptyScene(name: string): SceneData {
     id: newId('scene'),
     name,
     centerText: '',
+    centerFontSize: DEFAULT_CENTER_FONT_SIZE,
     objects: [],
     createdAt: now,
     updatedAt: now,

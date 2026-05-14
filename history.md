@@ -4,6 +4,16 @@
 
 ## 2026-05-15
 
+### 주제 원 제거 + 주제 글자 크기 변경 가능
+
+- Renderer의 `drawCenter`에서 노란 원(`#fff7d6` 채움 + `#c9a227` 테두리)을 그리던 호출 제거. 이제 가운데에 글자만 표시.
+- `SceneData`에 `centerFontSize?: number` 필드 추가, 기본값 `DEFAULT_CENTER_FONT_SIZE = 28`.
+- `SceneStore.setCenterFontSize(size)` 추가 (8~200 클램프).
+- 헤더 툴바에 "주제크기" 입력(`#inputCenterFontSize`) 추가 → 입력 시 `setCenterFontSize` 호출 → 캔버스 즉시 반영.
+- 작업 불러오기 시 누락된 `centerFontSize`는 기본값으로 채우고 입력값을 동기화.
+- 래핑 너비를 글자 크기 비례 (`max(120, fs*8)`)로 확장하여 큰 글자도 단어 단위로 줄바꿈.
+- i18n에 `centerFontSize` 키 추가 ('주제크기' / 'Topic Size').
+
 ### Insert 화살표 길이 자동 조절 (기존 평균)
 
 - `_insertArrow`에서 새 화살표 길이를 기존 화살표들의 평균 길이로 설정.

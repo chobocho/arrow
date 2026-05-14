@@ -50,6 +50,12 @@ export class SceneStore {
     this.emit();
   }
 
+  setCenterFontSize(size: number): void {
+    this.scene.centerFontSize = Math.max(8, Math.min(200, size));
+    this.touch();
+    this.emit();
+  }
+
   setName(name: string): void {
     this.scene.name = name;
     this.touch();

@@ -47,6 +47,7 @@ const strings: Record<LangCode, Dict> = {
     sortByDate: '최근수정순',
     unsavedNew: '변경사항이 있습니다. 새로 만들까요?',
     unsavedLoad: '변경사항이 있습니다. 불러올까요?',
+    centerFontSize: '주제크기',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -92,6 +93,7 @@ const strings: Record<LangCode, Dict> = {
     sortByDate: 'Recent',
     unsavedNew: 'Unsaved changes. New work?',
     unsavedLoad: 'Unsaved changes. Discard?',
+    centerFontSize: 'Topic Size',
   },
 };
 

@@ -1,5 +1,5 @@
 import { Vec, MAX_CANVAS_SIZE } from '../utils/geometry.js';
-import { ArrowObject, SceneData, SceneObject, TextObject } from '../models/types.js';
+import { ArrowObject, DEFAULT_CENTER_FONT_SIZE, SceneData, SceneObject, TextObject } from '../models/types.js';
 import { CanvasView } from './CanvasView.js';
 
 export interface RenderOptions {
@@ -144,22 +144,16 @@ export class Renderer {
     const { ctx, view } = this;
     const center = { x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 };
     const screen = view.logicalToScreen(center);
-    const r = 80 * view.scale;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff7d6';
-    ctx.fill();
-    ctx.strokeStyle = '#c9a227';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
+    const baseFontSize = scene.centerFontSize || DEFAULT_CENTER_FONT_SIZE;
     ctx.fillStyle = '#333';
-    const fontSize = Math.max(10, 22 * view.scale);
+    const fontSize = Math.max(10, baseFontSize * view.scale);
     ctx.font = `${fontSize}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const label = scene.centerText || '주제 / Topic';
-    this.wrapText(label, screen.x, screen.y, r * 1.7, fontSize * 1.1);
+    // wrap to a generous box proportional to font size.
+    const wrapWidth = Math.max(120, baseFontSize * 8) * view.scale;
+    this.wrapText(label, screen.x, screen.y, wrapWidth, fontSize * 1.1);
   }
 
   private wrapText(text: string, cx: number, cy: number, maxWidth: number, lineHeight: number): void {

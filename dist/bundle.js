@@ -25,12 +25,14 @@
   function newId(prefix) {
     return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
+  var DEFAULT_CENTER_FONT_SIZE = 28;
   function emptyScene(name) {
     var now = Date.now();
     return {
       id: newId('scene'),
       name: name,
       centerText: '',
+      centerFontSize: DEFAULT_CENTER_FONT_SIZE,
       objects: [],
       createdAt: now,
       updatedAt: now,
@@ -64,7 +66,8 @@
       placeholderTopic: '주제 / Topic',
       ok: '확인', cancel: '취소',
       load: '불러오기', close: '닫기', noWorks: '저장된 작업이 없습니다',
-      sortLabel: '정렬', sortByName: '이름순', sortByDate: '최근수정순'
+      sortLabel: '정렬', sortByName: '이름순', sortByDate: '최근수정순',
+      centerFontSize: '주제크기'
     },
     en: {
       appTitle: 'Arrow Mind Map',
@@ -88,7 +91,8 @@
       placeholderTopic: 'Topic / 주제',
       ok: 'OK', cancel: 'Cancel',
       load: 'Load', close: 'Close', noWorks: 'No saved works',
-      sortLabel: 'Sort', sortByName: 'Name', sortByDate: 'Recent'
+      sortLabel: 'Sort', sortByName: 'Name', sortByDate: 'Recent',
+      centerFontSize: 'Topic Size'
     }
   };
   var currentLang = 'ko';
@@ -385,18 +389,15 @@
     var ctx = this.ctx, view = this.view;
     var center = { x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 };
     var screen = view.logicalToScreen(center);
-    var r = 80 * view.scale;
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff7d6'; ctx.fill();
-    ctx.strokeStyle = '#c9a227'; ctx.lineWidth = 2; ctx.stroke();
+    var baseFs = scene.centerFontSize || DEFAULT_CENTER_FONT_SIZE;
     ctx.fillStyle = '#333';
-    var fs = Math.max(10, 22 * view.scale);
+    var fs = Math.max(10, baseFs * view.scale);
     ctx.font = fs + 'px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     var label = scene.centerText || t('placeholderTopic');
-    this._wrapText(label, screen.x, screen.y, r * 1.7, fs * 1.1);
+    var wrapWidth = Math.max(120, baseFs * 8) * view.scale;
+    this._wrapText(label, screen.x, screen.y, wrapWidth, fs * 1.1);
   };
   Renderer.prototype._wrapText = function (text, cx, cy, maxWidth, lineHeight) {
     var ctx = this.ctx;
@@ -501,6 +502,10 @@
   SceneStore.prototype._touch = function () { this.scene.updatedAt = Date.now(); };
   SceneStore.prototype._emit = function () { for (var i = 0; i < this.listeners.length; i++) this.listeners[i](); };
   SceneStore.prototype.setCenterText = function (text) { this.scene.centerText = text; this._touch(); this._emit(); };
+  SceneStore.prototype.setCenterFontSize = function (size) {
+    this.scene.centerFontSize = Math.max(8, Math.min(200, size));
+    this._touch(); this._emit();
+  };
   SceneStore.prototype.setName = function (name) { this.scene.name = name; this._touch(); this._emit(); };
   SceneStore.prototype.addArrow = function (from, to, color, thickness) {
     var arrow = { id: newId('arrow'), type: 'arrow', from: clampToCanvas(from), to: clampToCanvas(to), color: color, thickness: thickness };
@@ -974,6 +979,7 @@
       .then(function () { self._requestRender(); });
   };
   App.prototype._adoptScene = function (scene) {
+    if (scene.centerFontSize == null) scene.centerFontSize = DEFAULT_CENTER_FONT_SIZE;
     this.store.replace(scene);
     this.view.offset = { x: scene.viewOffsetX || 0, y: scene.viewOffsetY || 0 };
     this.view.scale = scene.viewScale > 0 ? scene.viewScale : 1;
@@ -981,7 +987,12 @@
     this.dirty = false;
     this._updateTitle();
     this._updateSelectionUi();
+    this._syncCenterFontInput();
     this._requestRender();
+  };
+  App.prototype._syncCenterFontInput = function () {
+    var el = document.getElementById('inputCenterFontSize');
+    if (el) el.value = String(this.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
   };
   App.prototype._requestRender = function () {
     if (this.renderScheduled) return;
@@ -1050,6 +1061,13 @@
     var fontEl = byId('inputFontSize');
     fontEl.value = String(this.fontSize);
     fontEl.addEventListener('input', function () { self.fontSize = parseFloat(fontEl.value) || 28; });
+    var centerFontEl = byId('inputCenterFontSize');
+    centerFontEl.value = String(this.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
+    centerFontEl.addEventListener('input', function () {
+      var n = parseFloat(centerFontEl.value);
+      if (!isFinite(n)) return;
+      self.store.setCenterFontSize(n);
+    });
     this._applyLangToUi();
     this._updateModeUi();
     this._updateSelectionUi();
@@ -1106,6 +1124,7 @@
     setText('labelColor', 'selectColor');
     setText('labelThickness', 'thickness');
     setText('labelFontSize', 'fontSize');
+    setText('labelCenterFontSize', 'centerFontSize');
     document.title = t('appTitle');
     this._updateTitle();
     this._renderWorks();
