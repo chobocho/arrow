@@ -584,10 +584,18 @@ export class App {
   // exist yet, fall back to the current viewport center.
   private insertArrow(): void {
     const visibleLogicalW = this.view.width / this.view.scale;
-    const lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
     const gap = 10;
-
     const arrows = this.store.get().objects.filter((o) => o.type === 'arrow') as ArrowObject[];
+    // Auto length: average of existing arrows' lengths so consecutive Insert
+    // arrows match the diagram's scale. Fall back to a viewport-based default.
+    let lengthLogical: number;
+    if (arrows.length === 0) {
+      lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
+    } else {
+      let total = 0;
+      for (const a of arrows) total += Math.hypot(a.to.x - a.from.x, a.to.y - a.from.y);
+      lengthLogical = Math.max(30, total / arrows.length);
+    }
     let from: Vec;
     if (arrows.length === 0) {
       const c = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });

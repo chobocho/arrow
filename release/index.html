@@ -1602,12 +1602,22 @@
   App.prototype._insertArrow = function () {
     var view = this.view;
     var visibleLogicalW = view.width / view.scale;
-    var lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
     var gap = 10;
     var objects = this.store.get().objects;
     var arrows = [];
     for (var i = 0; i < objects.length; i++) {
       if (objects[i].type === 'arrow') arrows.push(objects[i]);
+    }
+    var lengthLogical;
+    if (arrows.length === 0) {
+      lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
+    } else {
+      var total = 0;
+      for (var k = 0; k < arrows.length; k++) {
+        var ak = arrows[k];
+        total += Math.hypot(ak.to.x - ak.from.x, ak.to.y - ak.from.y);
+      }
+      lengthLogical = Math.max(30, total / arrows.length);
     }
     var from;
     if (arrows.length === 0) {

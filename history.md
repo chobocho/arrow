@@ -4,6 +4,12 @@
 
 ## 2026-05-15
 
+### Insert 화살표 길이 자동 조절 (기존 평균)
+
+- `_insertArrow`에서 새 화살표 길이를 기존 화살표들의 평균 길이로 설정.
+- 화살표가 없으면 viewport 기반 기본값(60~400 사이) 사용.
+- 최소 30 logical px로 클램프하여 너무 작아지지 않도록 함.
+
 ### 확인 팝업도 커스텀 모달로 (삭제/이어작업 등)
 
 - `customConfirm(message): Promise<boolean>`를 CustomPrompt 모듈에 추가.
