@@ -42,6 +42,9 @@ const strings: Record<LangCode, Dict> = {
     load: '불러오기',
     close: '닫기',
     noWorks: '저장된 작업이 없습니다',
+    sortLabel: '정렬',
+    sortByName: '이름순',
+    sortByDate: '최근수정순',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -82,6 +85,9 @@ const strings: Record<LangCode, Dict> = {
     load: 'Load',
     close: 'Close',
     noWorks: 'No saved works',
+    sortLabel: 'Sort',
+    sortByName: 'Name',
+    sortByDate: 'Recent',
   },
 };
 

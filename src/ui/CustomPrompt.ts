@@ -68,6 +68,9 @@ function injectStyles(): void {
     .ap-works-item.current { background: #f0f5ff; border-radius: 4px; }
     .ap-works-item .work-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ap-works-empty { padding: 20px; text-align: center; color: #999; font-size: 13px; }
+    .ap-works-sort { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; color: #666; }
+    .ap-sort-label { color: #888; }
+    .ap-sort-btn.active { background: #3a7afe; border-color: #3a7afe; color: #fff; }
   `;
   document.head.appendChild(style);
 }

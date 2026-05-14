@@ -351,6 +351,7 @@ export class App {
 
   private worksModalEl: HTMLElement | null = null;
   private worksModalCleanup: (() => void) | null = null;
+  private worksSortKey: 'name' | 'date' = 'date';
 
   private openWorksModal(): void {
     if (this.worksModalEl) return;
@@ -369,10 +370,30 @@ export class App {
     closeBtn.className = 'ap-btn';
     closeBtn.textContent = t('close');
     header.append(title, closeBtn);
+
+    const sortBar = document.createElement('div');
+    sortBar.className = 'ap-works-sort';
+    const sortLabel = document.createElement('span');
+    sortLabel.className = 'ap-sort-label';
+    sortLabel.textContent = t('sortLabel') + ':';
+    const makeSortBtn = (key: 'name' | 'date', label: string): HTMLButtonElement => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ap-btn ap-btn-sm ap-sort-btn' + (this.worksSortKey === key ? ' active' : '');
+      b.textContent = label;
+      b.dataset.sort = key;
+      b.addEventListener('click', () => {
+        this.worksSortKey = key;
+        this.renderWorks();
+      });
+      return b;
+    };
+    sortBar.append(sortLabel, makeSortBtn('name', t('sortByName')), makeSortBtn('date', t('sortByDate')));
+
     const listEl = document.createElement('ul');
     listEl.className = 'ap-works-list';
     listEl.id = 'worksList';
-    card.append(header, listEl);
+    card.append(header, sortBar, listEl);
     overlay.appendChild(card);
     document.body.appendChild(overlay);
     this.worksModalEl = overlay;
@@ -389,8 +410,15 @@ export class App {
   }
 
   private renderWorks(): void {
-    const ul = this.worksModalEl ? this.worksModalEl.querySelector('#worksList') as HTMLUListElement | null : null;
+    if (!this.worksModalEl) return;
+    const ul = this.worksModalEl.querySelector('#worksList') as HTMLUListElement | null;
     if (!ul) return;
+    // Sync sort-button active state.
+    const sortBtns = this.worksModalEl.querySelectorAll('.ap-sort-btn');
+    sortBtns.forEach((b) => {
+      const el = b as HTMLElement;
+      el.classList.toggle('active', el.dataset.sort === this.worksSortKey);
+    });
     ul.innerHTML = '';
     const current = this.store.get().id;
     if (this.worksList.length === 0) {
@@ -400,7 +428,11 @@ export class App {
       ul.appendChild(empty);
       return;
     }
-    for (const w of this.worksList) {
+    const sorted = this.worksList.slice().sort((a, b) => {
+      if (this.worksSortKey === 'name') return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      return b.updatedAt - a.updatedAt;
+    });
+    for (const w of sorted) {
       const li = document.createElement('li');
       li.className = 'ap-works-item' + (w.id === current ? ' current' : '');
       const name = document.createElement('span');

@@ -195,7 +195,8 @@
       unsavedLoad: '변경사항이 있습니다. 불러올까요?',
       placeholderTopic: '주제 / Topic',
       ok: '확인', cancel: '취소',
-      load: '불러오기', close: '닫기', noWorks: '저장된 작업이 없습니다'
+      load: '불러오기', close: '닫기', noWorks: '저장된 작업이 없습니다',
+      sortLabel: '정렬', sortByName: '이름순', sortByDate: '최근수정순'
     },
     en: {
       appTitle: 'Arrow Mind Map',
@@ -218,7 +219,8 @@
       unsavedLoad: 'Unsaved changes. Discard?',
       placeholderTopic: 'Topic / 주제',
       ok: 'OK', cancel: 'Cancel',
-      load: 'Load', close: 'Close', noWorks: 'No saved works'
+      load: 'Load', close: 'Close', noWorks: 'No saved works',
+      sortLabel: 'Sort', sortByName: 'Name', sortByDate: 'Recent'
     }
   };
   var currentLang = 'ko';
@@ -259,7 +261,10 @@
       '.ap-works-item{display:flex;align-items:center;gap:6px;padding:8px 6px;border-bottom:1px solid #f1f1f5;font-size:13px;}' +
       '.ap-works-item.current{background:#f0f5ff;border-radius:4px;}' +
       '.ap-works-item .work-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
-      '.ap-works-empty{padding:20px;text-align:center;color:#999;font-size:13px;}';
+      '.ap-works-empty{padding:20px;text-align:center;color:#999;font-size:13px;}' +
+      '.ap-works-sort{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px;color:#666;}' +
+      '.ap-sort-label{color:#888;}' +
+      '.ap-sort-btn.active{background:#3a7afe;border-color:#3a7afe;color:#fff;}';
     document.head.appendChild(style);
   }
   function customPrompt(message, defaultValue) {
@@ -1008,6 +1013,7 @@
     this.draftArrow = null;
     this.dirty = false;
     this.worksList = [];
+    this.worksSortKey = 'date';
     this.renderScheduled = false;
 
     this.input = new InputHandler(this.canvas, this.view, this.store, {
@@ -1314,10 +1320,33 @@
     closeBtn.textContent = t('close');
     head.appendChild(title);
     head.appendChild(closeBtn);
+
+    var sortBar = document.createElement('div');
+    sortBar.className = 'ap-works-sort';
+    var sortLabel = document.createElement('span');
+    sortLabel.className = 'ap-sort-label';
+    sortLabel.textContent = t('sortLabel') + ':';
+    sortBar.appendChild(sortLabel);
+    var makeSortBtn = function (key, label) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ap-btn ap-btn-sm ap-sort-btn' + (self.worksSortKey === key ? ' active' : '');
+      b.textContent = label;
+      b.dataset.sort = key;
+      b.addEventListener('click', function () {
+        self.worksSortKey = key;
+        self._renderWorks();
+      });
+      return b;
+    };
+    sortBar.appendChild(makeSortBtn('name', t('sortByName')));
+    sortBar.appendChild(makeSortBtn('date', t('sortByDate')));
+
     var listEl = document.createElement('ul');
     listEl.className = 'ap-works-list';
     listEl.id = 'worksList';
     card.appendChild(head);
+    card.appendChild(sortBar);
     card.appendChild(listEl);
     overlay.appendChild(card);
     document.body.appendChild(overlay);
@@ -1342,6 +1371,12 @@
     if (!this._worksModalEl) return;
     var ul = this._worksModalEl.querySelector('#worksList');
     if (!ul) return;
+    var sortBtns = this._worksModalEl.querySelectorAll('.ap-sort-btn');
+    for (var k = 0; k < sortBtns.length; k++) {
+      var b = sortBtns[k];
+      if (b.dataset.sort === this.worksSortKey) b.classList.add('active');
+      else b.classList.remove('active');
+    }
     ul.innerHTML = '';
     var current = this.store.get().id;
     var self = this;
@@ -1352,7 +1387,13 @@
       ul.appendChild(empty);
       return;
     }
-    for (var i = 0; i < this.worksList.length; i++) {
+    var sorted = this.worksList.slice();
+    var sortKey = this.worksSortKey;
+    sorted.sort(function (a, b) {
+      if (sortKey === 'name') return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+      return b.updatedAt - a.updatedAt;
+    });
+    for (var i = 0; i < sorted.length; i++) {
       (function (w) {
         var li = document.createElement('li');
         li.className = 'ap-works-item' + (w.id === current ? ' current' : '');
@@ -1380,7 +1421,7 @@
         li.appendChild(renameBtn);
         li.appendChild(delBtn);
         ul.appendChild(li);
-      })(this.worksList[i]);
+      })(sorted[i]);
     }
   };
   App.prototype._loadWork = function (id) {
