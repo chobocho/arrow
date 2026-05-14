@@ -207,23 +207,30 @@ export class App {
       const el = document.getElementById(id);
       if (el) el.textContent = t(key);
     };
-    setText('btnSelect', 'modeSelect');
-    setText('btnArrow', 'modeArrow');
-    setText('btnText', 'modeText');
-    setText('btnPan', 'modePan');
-    setText('btnSave', 'save');
-    setText('btnSaveAs', 'saveAs');
-    setText('btnNew', 'newWork');
-    setText('btnExportPng', 'exportPng');
-    setText('btnExportJson', 'exportJson');
-    setText('btnImportJson', 'importJson');
-    setText('btnLang', 'language');
-    setText('btnEditCenter', 'editCenter');
-    setText('btnFit', 'fit');
-    setText('btnZoomIn', 'zoomIn');
-    setText('btnZoomOut', 'zoomOut');
-    setText('btnDelete', 'delete');
-    setText('btnWorks', 'works');
+    // Icon buttons keep their emoji and use title for the i18n tooltip.
+    const setTip = (id: string, key: string) => {
+      const el = document.getElementById(id);
+      if (el) el.title = t(key);
+    };
+    setTip('btnSelect', 'modeSelect');
+    setTip('btnArrow', 'modeArrow');
+    setTip('btnText', 'modeText');
+    setTip('btnPan', 'modePan');
+    setTip('btnSave', 'save');
+    setTip('btnSaveAs', 'saveAs');
+    setTip('btnNew', 'newWork');
+    setTip('btnExportPng', 'exportPng');
+    setTip('btnExportJson', 'exportJson');
+    setTip('btnImportJson', 'importJson');
+    setTip('btnEditCenter', 'editCenter');
+    setTip('btnFit', 'fit');
+    setTip('btnZoomIn', 'zoomIn');
+    setTip('btnZoomOut', 'zoomOut');
+    setTip('btnDelete', 'delete');
+    setTip('btnWorks', 'works');
+    // Language toggle: tooltip describes the target language.
+    const langEl = document.getElementById('btnLang');
+    if (langEl) langEl.title = getLang() === 'ko' ? 'Switch to English' : '한국어로 전환';
     setText('labelColor', 'selectColor');
     setText('labelThickness', 'thickness');
     setText('labelFontSize', 'fontSize');

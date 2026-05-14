@@ -47,14 +47,14 @@
       modeSelect: '선택', modeArrow: '화살표', modeText: '글자', modePan: '이동',
       save: '저장', saveAs: '새이름저장', newWork: '새 작업',
       delete: '삭제', rename: '이름변경',
-      exportPng: 'PNG', exportJson: 'JSON↓', importJson: 'JSON↑',
+      exportPng: 'PNG 내보내기', exportJson: 'JSON 내보내기', importJson: 'JSON 가져오기',
       language: 'EN', works: '작업 목록',
       editCenter: '주제 편집',
       promptCenter: '가운데 주제를 입력하세요',
       promptName: '작업 이름', promptRename: '새 이름',
       promptText: '글자를 입력하세요',
       confirmDelete: '정말 삭제할까요?', confirmDeleteSelected: '선택한 객체를 삭제할까요?',
-      zoomIn: '＋', zoomOut: '－', fit: '맞춤',
+      zoomIn: '확대', zoomOut: '축소', fit: '맞춤',
       selectColor: '색상', thickness: '굵기', fontSize: '글자크기',
       saved: '저장됨', importedCount: '개 가져왔습니다',
       invalidJson: '잘못된 JSON 형식입니다',
@@ -71,15 +71,15 @@
       modeSelect: 'Select', modeArrow: 'Arrow', modeText: 'Text', modePan: 'Pan',
       save: 'Save', saveAs: 'Save As', newWork: 'New',
       delete: 'Delete', rename: 'Rename',
-      exportPng: 'PNG', exportJson: 'JSON↓', importJson: 'JSON↑',
+      exportPng: 'Export PNG', exportJson: 'Export JSON', importJson: 'Import JSON',
       language: '한', works: 'Works',
       editCenter: 'Edit Topic',
       promptCenter: 'Enter the center topic',
       promptName: 'Work name', promptRename: 'New name',
       promptText: 'Enter text',
       confirmDelete: 'Delete this work?', confirmDeleteSelected: 'Delete the selected object?',
-      zoomIn: '＋', zoomOut: '－', fit: 'Fit',
-      selectColor: 'Color', thickness: 'Thickness', fontSize: 'Font',
+      zoomIn: 'Zoom In', zoomOut: 'Zoom Out', fit: 'Fit',
+      selectColor: 'Color', thickness: 'Thickness', fontSize: 'Font Size',
       saved: 'Saved', importedCount: ' imported',
       invalidJson: 'Invalid JSON',
       untitled: 'Untitled',
@@ -1031,23 +1031,28 @@
       var el = document.getElementById(id);
       if (el) el.textContent = t(key);
     };
-    setText('btnSelect', 'modeSelect');
-    setText('btnArrow', 'modeArrow');
-    setText('btnText', 'modeText');
-    setText('btnPan', 'modePan');
-    setText('btnSave', 'save');
-    setText('btnSaveAs', 'saveAs');
-    setText('btnNew', 'newWork');
-    setText('btnExportPng', 'exportPng');
-    setText('btnExportJson', 'exportJson');
-    setText('btnImportJson', 'importJson');
-    setText('btnLang', 'language');
-    setText('btnEditCenter', 'editCenter');
-    setText('btnFit', 'fit');
-    setText('btnZoomIn', 'zoomIn');
-    setText('btnZoomOut', 'zoomOut');
-    setText('btnDelete', 'delete');
-    setText('btnWorks', 'works');
+    var setTip = function (id, key) {
+      var el = document.getElementById(id);
+      if (el) el.title = t(key);
+    };
+    setTip('btnSelect', 'modeSelect');
+    setTip('btnArrow', 'modeArrow');
+    setTip('btnText', 'modeText');
+    setTip('btnPan', 'modePan');
+    setTip('btnSave', 'save');
+    setTip('btnSaveAs', 'saveAs');
+    setTip('btnNew', 'newWork');
+    setTip('btnExportPng', 'exportPng');
+    setTip('btnExportJson', 'exportJson');
+    setTip('btnImportJson', 'importJson');
+    setTip('btnEditCenter', 'editCenter');
+    setTip('btnFit', 'fit');
+    setTip('btnZoomIn', 'zoomIn');
+    setTip('btnZoomOut', 'zoomOut');
+    setTip('btnDelete', 'delete');
+    setTip('btnWorks', 'works');
+    var langEl = document.getElementById('btnLang');
+    if (langEl) langEl.title = currentLang === 'ko' ? 'Switch to English' : '한국어로 전환';
     setText('labelColor', 'selectColor');
     setText('labelThickness', 'thickness');
     setText('labelFontSize', 'fontSize');
