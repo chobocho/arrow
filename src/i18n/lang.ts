@@ -39,6 +39,9 @@ const strings: Record<LangCode, Dict> = {
     untitled: '제목 없음',
     ok: '확인',
     cancel: '취소',
+    load: '불러오기',
+    close: '닫기',
+    noWorks: '저장된 작업이 없습니다',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -76,6 +79,9 @@ const strings: Record<LangCode, Dict> = {
     untitled: 'Untitled',
     ok: 'OK',
     cancel: 'Cancel',
+    load: 'Load',
+    close: 'Close',
+    noWorks: 'No saved works',
   },
 };
 

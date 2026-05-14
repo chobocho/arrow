@@ -24,13 +24,12 @@
   }
   #app {
     display: grid;
-    grid-template-columns: 1fr 240px;
+    grid-template-columns: 1fr;
     grid-template-rows: 48px 1fr;
     height: 100%;
     width: 100%;
   }
   header {
-    grid-column: 1 / span 2;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
     display: flex;
@@ -72,24 +71,6 @@
   body[data-mode="select"] canvas#mainCanvas { cursor: default; }
   body[data-mode="pan"] canvas#mainCanvas { cursor: grab; }
   body[data-mode="text"] canvas#mainCanvas { cursor: text; }
-  aside.sidebar {
-    background: var(--panel);
-    border-left: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  aside.sidebar h3 { margin: 0; padding: 10px 12px; font-size: 13px; border-bottom: 1px solid var(--border); color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  ul#worksList { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; }
-  ul#worksList li {
-    display: flex; align-items: center; gap: 4px;
-    padding: 6px 10px; border-bottom: 1px solid #f1f1f5;
-    font-size: 13px;
-  }
-  ul#worksList li.current { background: #f0f5ff; }
-  ul#worksList .work-name { flex: 1; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  ul#worksList button { background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 2px 6px; font-size: 13px; }
-  ul#worksList button:hover { color: var(--accent); }
   #statusBar {
     position: absolute;
     bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -100,9 +81,7 @@
   }
   #statusBar.visible { opacity: 1; }
   @media (max-width: 720px) {
-    #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr 140px; }
-    aside.sidebar { border-left: none; border-top: 1px solid var(--border); }
-    aside.sidebar h3 { padding: 6px 12px; }
+    #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     header { flex-wrap: wrap; height: auto; padding: 6px; }
     button.tool { font-size: 12px; padding: 5px 8px; }
   }
@@ -137,6 +116,7 @@
       <button class="tool" id="btnNew">새 작업</button>
       <button class="tool" id="btnSave">저장</button>
       <button class="tool" id="btnSaveAs">새이름저장</button>
+      <button class="tool" id="btnWorks">작업 목록</button>
       <button class="tool" id="btnExportPng">PNG</button>
       <button class="tool" id="btnExportJson">JSON↓</button>
       <button class="tool" id="btnImportJson">JSON↑</button>
@@ -148,10 +128,6 @@
     <canvas id="mainCanvas"></canvas>
     <div id="statusBar"></div>
   </div>
-  <aside class="sidebar">
-    <h3 id="worksTitle">작업 목록</h3>
-    <ul id="worksList"></ul>
-  </aside>
 </div>
 <script src="dist/bundle.js"></script>
 </body>

@@ -59,6 +59,15 @@ function injectStyles(): void {
     .ap-btn:hover { background: #f0f3ff; }
     .ap-btn.primary { background: #3a7afe; border-color: #3a7afe; color: #fff; }
     .ap-btn.primary:hover { background: #2e6bf0; }
+    .ap-btn-sm { padding: 4px 10px; font-size: 12px; }
+    .ap-works-card { min-width: 380px; max-width: 92vw; max-height: 80vh; display: flex; flex-direction: column; }
+    .ap-works-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
+    .ap-works-head .ap-title { margin-bottom: 0; font-weight: 600; font-size: 15px; }
+    .ap-works-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+    .ap-works-item { display: flex; align-items: center; gap: 6px; padding: 8px 6px; border-bottom: 1px solid #f1f1f5; font-size: 13px; }
+    .ap-works-item.current { background: #f0f5ff; border-radius: 4px; }
+    .ap-works-item .work-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ap-works-empty { padding: 20px; text-align: center; color: #999; font-size: 13px; }
   `;
   document.head.appendChild(style);
 }

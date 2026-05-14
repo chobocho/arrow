@@ -154,6 +154,7 @@ export class App {
       this.requestRender();
     });
     ($('#btnDelete')).addEventListener('click', () => this.deleteSelected());
+    ($('#btnWorks')).addEventListener('click', () => this.openWorksModal());
 
     const colorEl = $('#inputColor') as HTMLInputElement;
     colorEl.value = this.color;
@@ -222,7 +223,7 @@ export class App {
     setText('btnZoomIn', 'zoomIn');
     setText('btnZoomOut', 'zoomOut');
     setText('btnDelete', 'delete');
-    setText('worksTitle', 'works');
+    setText('btnWorks', 'works');
     setText('labelColor', 'selectColor');
     setText('labelThickness', 'thickness');
     setText('labelFontSize', 'fontSize');
@@ -348,28 +349,80 @@ export class App {
     this.renderWorks();
   }
 
+  private worksModalEl: HTMLElement | null = null;
+  private worksModalCleanup: (() => void) | null = null;
+
+  private openWorksModal(): void {
+    if (this.worksModalEl) return;
+    void this.refreshWorks();
+    const overlay = document.createElement('div');
+    overlay.className = 'ap-overlay';
+    const card = document.createElement('div');
+    card.className = 'ap-card ap-works-card';
+    const header = document.createElement('div');
+    header.className = 'ap-works-head';
+    const title = document.createElement('div');
+    title.className = 'ap-title';
+    title.textContent = t('works');
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'ap-btn';
+    closeBtn.textContent = t('close');
+    header.append(title, closeBtn);
+    const listEl = document.createElement('ul');
+    listEl.className = 'ap-works-list';
+    listEl.id = 'worksList';
+    card.append(header, listEl);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    this.worksModalEl = overlay;
+
+    const onKey = (ev: KeyboardEvent): void => {
+      if (ev.key === 'Escape') { ev.preventDefault(); this.closeWorksModal(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    this.worksModalCleanup = () => document.removeEventListener('keydown', onKey, true);
+    closeBtn.addEventListener('click', () => this.closeWorksModal());
+    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) this.closeWorksModal(); });
+
+    this.renderWorks();
+  }
+
   private renderWorks(): void {
-    const ul = document.getElementById('worksList');
+    const ul = this.worksModalEl ? this.worksModalEl.querySelector('#worksList') as HTMLUListElement | null : null;
     if (!ul) return;
     ul.innerHTML = '';
     const current = this.store.get().id;
+    if (this.worksList.length === 0) {
+      const empty = document.createElement('li');
+      empty.className = 'ap-works-empty';
+      empty.textContent = t('noWorks');
+      ul.appendChild(empty);
+      return;
+    }
     for (const w of this.worksList) {
       const li = document.createElement('li');
-      li.className = 'work-item' + (w.id === current ? ' current' : '');
+      li.className = 'ap-works-item' + (w.id === current ? ' current' : '');
       const name = document.createElement('span');
       name.className = 'work-name';
       name.textContent = w.name;
       name.title = new Date(w.updatedAt).toLocaleString();
-      name.addEventListener('click', () => void this.loadWork(w.id));
+      const loadBtn = document.createElement('button');
+      loadBtn.type = 'button';
+      loadBtn.className = 'ap-btn ap-btn-sm';
+      loadBtn.textContent = t('load');
+      loadBtn.addEventListener('click', () => void this.loadWork(w.id));
       const renameBtn = document.createElement('button');
-      renameBtn.textContent = '✎';
-      renameBtn.title = t('rename');
+      renameBtn.type = 'button';
+      renameBtn.className = 'ap-btn ap-btn-sm';
+      renameBtn.textContent = t('rename');
       renameBtn.addEventListener('click', () => void this.renameWork(w));
       const delBtn = document.createElement('button');
-      delBtn.textContent = '✕';
-      delBtn.title = t('delete');
+      delBtn.type = 'button';
+      delBtn.className = 'ap-btn ap-btn-sm';
+      delBtn.textContent = t('delete');
       delBtn.addEventListener('click', () => void this.deleteWork(w));
-      li.append(name, renameBtn, delBtn);
+      li.append(name, loadBtn, renameBtn, delBtn);
       ul.appendChild(li);
     }
   }
@@ -380,7 +433,15 @@ export class App {
     if (!scene) return;
     this.adoptScene(scene);
     await this.db.setMeta('lastSceneId', id);
-    this.renderWorks();
+    this.closeWorksModal();
+  }
+
+  private closeWorksModal(): void {
+    if (!this.worksModalEl) return;
+    if (this.worksModalCleanup) this.worksModalCleanup();
+    this.worksModalEl.remove();
+    this.worksModalEl = null;
+    this.worksModalCleanup = null;
   }
 
   private async renameWork(w: SceneSummary): Promise<void> {

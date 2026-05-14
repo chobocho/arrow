@@ -62,7 +62,8 @@
       unsavedNew: '변경사항이 있습니다. 새로 만들까요?',
       unsavedLoad: '변경사항이 있습니다. 불러올까요?',
       placeholderTopic: '주제 / Topic',
-      ok: '확인', cancel: '취소'
+      ok: '확인', cancel: '취소',
+      load: '불러오기', close: '닫기', noWorks: '저장된 작업이 없습니다'
     },
     en: {
       appTitle: 'Arrow Mind Map',
@@ -84,7 +85,8 @@
       unsavedNew: 'Unsaved changes. New work?',
       unsavedLoad: 'Unsaved changes. Discard?',
       placeholderTopic: 'Topic / 주제',
-      ok: 'OK', cancel: 'Cancel'
+      ok: 'OK', cancel: 'Cancel',
+      load: 'Load', close: 'Close', noWorks: 'No saved works'
     }
   };
   var currentLang = 'ko';
@@ -116,7 +118,16 @@
       'border-radius:6px;cursor:pointer;font-size:13px;color:#222;}' +
       '.ap-btn:hover{background:#f0f3ff;}' +
       '.ap-btn.primary{background:#3a7afe;border-color:#3a7afe;color:#fff;}' +
-      '.ap-btn.primary:hover{background:#2e6bf0;}';
+      '.ap-btn.primary:hover{background:#2e6bf0;}' +
+      '.ap-btn-sm{padding:4px 10px;font-size:12px;}' +
+      '.ap-works-card{min-width:380px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;}' +
+      '.ap-works-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:12px;}' +
+      '.ap-works-head .ap-title{margin-bottom:0;font-weight:600;font-size:15px;}' +
+      '.ap-works-list{list-style:none;margin:0;padding:0;overflow-y:auto;flex:1;}' +
+      '.ap-works-item{display:flex;align-items:center;gap:6px;padding:8px 6px;border-bottom:1px solid #f1f1f5;font-size:13px;}' +
+      '.ap-works-item.current{background:#f0f5ff;border-radius:4px;}' +
+      '.ap-works-item .work-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+      '.ap-works-empty{padding:20px;text-align:center;color:#999;font-size:13px;}';
     document.head.appendChild(style);
   }
   function customPrompt(message, defaultValue) {
@@ -973,6 +984,7 @@
       self._requestRender();
     });
     byId('btnDelete').addEventListener('click', function () { self._deleteSelected(); });
+    byId('btnWorks').addEventListener('click', function () { self._openWorksModal(); });
     var colorEl = byId('inputColor');
     colorEl.value = this.color;
     colorEl.addEventListener('input', function () { self.color = colorEl.value; });
@@ -1029,7 +1041,7 @@
     setText('btnZoomIn', 'zoomIn');
     setText('btnZoomOut', 'zoomOut');
     setText('btnDelete', 'delete');
-    setText('worksTitle', 'works');
+    setText('btnWorks', 'works');
     setText('labelColor', 'selectColor');
     setText('labelThickness', 'thickness');
     setText('labelFontSize', 'fontSize');
@@ -1151,30 +1163,88 @@
       self._renderWorks();
     }).catch(function () { self.worksList = []; self._renderWorks(); });
   };
+  App.prototype._openWorksModal = function () {
+    if (this._worksModalEl) return;
+    var self = this;
+    this._refreshWorks();
+    var overlay = document.createElement('div');
+    overlay.className = 'ap-overlay';
+    var card = document.createElement('div');
+    card.className = 'ap-card ap-works-card';
+    var head = document.createElement('div');
+    head.className = 'ap-works-head';
+    var title = document.createElement('div');
+    title.className = 'ap-title';
+    title.textContent = t('works');
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'ap-btn';
+    closeBtn.textContent = t('close');
+    head.appendChild(title);
+    head.appendChild(closeBtn);
+    var listEl = document.createElement('ul');
+    listEl.className = 'ap-works-list';
+    listEl.id = 'worksList';
+    card.appendChild(head);
+    card.appendChild(listEl);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    this._worksModalEl = overlay;
+    var onKey = function (ev) {
+      if (ev.key === 'Escape') { ev.preventDefault(); self._closeWorksModal(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    this._worksModalCleanup = function () { document.removeEventListener('keydown', onKey, true); };
+    closeBtn.addEventListener('click', function () { self._closeWorksModal(); });
+    overlay.addEventListener('mousedown', function (ev) { if (ev.target === overlay) self._closeWorksModal(); });
+    this._renderWorks();
+  };
+  App.prototype._closeWorksModal = function () {
+    if (!this._worksModalEl) return;
+    if (this._worksModalCleanup) this._worksModalCleanup();
+    if (this._worksModalEl.parentNode) this._worksModalEl.parentNode.removeChild(this._worksModalEl);
+    this._worksModalEl = null;
+    this._worksModalCleanup = null;
+  };
   App.prototype._renderWorks = function () {
-    var ul = document.getElementById('worksList');
+    if (!this._worksModalEl) return;
+    var ul = this._worksModalEl.querySelector('#worksList');
     if (!ul) return;
     ul.innerHTML = '';
     var current = this.store.get().id;
     var self = this;
+    if (this.worksList.length === 0) {
+      var empty = document.createElement('li');
+      empty.className = 'ap-works-empty';
+      empty.textContent = t('noWorks');
+      ul.appendChild(empty);
+      return;
+    }
     for (var i = 0; i < this.worksList.length; i++) {
       (function (w) {
         var li = document.createElement('li');
-        li.className = 'work-item' + (w.id === current ? ' current' : '');
+        li.className = 'ap-works-item' + (w.id === current ? ' current' : '');
         var name = document.createElement('span');
         name.className = 'work-name';
         name.textContent = w.name;
         name.title = new Date(w.updatedAt).toLocaleString();
-        name.addEventListener('click', function () { self._loadWork(w.id); });
+        var loadBtn = document.createElement('button');
+        loadBtn.type = 'button';
+        loadBtn.className = 'ap-btn ap-btn-sm';
+        loadBtn.textContent = t('load');
+        loadBtn.addEventListener('click', function () { self._loadWork(w.id); });
         var renameBtn = document.createElement('button');
-        renameBtn.textContent = '✎';
-        renameBtn.title = t('rename');
-        renameBtn.addEventListener('click', function (ev) { ev.stopPropagation(); self._renameWork(w); });
+        renameBtn.type = 'button';
+        renameBtn.className = 'ap-btn ap-btn-sm';
+        renameBtn.textContent = t('rename');
+        renameBtn.addEventListener('click', function () { self._renameWork(w); });
         var delBtn = document.createElement('button');
-        delBtn.textContent = '✕';
-        delBtn.title = t('delete');
-        delBtn.addEventListener('click', function (ev) { ev.stopPropagation(); self._deleteWork(w); });
+        delBtn.type = 'button';
+        delBtn.className = 'ap-btn ap-btn-sm';
+        delBtn.textContent = t('delete');
+        delBtn.addEventListener('click', function () { self._deleteWork(w); });
         li.appendChild(name);
+        li.appendChild(loadBtn);
         li.appendChild(renameBtn);
         li.appendChild(delBtn);
         ul.appendChild(li);
@@ -1188,7 +1258,7 @@
       if (!scene) return;
       self._adoptScene(scene);
       self.db.setMeta('lastSceneId', id);
-      self._renderWorks();
+      self._closeWorksModal();
     });
   };
   App.prototype._renameWork = function (w) {
