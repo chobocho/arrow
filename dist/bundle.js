@@ -917,6 +917,22 @@
   };
   InputHandler.prototype._begin = function (screen, logical, wantsClone) {
     var mode = this.cb.getMode();
+    // Highlighter mode short-circuits hit testing: pressing on an existing
+    // object (e.g. text) must NOT select/move it — the user is drawing a
+    // stroke over whatever is under the pointer.
+    if (mode === 'highlighter') {
+      var hldraft = {
+        id: 'draft', type: 'highlighter',
+        points: [logical],
+        color: this.cb.getColor(), thickness: this.cb.getThickness()
+      };
+      this.cb.onDraftHighlighter(hldraft);
+      this.drag = { kind: 'draft-highlighter', draft: hldraft, lastScreen: screen };
+      this.selectedId = null;
+      this.cb.onSelect(null);
+      this.cb.onChange();
+      return;
+    }
     var tol = this._tolLogical();
     var hit = this.store.hitTest(logical, tol);
     if (hit.object) {
@@ -966,19 +982,8 @@
       this.cb.onChange();
       return;
     }
-    if (mode === 'highlighter') {
-      var hdraft = {
-        id: 'draft', type: 'highlighter',
-        points: [logical],
-        color: this.cb.getColor(), thickness: this.cb.getThickness()
-      };
-      this.cb.onDraftHighlighter(hdraft);
-      this.drag = { kind: 'draft-highlighter', draft: hdraft, lastScreen: screen };
-      this.selectedId = null;
-      this.cb.onSelect(null);
-      this.cb.onChange();
-      return;
-    }
+    // Highlighter empty-space case lives at the top of this method so it
+    // can also short-circuit object hits.
     if (mode === 'text') {
       this.drag = { kind: 'none' };
       var self = this;

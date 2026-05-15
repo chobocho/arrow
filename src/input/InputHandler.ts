@@ -214,6 +214,33 @@ export class InputHandler {
   // --- Shared pointer flow ---
   private beginPointer(screen: Vec, logical: Vec, wantsClone = false): void {
     const mode = this.cb.getMode();
+
+    // Highlighter mode owns the entire gesture: pressing on an existing
+    // object must NOT select/move it, because the user's intent is to lay
+    // down a stroke across whatever is under the pointer. (Previously a
+    // highlighter started on text grabbed the text and dragged it instead.)
+    if (mode === 'highlighter') {
+      const draft: HighlighterObject = {
+        id: 'draft',
+        type: 'highlighter',
+        points: [logical],
+        color: this.cb.getColor(),
+        thickness: this.cb.getThickness(),
+      };
+      this.cb.onDraftHighlighter(draft);
+      this.dragging = {
+        kind: 'draft-highlighter',
+        startLogical: logical,
+        startScreen: screen,
+        lastScreen: screen,
+        origin: { draft },
+      };
+      this.selectedId = null;
+      this.cb.onSelect(null);
+      this.cb.onChange();
+      return;
+    }
+
     const tol = this.toleranceLogical();
     const hit = this.store.hitTest(logical, tol);
 
@@ -265,28 +292,8 @@ export class InputHandler {
       return;
     }
 
-    // Empty space behavior depends on mode.
-    if (mode === 'highlighter') {
-      const draft: HighlighterObject = {
-        id: 'draft',
-        type: 'highlighter',
-        points: [logical],
-        color: this.cb.getColor(),
-        thickness: this.cb.getThickness(),
-      };
-      this.cb.onDraftHighlighter(draft);
-      this.dragging = {
-        kind: 'draft-highlighter',
-        startLogical: logical,
-        startScreen: screen,
-        lastScreen: screen,
-        origin: { draft },
-      };
-      this.selectedId = null;
-      this.cb.onSelect(null);
-      this.cb.onChange();
-      return;
-    }
+    // Empty space behavior depends on mode. (Highlighter is handled at the
+    // top of this method so it can short-circuit object hits.)
     if (mode === 'arrow') {
       const draft: ArrowObject = {
         id: 'draft',
