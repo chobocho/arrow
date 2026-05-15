@@ -640,8 +640,12 @@
       if (pointToSegmentDistance(p, obj.from, obj.to) <= Math.max(tol, obj.thickness)) return 'arrow-body';
     } else if (obj.type === 'highlighter') {
       var margin = Math.max(tol, obj.thickness * 2);
-      for (var i = 0; i + 1 < obj.points.length; i++) {
-        if (pointToSegmentDistance(p, obj.points[i], obj.points[i + 1]) <= margin) return 'highlighter-body';
+      if (obj.points.length === 1) {
+        if (vecDist(p, obj.points[0]) <= margin) return 'highlighter-body';
+      } else {
+        for (var i = 0; i + 1 < obj.points.length; i++) {
+          if (pointToSegmentDistance(p, obj.points[i], obj.points[i + 1]) <= margin) return 'highlighter-body';
+        }
       }
     } else {
       var charW = obj.fontSize * 0.6;

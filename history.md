@@ -4,6 +4,13 @@
 
 ## 2026-05-15
 
+### 단일 점 형광펜 선택 불가 버그 수정
+
+- 증상: 모바일에서 펜으로 한 번 톡 찍어 만든 형광펜(점 1개짜리)을 다시 탭해도 선택되지 않아 삭제할 방법이 없었음.
+- 원인: `SceneStore.hitObject`의 형광펜 분기가 세그먼트 루프(`i + 1 < points.length`)만 사용해 점이 1개인 경우 루프가 한 번도 실행되지 않아 항상 미스.
+- 수정: `points.length === 1`이면 단일 점과의 거리를 `margin` 이내로 직접 비교하여 `highlighter-body` 핸들로 히트 처리. 다중 점 스트로크는 기존 세그먼트 거리 로직 유지.
+- 적용 위치: `src/models/SceneStore.ts`, `dist/bundle.js`.
+
 ### 형광펜(Highlighter) 도구 추가
 
 - 새 객체 유형 `HighlighterObject { points: Vec[], color, thickness }` 추가. `SceneObject` 유니온에 합류시켜 저장/불러오기/내보내기 흐름에 그대로 편승.

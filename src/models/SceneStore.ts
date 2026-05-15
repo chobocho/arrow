@@ -152,9 +152,13 @@ export class SceneStore {
       if (d <= Math.max(tolerance, obj.thickness)) return { handle: 'arrow-body' };
     } else if (obj.type === 'highlighter') {
       const margin = Math.max(tolerance, obj.thickness * 2);
-      for (let i = 0; i + 1 < obj.points.length; i++) {
-        const d = pointToSegmentDistance(point, obj.points[i], obj.points[i + 1]);
-        if (d <= margin) return { handle: 'highlighter-body' };
+      if (obj.points.length === 1) {
+        if (vecDist(point, obj.points[0]) <= margin) return { handle: 'highlighter-body' };
+      } else {
+        for (let i = 0; i + 1 < obj.points.length; i++) {
+          const d = pointToSegmentDistance(point, obj.points[i], obj.points[i + 1]);
+          if (d <= margin) return { handle: 'highlighter-body' };
+        }
       }
     } else {
       // Rough bounding box; renderer measures width but we don't have ctx here.
