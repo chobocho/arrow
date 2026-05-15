@@ -1002,7 +1002,17 @@
     e.preventDefault();
     var screen = this._screenFromEvent(e);
     var logical = this.view.screenToLogical(screen);
-    if (e.button === 2 || e.button === 1 || this.cb.getMode() === 'pan' || e.shiftKey) {
+    if (e.button === 2) {
+      // Right-click: select the object under the cursor (or deselect on empty).
+      var tol = this._tolLogical();
+      var hit = this.store.hitTest(logical, tol);
+      this.selectedId = hit.object ? hit.object.id : null;
+      this.cb.onSelect(this.selectedId);
+      this.drag = { kind: 'none', lastScreen: screen };
+      this.cb.onChange();
+      return;
+    }
+    if (e.button === 1 || this.cb.getMode() === 'pan' || e.shiftKey) {
       this.drag = { kind: 'pan', startLogical: logical, lastScreen: screen };
       return;
     }

@@ -4,6 +4,13 @@
 
 ## 2026-05-15
 
+### 번들 우클릭 드리프트 보정
+
+- 증상: 커밋 `003458f`(우클릭으로 객체 선택)에서 TS 소스만 갱신되고 `dist/bundle.js`는 누락. 번들의 `_onMouseDown`이 `e.button === 2`도 pan으로 묶어 처리해 우클릭 선택이 동작하지 않았음.
+- 수정: 번들 `_onMouseDown`에 TS 소스와 동일한 우클릭 분기 추가 — `hitTest`로 객체 찾기 → `selectedId` 갱신 → `onSelect` 호출. drag는 `none`으로 두어 우클릭만으로 드래그가 시작되지 않게 함.
+- 검증: `./build.sh` → `release/index.html` 92,266 bytes 빌드. `node test/run_node.js` 35/35 통과. release에서 "Right-click: select" 주석 매칭 확인.
+- 적용 위치: `dist/bundle.js`, `release/index.html` (재빌드 산출물).
+
 ### TODO #15·#16: Ctrl+드래그 객체 복제 + 모바일용 가상 Ctrl 버튼
 
 - 동기: TODO.md에 남아 있던 두 미완료 항목. #16(Ctrl+드래그 복제)이 본 기능, #15(우측 하단 가상 Ctrl)는 물리 Ctrl 키 없는 모바일에서 #16을 트리거하기 위한 UI. 한 쌍이라 같이 구현.
