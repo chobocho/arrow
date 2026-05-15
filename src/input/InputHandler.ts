@@ -95,7 +95,17 @@ export class InputHandler {
     e.preventDefault();
     const screen = this.getScreenFromEvent(e);
     const logical = this.view.screenToLogical(screen);
-    if (e.button === 2 || e.button === 1 || this.cb.getMode() === 'pan' || e.shiftKey) {
+    if (e.button === 2) {
+      // Right-click: select the object under the cursor (or deselect on empty).
+      const tol = this.toleranceLogical();
+      const hit = this.store.hitTest(logical, tol);
+      this.selectedId = hit.object ? hit.object.id : null;
+      this.cb.onSelect(this.selectedId);
+      this.dragging = { kind: 'none', startLogical: logical, startScreen: screen, lastScreen: screen };
+      this.cb.onChange();
+      return;
+    }
+    if (e.button === 1 || this.cb.getMode() === 'pan' || e.shiftKey) {
       this.dragging = { kind: 'pan', startLogical: logical, startScreen: screen, lastScreen: screen };
       return;
     }
