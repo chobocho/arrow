@@ -1,0 +1,57 @@
+@startuml sequence-save-load
+title Sequence — Save to IndexedDB and auto-restore on next visit
+
+skinparam shadowing false
+skinparam sequence {
+  ArrowColor #3A7AFE
+  LifeLineBorderColor #888888
+  ParticipantBorderColor #3A7AFE
+  ParticipantBackgroundColor #EAF1FF
+  ActorBackgroundColor #FFF7D6
+  ActorBorderColor #C9A227
+}
+
+actor User
+participant App as app
+participant CustomPrompt as prompt
+participant SceneStore as store
+participant IndexedDBStore as db
+participant IndexedDB as idb
+
+== Save flow (Ctrl+S or Save button) ==
+User -> app : Ctrl+S
+app -> app : ensureName()
+alt no name yet
+  app -> prompt : customPrompt("Work name")
+  prompt --> User : modal
+  User -> prompt : type name, press Enter
+  prompt --> app : "My Map"
+  app -> store : setName("My Map")
+end
+app -> store : get()
+store --> app : SceneData
+app -> app : copy view offset / scale into scene
+app -> db : saveScene(scene)
+db -> idb : put(scene) in "scenes" store
+idb --> db : ok
+db --> app : ok
+app -> db : setMeta("lastSceneId", scene.id)
+db -> idb : put(meta)
+idb --> db : ok
+app -> app : dirty = false, flashStatus("Saved")
+
+== Restore on next visit ==
+User -> app : open page
+app -> db : getMeta("lastSceneId")
+db -> idb : get(meta)
+idb --> db : "scene_abc"
+db --> app : "scene_abc"
+app -> db : loadScene("scene_abc")
+db -> idb : get("scene_abc")
+idb --> db : SceneData
+db --> app : SceneData
+app -> store : replace(scene)
+store -> store : emit()
+app -> app : restore view offset / scale,\nrender scene
+
+@enduml

@@ -1,12 +1,12 @@
 import { CanvasView } from './canvas/CanvasView.js';
 import { Renderer } from './canvas/Renderer.js';
 import { SceneStore } from './models/SceneStore.js';
-import { ArrowObject, DEFAULT_CENTER_FONT_SIZE, SceneData, emptyScene } from './models/types.js';
+import { ArrowObject, DEFAULT_CENTER_FONT_SIZE, SceneData, SceneObject, emptyScene } from './models/types.js';
 import { InputHandler, EditorMode } from './input/InputHandler.js';
 import { IndexedDBStore, SceneSummary } from './storage/IndexedDBStore.js';
 import { LangCode, getLang, setLang, t } from './i18n/lang.js';
 import { MAX_CANVAS_SIZE, Vec, clampToCanvas } from './utils/geometry.js';
-import { customPrompt, customConfirm } from './ui/CustomPrompt.js';
+import { customPrompt, customConfirm, ensureModalStyles } from './ui/CustomPrompt.js';
 
 // Top-level controller that ties together the renderer, store, input handler,
 // and DOM toolbar/panel. Exposed via window.startApp by the bundled HTML.
@@ -28,6 +28,9 @@ export class App {
   private draftArrow: ArrowObject | null = null;
   private dirty = false;
   private worksList: SceneSummary[] = [];
+  // Internal clipboard for Ctrl+C / Ctrl+V cloning. Holds a deep snapshot so
+  // edits to the original after Copy don't bleed into future Pastes.
+  private clipboard: SceneObject | null = null;
 
   constructor(root: HTMLElement) {
     this.canvas = root.querySelector('#mainCanvas') as HTMLCanvasElement;
@@ -118,6 +121,9 @@ export class App {
   private syncFontInputToSelection(): void {
     const el = document.getElementById('inputFontSize') as HTMLInputElement | null;
     if (!el) return;
+    // Don't clobber the user's in-progress typing. The clamp on commit would
+    // otherwise jump "1" → "8" mid-typing and prevent ever reaching "12".
+    if (document.activeElement === el) return;
     const sel = this.getSelectedObject();
     if (sel && sel.type === 'text') el.value = String(sel.fontSize);
     else el.value = String(this.fontSize);
@@ -187,6 +193,7 @@ export class App {
     });
     ($('#btnDelete')).addEventListener('click', () => this.deleteSelected());
     ($('#btnWorks')).addEventListener('click', () => this.openWorksModal());
+    ($('#btnHelp')).addEventListener('click', () => this.openHelpModal());
 
     const colorEl = $('#inputColor') as HTMLInputElement;
     colorEl.value = this.color;
@@ -207,12 +214,22 @@ export class App {
         this.fontSize = n || 28;
       }
     });
+    // On commit (blur / Enter), snap the field to the actual clamped value
+    // so an out-of-range entry like "5" visually corrects to "8".
+    fontEl.addEventListener('change', () => {
+      const sel = this.getSelectedObject();
+      if (sel && sel.type === 'text') fontEl.value = String(sel.fontSize);
+      else fontEl.value = String(this.fontSize);
+    });
     const centerFontEl = $('#inputCenterFontSize') as HTMLInputElement;
     centerFontEl.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
     centerFontEl.addEventListener('input', () => {
       const n = parseFloat(centerFontEl.value);
       if (!Number.isFinite(n)) return;
       this.store.setCenterFontSize(n);
+    });
+    centerFontEl.addEventListener('change', () => {
+      centerFontEl.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
     });
 
     this.applyLangToUi();
@@ -277,6 +294,7 @@ export class App {
     setTip('btnZoomOut', 'zoomOut');
     setTip('btnDelete', 'delete');
     setTip('btnWorks', 'works');
+    setTip('btnHelp', 'help');
     // Language toggle: tooltip describes the target language.
     const langEl = document.getElementById('btnLang');
     if (langEl) langEl.title = getLang() === 'ko' ? 'Switch to English' : '한국어로 전환';
@@ -409,6 +427,73 @@ export class App {
   private worksModalEl: HTMLElement | null = null;
   private worksModalCleanup: (() => void) | null = null;
   private worksSortKey: 'name' | 'date' = 'date';
+  private helpModalEl: HTMLElement | null = null;
+  private helpModalCleanup: (() => void) | null = null;
+
+  private openHelpModal(): void {
+    if (this.helpModalEl) return;
+    // The shared modal CSS is injected lazily by customPrompt/customConfirm.
+    // Ensure it's mounted now so the help modal is visible on first open.
+    ensureModalStyles();
+    const overlay = document.createElement('div');
+    overlay.className = 'ap-overlay';
+    const card = document.createElement('div');
+    card.className = 'ap-card ap-help-card';
+    const header = document.createElement('div');
+    header.className = 'ap-works-head';
+    const title = document.createElement('div');
+    title.className = 'ap-title';
+    title.textContent = t('helpTitle');
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'ap-btn';
+    closeBtn.textContent = t('close');
+    header.append(title, closeBtn);
+
+    const body = document.createElement('div');
+    body.className = 'ap-help-body';
+    const sections: Array<[string, string]> = [
+      ['helpSecModes', 'helpModes'],
+      ['helpSecKeys', 'helpKeys'],
+      ['helpSecMouse', 'helpMouse'],
+      ['helpSecMobile', 'helpMobile'],
+    ];
+    for (const [titleKey, bodyKey] of sections) {
+      const sec = document.createElement('div');
+      sec.className = 'sec';
+      sec.textContent = '[' + t(titleKey) + ']';
+      const txt = document.createElement('div');
+      txt.textContent = t(bodyKey);
+      body.append(sec, txt);
+      const spacer = document.createElement('div');
+      body.appendChild(spacer);
+    }
+
+    card.append(header, body);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    this.helpModalEl = overlay;
+
+    const onKey = (ev: KeyboardEvent): void => {
+      if (ev.key === 'Escape' || ev.key === 'F1') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.closeHelpModal();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    this.helpModalCleanup = () => document.removeEventListener('keydown', onKey, true);
+    closeBtn.addEventListener('click', () => this.closeHelpModal());
+    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) this.closeHelpModal(); });
+  }
+
+  private closeHelpModal(): void {
+    if (!this.helpModalEl) return;
+    if (this.helpModalCleanup) this.helpModalCleanup();
+    this.helpModalEl.remove();
+    this.helpModalEl = null;
+    this.helpModalCleanup = null;
+  }
 
   private openWorksModal(): void {
     if (this.worksModalEl) return;
@@ -587,12 +672,21 @@ export class App {
   private onKey(e: KeyboardEvent): void {
     if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
     if (this.worksModalEl) return;
+    if (this.helpModalEl) {
+      if (e.key === 'F1') e.preventDefault();
+      return;
+    }
+    if (e.key === 'F1') {
+      e.preventDefault();
+      this.openHelpModal();
+      return;
+    }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (this.selectedId) {
         e.preventDefault();
         this.deleteSelected();
       }
-    } else if (e.key === 'Insert') {
+    } else if (e.key === 'Insert' || e.key === '+') {
       e.preventDefault();
       this.insertArrow();
     } else if (e.key === 'Enter') {
@@ -601,10 +695,50 @@ export class App {
     } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       void this.save();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      if (this.copySelected()) e.preventDefault();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+      if (this.pasteClone()) e.preventDefault();
     } else if (e.key === 'a') this.setMode('arrow');
     else if (e.key === 't') this.setMode('text');
     else if (e.key === 'v') this.setMode('select');
     else if (e.key === 'h') this.setMode('pan');
+  }
+
+  // Copy the currently selected object to the internal clipboard. Returns
+  // true if something was copied so callers can suppress the default
+  // browser copy (which would otherwise copy empty text selection).
+  private copySelected(): boolean {
+    const sel = this.getSelectedObject();
+    if (!sel) return false;
+    this.clipboard = JSON.parse(JSON.stringify(sel));
+    this.flashStatus('copy');
+    return true;
+  }
+
+  // Paste the clipboard object as a new scene object, offset slightly so the
+  // user sees the clone. Subsequent pastes continue to offset from the last
+  // paste position so repeated Ctrl+V spreads copies out.
+  private pasteClone(): boolean {
+    const clip = this.clipboard;
+    if (!clip) return false;
+    const offset = 20;
+    let created: SceneObject;
+    if (clip.type === 'arrow') {
+      const from: Vec = { x: clip.from.x + offset, y: clip.from.y + offset };
+      const to: Vec = { x: clip.to.x + offset, y: clip.to.y + offset };
+      created = this.store.addArrow(from, to, clip.color, clip.thickness);
+      clip.from = from;
+      clip.to = to;
+    } else {
+      const pos: Vec = { x: clip.pos.x + offset, y: clip.pos.y + offset };
+      created = this.store.addText(pos, clip.text, clip.fontSize, clip.color);
+      clip.pos = pos;
+    }
+    this.selectedId = created.id;
+    this.input.setSelected(created.id);
+    this.flashStatus('paste');
+    return true;
   }
 
   // Opens the text-input modal and places the typed text at the current
@@ -625,17 +759,17 @@ export class App {
   // exist yet, fall back to the current viewport center.
   private insertArrow(): void {
     const visibleLogicalW = this.view.width / this.view.scale;
-    const gap = 10;
+    const gap = 5;
     const arrows = this.store.get().objects.filter((o) => o.type === 'arrow') as ArrowObject[];
-    // Auto length: average of existing arrows' lengths so consecutive Insert
-    // arrows match the diagram's scale. Fall back to a viewport-based default.
+    // Auto length: 1/3 of the previous default (viewport-based or avg of
+    // existing arrows) so a quick + spam grows the diagram in finer steps.
     let lengthLogical: number;
     if (arrows.length === 0) {
-      lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
+      lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25)) / 3;
     } else {
       let total = 0;
       for (const a of arrows) total += Math.hypot(a.to.x - a.from.x, a.to.y - a.from.y);
-      lengthLogical = Math.max(30, total / arrows.length);
+      lengthLogical = Math.max(30, total / arrows.length) / 3;
     }
     let from: Vec;
     if (arrows.length === 0) {

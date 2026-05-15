@@ -7,6 +7,12 @@ import { t } from '../i18n/lang.js';
 
 let stylesInjected = false;
 
+// Exposed so other modal openers (e.g. the help modal in app.ts) can guarantee
+// the shared .ap-overlay / .ap-card styles are present before mounting.
+export function ensureModalStyles(): void {
+  injectStyles();
+}
+
 function injectStyles(): void {
   if (stylesInjected) return;
   stylesInjected = true;
@@ -117,6 +123,9 @@ export function customPrompt(message: string, defaultValue: string = ''): Promis
     };
     const onKey = (ev: KeyboardEvent): void => {
       if (ev.key === 'Enter') {
+        // Korean/Japanese IME fires an Enter to commit composition. Ignore that
+        // first Enter so users don't accidentally submit while still composing.
+        if (ev.isComposing || ev.keyCode === 229) return;
         ev.preventDefault();
         ev.stopPropagation();
         finish(input.value);
@@ -175,8 +184,10 @@ export function customConfirm(message: string): Promise<boolean> {
       resolve(value);
     };
     const onKey = (ev: KeyboardEvent): void => {
-      if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); finish(true); }
-      else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); }
+      if (ev.key === 'Enter') {
+        if (ev.isComposing || ev.keyCode === 229) return;
+        ev.preventDefault(); ev.stopPropagation(); finish(true);
+      } else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); }
     };
     document.addEventListener('keydown', onKey, true);
     okBtn.addEventListener('click', () => finish(true));

@@ -4,6 +4,56 @@
 
 ## 2026-05-15
 
+### Ctrl+C / Ctrl+V로 선택 객체 복제
+
+- App에 내부 클립보드 필드 `clipboard: SceneObject | null` 추가. 시스템 클립보드는 사용하지 않음 (객체 구조를 그대로 보존하기 위함).
+- `Ctrl/⌘ + C` — 선택 객체를 `JSON.parse(JSON.stringify(...))`로 깊은 복사하여 클립보드에 보관. 선택이 없으면 무동작.
+- `Ctrl/⌘ + V` — 클립보드 객체에 (+20, +20) logical px 오프셋을 더해 새 객체로 추가 후 자동 선택. 연속 붙여넣기 시 클립보드 좌표도 함께 이동하여 사본들이 계단식으로 펼쳐짐.
+- 도움말 모달 / README 단축키 항목에 `Ctrl/⌘ + C / V` 추가.
+- 충돌 방지: 기존 `V` 단축키(선택 모드 토글)가 Ctrl+V를 가로채지 않도록 Ctrl+V 체크를 먼저 수행.
+
+### 화살표 그리기 후 모드 유지
+
+- 기존엔 InputHandler가 draft 화살표를 commit한 뒤 자동으로 `select` 모드로 전환했음 → 연속 화살표 그리기가 불편.
+- 변경: 화살표 commit 후 모드를 그대로 유지. 사용자가 명시적으로 다른 모드를 고르기 전까지 화살표 그리기 모드 지속.
+
+### IME 조합 중 Enter로 모달이 닫히는 버그 수정
+
+- 한글/일본어 IME 조합 중 Enter 키는 조합 완료(commit)용으로 사용되는데, customPrompt / customConfirm의 keydown 핸들러가 이 Enter도 가로채 모달을 닫아버렸음.
+- 수정: keydown 핸들러에서 `ev.isComposing` 또는 `ev.keyCode === 229`이면 무시. 사용자가 조합을 마치고 다시 Enter를 눌렀을 때만 실제 제출이 일어남.
+
+### `+`/Insert 화살표 길이 1/3, 간격 5px로 축소
+
+- `insertArrow` 자동 길이를 기존 계산의 1/3로 줄임 (`Math.max(60, min(400, vw*0.25)) / 3` 또는 평균/3).
+- 연속 삽입 시 stagger 간격을 10px → 5px로 변경. 결과: 새 화살표가 직전 화살표의 오른쪽으로 5px, 위로 5px 오프셋된 위치에 시작.
+
+### `+` 키로 화살표 추가 지원
+
+- 기존 `Insert` 단축키와 동일하게 `+` 입력 시 `insertArrow` 호출. 메인 키보드의 Shift+= 와 숫자키패드 + 모두 `e.key === '+'`로 감지.
+- 도움말 모달 / README 단축키 항목을 `Insert / +`로 갱신.
+
+### 도움말 모달 첫 오픈 시 안 보이는 버그 수정
+
+- 증상: 앱 시작 후 다른 팝업(글자 입력 등)을 한 번도 안 띄운 상태에서 F1/❓를 누르면 도움말 DOM은 있지만 화면에 안 보임. 글자 입력 팝업 등을 한 번 띄운 뒤에는 정상 표시.
+- 원인: `.ap-overlay` / `.ap-card` 등 모달 공용 CSS는 `customPrompt` / `customConfirm`이 처음 호출될 때 `injectCustomPromptStyles()`가 lazy 주입. 도움말 모달은 이 함수를 거치지 않아 스타일 없는 채로 마운트됐음.
+- 수정: `CustomPrompt`에서 `ensureModalStyles()`를 export하고 `openHelpModal` 시작 시 호출. 번들에서도 `injectCustomPromptStyles()` 직접 호출.
+
+### 글자크기 입력에서 "12" 같은 값 입력 불가 버그 수정
+
+- 증상: 텍스트가 선택된 상태에서 "글자크기" 입력란에 12를 치려고 하면 "1"을 입력하는 순간 값이 8로 점프해 두번째 자리를 칠 수 없었음.
+- 원인: 입력값을 받자마자 `Math.max(8, ...)` 클램프가 객체 fontSize에 적용 → 스토어 emit → `syncFontInputToSelection`이 input.value를 클램프된 "8"로 덮어씀.
+- 수정: `syncFontInputToSelection`가 현재 input이 포커스된 상태(`document.activeElement === el`)이면 덮어쓰지 않도록 가드. 사용자가 다 치고 blur할 때 동작하는 `change` 핸들러를 추가해 최종 클램프 값으로 스냅.
+- HTML `min` 속성을 `1`로 낮춰 입력 중 브라우저가 invalid로 표시하지 않도록 함. 실제 클램프 범위(8~200)는 모델 계층에서 유지.
+
+### F1 / ❓ 버튼으로 도움말 모달 추가
+
+- 헤더 우측 끝에 `btnHelp`(❓) 아이콘 버튼 추가, 클릭 시 도움말 모달 오픈.
+- `F1` 키 단축키로도 동일 모달 오픈. 모달이 열린 상태에서 `Esc` 또는 `F1`로 닫힘.
+- 모달은 `.ap-overlay` / `.ap-card` 스타일을 재사용하고 `.ap-help-card` / `.ap-help-body` CSS만 추가.
+- 내용: 모드 전환 단축키(V/A/T/H), 키보드 단축키(Insert/Enter/Delete/Ctrl-S/F1), 마우스 동작, 모바일 제스처 4개 섹션.
+- i18n: `help`, `helpTitle`, `helpSecModes/Keys/Mouse/Mobile`, `helpModes/Keys/Mouse/Mobile` 한/영 추가.
+- 모달 키 핸들러는 `stopPropagation`으로 window 레벨 `_onKey` F1 재실행 방지.
+
 ### 글자크기 입력이 선택된 텍스트도 리사이즈하도록
 
 - 기존: "글자크기" 입력은 새로 만들 텍스트의 기본값만 바꿔, 이미 그려진 텍스트는 드래그 핸들로만 크기 조정 가능했음.

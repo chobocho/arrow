@@ -1,0 +1,199 @@
+@startuml class-diagram
+title Arrow Mind Map — Module / Class Overview
+
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #3A7AFE
+  ArrowColor #555555
+  HeaderBackgroundColor #EAF1FF
+}
+skinparam note {
+  BackgroundColor #FFFDF5
+  BorderColor #C9A227
+}
+
+package "app" {
+  class App {
+    - canvas : HTMLCanvasElement
+    - view : CanvasView
+    - store : SceneStore
+    - renderer : Renderer
+    - input : InputHandler
+    - db : IndexedDBStore
+    - mode : EditorMode
+    - selectedId : string?
+    - clipboard : SceneObject?
+    + bindUi()
+    + onKey(e)
+    + insertArrow()
+    + insertTextAtViewportCenter()
+    + copySelected() : boolean
+    + pasteClone() : boolean
+    + save() / saveAs() / newScene()
+    + exportPng() / exportJson() / importJson()
+  }
+}
+
+package "canvas" {
+  class CanvasView {
+    + offset : Vec
+    + scale : number
+    + width / height / dpr
+    + resize(w, h, dpr)
+    + screenToLogical(p) : Vec
+    + logicalToScreen(p) : Vec
+    + zoomAt(anchor, factor)
+    + panBy(dx, dy)
+    + centerOn(p)
+  }
+  class Renderer {
+    - ctx : CanvasRenderingContext2D
+    - view : CanvasView
+    + render(scene, opts)
+    + renderToImage(scene) : HTMLCanvasElement
+    - drawCenter(scene)
+    - drawArrow(a)
+    - drawText(t)
+    - drawSelection(obj)
+  }
+}
+
+package "models" {
+  class SceneStore {
+    - scene : SceneData
+    - listeners : Listener[]
+    + get() : SceneData
+    + replace(next)
+    + subscribe(fn)
+    + setCenterText(s) / setCenterFontSize(n)
+    + setName(s)
+    + addArrow(from, to, color, thickness) : ArrowObject
+    + addText(pos, text, fontSize, color) : TextObject
+    + update(id, mutator)
+    + remove(id)
+    + hitTest(p, tol) : HitResult
+  }
+  class SceneData <<interface>> {
+    id : string
+    name : string
+    centerText : string
+    centerFontSize : number?
+    objects : SceneObject[]
+    viewOffsetX / viewOffsetY / viewScale
+    createdAt / updatedAt
+  }
+  class ArrowObject <<interface>> {
+    id : string
+    type = "arrow"
+    from : Vec
+    to : Vec
+    color : string
+    thickness : number
+  }
+  class TextObject <<interface>> {
+    id : string
+    type = "text"
+    pos : Vec
+    text : string
+    fontSize : number
+    color : string
+  }
+  SceneData "1" *-- "*" ArrowObject
+  SceneData "1" *-- "*" TextObject
+}
+
+package "input" {
+  class InputHandler {
+    - dragging : DragState
+    - selectedId : string?
+    - pinch : PinchState?
+    + attach()
+    + setSelected(id)
+    - beginPointer(screen, logical)
+    - movePointer(screen)
+    - endPointer(screen)
+    - handleDoubleTap(logical)
+  }
+  enum EditorMode {
+    select
+    arrow
+    text
+    pan
+  }
+}
+
+package "storage" {
+  class IndexedDBStore {
+    - dbPromise : Promise<IDBDatabase>
+    + saveScene(scene)
+    + loadScene(id) : SceneData?
+    + listScenes() : SceneSummary[]
+    + renameScene(id, name)
+    + deleteScene(id)
+    + setMeta(k, v) / getMeta(k)
+    + exportAll() / importAll(payload, merge)
+  }
+}
+
+package "ui" {
+  class CustomPrompt <<module>> {
+    + customPrompt(message, default) : Promise<string?>
+    + customConfirm(message) : Promise<boolean>
+    + ensureModalStyles()
+  }
+}
+
+package "i18n" {
+  class lang <<module>> {
+    + getLang() : LangCode
+    + setLang(code)
+    + t(key) : string
+  }
+}
+
+package "utils" {
+  class geometry <<module>> {
+    + MAX_CANVAS_SIZE = 4096
+    + vecDist(a, b)
+    + pointToSegmentDistance(p, a, b)
+    + clampToCanvas(p)
+  }
+}
+
+App --> CanvasView
+App --> Renderer
+App --> SceneStore
+App --> InputHandler
+App --> IndexedDBStore
+App ..> CustomPrompt : opens modals
+App ..> lang : translates UI
+
+Renderer --> CanvasView
+Renderer ..> SceneData : reads
+
+InputHandler --> CanvasView
+InputHandler --> SceneStore
+InputHandler ..> CustomPrompt : prompts text on click
+InputHandler ..> EditorMode
+
+SceneStore o-- SceneData
+IndexedDBStore ..> SceneData : persists
+
+note right of App
+  Top-level controller.
+  Owns DOM toolbar bindings,
+  routes keyboard shortcuts,
+  manages internal clipboard
+  for Ctrl+C / Ctrl+V cloning.
+end note
+
+note bottom of SceneStore
+  Single source of truth.
+  Mutations call emit() so
+  Renderer and DB layers
+  observe scene changes.
+end note
+
+@enduml

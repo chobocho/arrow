@@ -81,6 +81,23 @@
     opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
   }
   #statusBar.visible { opacity: 1; }
+  .ap-help-card {
+    min-width: 360px;
+    max-width: 540px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .ap-help-body {
+    white-space: pre-line;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #333;
+    overflow-y: auto;
+    margin: 4px 0 12px;
+    flex: 1;
+  }
+  .ap-help-body .sec { color: #3a7afe; font-weight: 600; }
   @media (max-width: 720px) {
     #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     header { flex-wrap: wrap; height: auto; padding: 6px; }
@@ -101,8 +118,8 @@
     <div class="group">
       <label class="field"><span id="labelColor">색상</span><input type="color" id="inputColor" value="#222222"></label>
       <label class="field"><span id="labelThickness">굵기</span><input type="number" id="inputThickness" min="1" max="40" value="4"></label>
-      <label class="field"><span id="labelFontSize">글자크기</span><input type="number" id="inputFontSize" min="8" max="160" value="28"></label>
-      <label class="field"><span id="labelCenterFontSize">주제크기</span><input type="number" id="inputCenterFontSize" min="8" max="200" value="28"></label>
+      <label class="field"><span id="labelFontSize">글자크기</span><input type="number" id="inputFontSize" min="1" max="200" value="28"></label>
+      <label class="field"><span id="labelCenterFontSize">주제크기</span><input type="number" id="inputCenterFontSize" min="1" max="200" value="28"></label>
     </div>
     <div class="group">
       <button class="tool icon" id="btnEditCenter" title="주제 편집">🎯</button>
@@ -124,6 +141,7 @@
       <button class="tool icon" id="btnImportJson" title="JSON 가져오기">📥</button>
       <input type="file" id="fileImport" accept="application/json" style="display:none">
       <button class="tool icon" id="btnLang" title="Switch to English">🌐</button>
+      <button class="tool icon" id="btnHelp" title="도움말 (F1)">❓</button>
     </div>
   </header>
   <div id="canvasWrap">

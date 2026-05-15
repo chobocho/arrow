@@ -50,6 +50,34 @@ python -m http.server 8001
 
 빌드 결과는 `release/index.html` 하나로 떨어지며, 더블 클릭만으로 열 수 있습니다.
 
+## 아키텍처 다이어그램
+
+### 모듈 / 클래스 구성 (Class Diagram)
+
+![Class diagram](docs/class-diagram.png)
+
+`App`이 최상위 컨트롤러로서 `CanvasView`, `Renderer`, `SceneStore`, `InputHandler`, `IndexedDBStore`를 소유합니다.
+`SceneStore`가 단일 진실 공급원(single source of truth)이며 변경 이벤트를 통해 다른 계층이 동기화됩니다.
+
+### 화살표 그리기 흐름 (Sequence — Drawing an arrow)
+
+![Sequence: drawing an arrow](docs/sequence-draw-arrow.png)
+
+빈 영역에서 mousedown → drag → mouseup으로 이어지는 화살표 그리기 과정을 보여줍니다.
+draft 상태는 `InputHandler`가 들고 있다가 release 시 `SceneStore.addArrow`로 commit합니다.
+
+### 저장 / 복원 흐름 (Sequence — Save & auto-restore)
+
+![Sequence: save and restore](docs/sequence-save-load.png)
+
+`Ctrl+S` 또는 저장 버튼으로 IndexedDB에 저장하고, 다음 방문 시 `lastSceneId` 메타로부터 자동 복원하는 과정입니다.
+
+> 다이어그램 소스(.puml)는 `docs/` 폴더에 있으며 다음 명령으로 재생성할 수 있습니다.
+>
+> ```sh
+> plantuml -tpng docs/*.puml
+> ```
+
 ## 디렉토리 구조
 
 ```
@@ -71,6 +99,7 @@ arrow/
 │  └─ run_node.js
 ├─ scripts/inline_build.py # release 빌드 헬퍼
 ├─ build.sh / build.bat
+├─ docs/                   # 아키텍처 다이어그램 (PlantUML + PNG)
 ├─ history.md              # 작업 이력
 └─ release/index.html      # 빌드 산출물
 ```
@@ -94,9 +123,12 @@ arrow/
 - `A` — 화살표 모드
 - `T` — 글자 모드
 - `H` — 이동 모드
-- `Insert` — 현재 화면 중앙에 가로 화살표 즉시 추가
+- `Insert` / `+` — 현재 화면 중앙에 가로 화살표 즉시 추가
+- `Enter` — 현재 화면 중앙에 글자 추가
 - `Delete` / `Backspace` — 선택 객체 삭제
+- `Ctrl/⌘ + C` / `Ctrl/⌘ + V` — 선택 객체 복사 / 붙여넣기 (내부 클립보드)
 - `Ctrl/⌘ + S` — 저장
+- `F1` — 도움말 (헤더의 ❓ 버튼과 동일)
 
 ## 테스트
 

@@ -349,8 +349,8 @@ export class InputHandler {
         this.cb.onSelect(created.id);
       }
       this.cb.onDraftChange(null);
-      // After drawing one arrow drop back into select mode for ergonomic editing.
-      if (this.cb.setMode) this.cb.setMode('select');
+      // Stay in arrow mode so users can chain multiple arrows without
+      // re-selecting the tool each time.
     }
     this.dragging = { kind: 'none', startLogical: { x: 0, y: 0 }, startScreen: { x: 0, y: 0 }, lastScreen: { x: 0, y: 0 } };
     this.cb.onChange();

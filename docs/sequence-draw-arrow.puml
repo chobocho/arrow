@@ -1,0 +1,70 @@
+@startuml sequence-draw-arrow
+title Sequence — Drawing an arrow by click-and-drag
+
+skinparam shadowing false
+skinparam sequence {
+  ArrowColor #3A7AFE
+  LifeLineBorderColor #888888
+  ParticipantBorderColor #3A7AFE
+  ParticipantBackgroundColor #EAF1FF
+  ActorBackgroundColor #FFF7D6
+  ActorBorderColor #C9A227
+}
+
+actor User
+participant Canvas as canvas
+participant InputHandler as ih
+participant CanvasView as view
+participant SceneStore as store
+participant App as app
+participant Renderer as renderer
+
+== Begin draft ==
+User -> canvas : mousedown (empty area, mode=arrow)
+canvas -> ih : onMouseDown(event)
+ih -> view : screenToLogical(screen)
+view --> ih : logical Vec
+ih -> store : hitTest(logical, tolerance)
+store --> ih : { object: null }
+ih -> ih : create draft ArrowObject\n(from = to = logical)
+ih -> app : onDraftChange(draft)
+ih -> app : onChange()
+app -> renderer : render(scene, { draftArrow })
+renderer --> canvas : ctx.drawImage / strokes
+
+== Drag to extend ==
+loop while pointer moves
+  User -> canvas : mousemove
+  canvas -> ih : onMouseMove(event)
+  ih -> view : screenToLogical(screen)
+  view --> ih : logical Vec
+  ih -> ih : draft.to = clampToCanvas(logical)
+  ih -> app : onDraftChange(draft)
+  ih -> app : onChange()
+  app -> renderer : render(scene, { draftArrow })
+end
+
+== Commit on release ==
+User -> canvas : mouseup
+canvas -> ih : onMouseUp(event)
+ih -> ih : check length > 4 / scale
+alt long enough
+  ih -> store : addArrow(from, to, color, thickness)
+  store -> store : push(arrow), touch(), emit()
+  store --> app : listeners fire (subscribe)
+  app -> app : dirty = true, requestRender()
+  store --> ih : created ArrowObject
+  ih -> app : onSelect(created.id)
+else too short
+  ih -> ih : discard draft
+end
+ih -> app : onDraftChange(null)
+note right of ih
+  Stays in "arrow" mode so
+  the next drag immediately
+  starts another arrow.
+end note
+app -> renderer : render(scene)
+renderer --> User : updated canvas
+
+@enduml

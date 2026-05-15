@@ -81,6 +81,23 @@
     opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
   }
   #statusBar.visible { opacity: 1; }
+  .ap-help-card {
+    min-width: 360px;
+    max-width: 540px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .ap-help-body {
+    white-space: pre-line;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #333;
+    overflow-y: auto;
+    margin: 4px 0 12px;
+    flex: 1;
+  }
+  .ap-help-body .sec { color: #3a7afe; font-weight: 600; }
   @media (max-width: 720px) {
     #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     header { flex-wrap: wrap; height: auto; padding: 6px; }
@@ -101,8 +118,8 @@
     <div class="group">
       <label class="field"><span id="labelColor">색상</span><input type="color" id="inputColor" value="#222222"></label>
       <label class="field"><span id="labelThickness">굵기</span><input type="number" id="inputThickness" min="1" max="40" value="4"></label>
-      <label class="field"><span id="labelFontSize">글자크기</span><input type="number" id="inputFontSize" min="8" max="160" value="28"></label>
-      <label class="field"><span id="labelCenterFontSize">주제크기</span><input type="number" id="inputCenterFontSize" min="8" max="200" value="28"></label>
+      <label class="field"><span id="labelFontSize">글자크기</span><input type="number" id="inputFontSize" min="1" max="200" value="28"></label>
+      <label class="field"><span id="labelCenterFontSize">주제크기</span><input type="number" id="inputCenterFontSize" min="1" max="200" value="28"></label>
     </div>
     <div class="group">
       <button class="tool icon" id="btnEditCenter" title="주제 편집">🎯</button>
@@ -124,6 +141,7 @@
       <button class="tool icon" id="btnImportJson" title="JSON 가져오기">📥</button>
       <input type="file" id="fileImport" accept="application/json" style="display:none">
       <button class="tool icon" id="btnLang" title="Switch to English">🌐</button>
+      <button class="tool icon" id="btnHelp" title="도움말 (F1)">❓</button>
     </div>
   </header>
   <div id="canvasWrap">
@@ -201,7 +219,14 @@
       ok: '확인', cancel: '취소',
       load: '불러오기', close: '닫기', noWorks: '저장된 작업이 없습니다',
       sortLabel: '정렬', sortByName: '이름순', sortByDate: '최근수정순',
-      centerFontSize: '주제크기'
+      centerFontSize: '주제크기',
+      help: '도움말', helpTitle: '도움말',
+      helpSecModes: '모드 전환', helpSecKeys: '키보드 단축키',
+      helpSecMouse: '마우스', helpSecMobile: '모바일',
+      helpModes: 'V — 선택\nA — 화살표\nT — 글자\nH — 이동',
+      helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + S — 저장\nF1 — 도움말',
+      helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝',
+      helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝'
     },
     en: {
       appTitle: 'Arrow Mind Map',
@@ -226,7 +251,14 @@
       ok: 'OK', cancel: 'Cancel',
       load: 'Load', close: 'Close', noWorks: 'No saved works',
       sortLabel: 'Sort', sortByName: 'Name', sortByDate: 'Recent',
-      centerFontSize: 'Topic Size'
+      centerFontSize: 'Topic Size',
+      help: 'Help', helpTitle: 'Help',
+      helpSecModes: 'Modes', helpSecKeys: 'Keyboard',
+      helpSecMouse: 'Mouse', helpSecMobile: 'Mobile',
+      helpModes: 'V — Select\nA — Arrow\nT — Text\nH — Pan',
+      helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + S — Save\nF1 — Help',
+      helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan',
+      helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan'
     }
   };
   var currentLang = 'ko';
@@ -314,8 +346,11 @@
         resolve(value);
       }
       function onKey(ev) {
-        if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); finish(input.value); }
-        else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(null); }
+        if (ev.key === 'Enter') {
+          // Skip Enter that just commits an IME composition (Korean/Japanese).
+          if (ev.isComposing || ev.keyCode === 229) return;
+          ev.preventDefault(); ev.stopPropagation(); finish(input.value);
+        } else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(null); }
       }
       document.addEventListener('keydown', onKey, true);
       okBtn.addEventListener('click', function () { finish(input.value); });
@@ -362,8 +397,10 @@
         resolve(value);
       }
       function onKey(ev) {
-        if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); finish(true); }
-        else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); }
+        if (ev.key === 'Enter') {
+          if (ev.isComposing || ev.keyCode === 229) return;
+          ev.preventDefault(); ev.stopPropagation(); finish(true);
+        } else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(false); }
       }
       document.addEventListener('keydown', onKey, true);
       okBtn.addEventListener('click', function () { finish(true); });
@@ -1028,7 +1065,7 @@
         this.cb.onSelect(created.id);
       }
       this.cb.onDraftChange(null);
-      if (this.cb.setMode) this.cb.setMode('select');
+      // Stay in arrow mode to allow chaining multiple arrows.
     }
     this.drag = { kind: 'none' };
     this.cb.onChange();
@@ -1068,6 +1105,8 @@
     this.worksList = [];
     this.worksSortKey = 'date';
     this.renderScheduled = false;
+    // Internal clipboard for Ctrl+C / Ctrl+V cloning of scene objects.
+    this.clipboard = null;
 
     this.input = new InputHandler(this.canvas, this.view, this.store, {
       getMode: function () { return self.mode; },
@@ -1141,6 +1180,9 @@
   App.prototype._syncFontInputToSelection = function () {
     var el = document.getElementById('inputFontSize');
     if (!el) return;
+    // Don't clobber the user's in-progress typing. The clamp on commit would
+    // otherwise jump "1" → "8" mid-typing and prevent ever reaching "12".
+    if (document.activeElement === el) return;
     var sel = this._getSelectedObject();
     if (sel && sel.type === 'text') el.value = String(sel.fontSize);
     else el.value = String(this.fontSize);
@@ -1203,6 +1245,7 @@
     });
     byId('btnDelete').addEventListener('click', function () { self._deleteSelected(); });
     byId('btnWorks').addEventListener('click', function () { self._openWorksModal(); });
+    byId('btnHelp').addEventListener('click', function () { self._openHelpModal(); });
     var colorEl = byId('inputColor');
     colorEl.value = this.color;
     colorEl.addEventListener('input', function () { self.color = colorEl.value; });
@@ -1223,12 +1266,22 @@
         self.fontSize = n || 28;
       }
     });
+    // On commit (blur / Enter), snap the field to the actual clamped value
+    // so an out-of-range entry like "5" visually corrects to "8".
+    fontEl.addEventListener('change', function () {
+      var sel = self._getSelectedObject();
+      if (sel && sel.type === 'text') fontEl.value = String(sel.fontSize);
+      else fontEl.value = String(self.fontSize);
+    });
     var centerFontEl = byId('inputCenterFontSize');
     centerFontEl.value = String(this.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
     centerFontEl.addEventListener('input', function () {
       var n = parseFloat(centerFontEl.value);
       if (!isFinite(n)) return;
       self.store.setCenterFontSize(n);
+    });
+    centerFontEl.addEventListener('change', function () {
+      centerFontEl.value = String(self.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
     });
     this._applyLangToUi();
     this._updateModeUi();
@@ -1281,6 +1334,7 @@
     setTip('btnZoomOut', 'zoomOut');
     setTip('btnDelete', 'delete');
     setTip('btnWorks', 'works');
+    setTip('btnHelp', 'help');
     var langEl = document.getElementById('btnLang');
     if (langEl) langEl.title = currentLang === 'ko' ? 'Switch to English' : '한국어로 전환';
     setText('labelColor', 'selectColor');
@@ -1481,6 +1535,70 @@
     this._worksModalEl = null;
     this._worksModalCleanup = null;
   };
+  App.prototype._openHelpModal = function () {
+    if (this._helpModalEl) return;
+    // The shared modal CSS is injected lazily by customPrompt/customConfirm.
+    // Ensure it's mounted now so the help modal is visible on first open.
+    injectCustomPromptStyles();
+    var self = this;
+    var overlay = document.createElement('div');
+    overlay.className = 'ap-overlay';
+    var card = document.createElement('div');
+    card.className = 'ap-card ap-help-card';
+    var header = document.createElement('div');
+    header.className = 'ap-works-head';
+    var title = document.createElement('div');
+    title.className = 'ap-title';
+    title.textContent = t('helpTitle');
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'ap-btn';
+    closeBtn.textContent = t('close');
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    var body = document.createElement('div');
+    body.className = 'ap-help-body';
+    var sections = [
+      ['helpSecModes', 'helpModes'],
+      ['helpSecKeys', 'helpKeys'],
+      ['helpSecMouse', 'helpMouse'],
+      ['helpSecMobile', 'helpMobile']
+    ];
+    for (var i = 0; i < sections.length; i++) {
+      var sec = document.createElement('div');
+      sec.className = 'sec';
+      sec.textContent = '[' + t(sections[i][0]) + ']';
+      var txt = document.createElement('div');
+      txt.textContent = t(sections[i][1]);
+      body.appendChild(sec);
+      body.appendChild(txt);
+      var spacer = document.createElement('div');
+      body.appendChild(spacer);
+    }
+    card.appendChild(header);
+    card.appendChild(body);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    this._helpModalEl = overlay;
+    var onKey = function (ev) {
+      if (ev.key === 'Escape' || ev.key === 'F1') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        self._closeHelpModal();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    this._helpModalCleanup = function () { document.removeEventListener('keydown', onKey, true); };
+    closeBtn.addEventListener('click', function () { self._closeHelpModal(); });
+    overlay.addEventListener('mousedown', function (ev) { if (ev.target === overlay) self._closeHelpModal(); });
+  };
+  App.prototype._closeHelpModal = function () {
+    if (!this._helpModalEl) return;
+    if (this._helpModalCleanup) this._helpModalCleanup();
+    if (this._helpModalEl.parentNode) this._helpModalEl.parentNode.removeChild(this._helpModalEl);
+    this._helpModalEl = null;
+    this._helpModalCleanup = null;
+  };
   App.prototype._renderWorks = function () {
     if (!this._worksModalEl) return;
     var ul = this._worksModalEl.querySelector('#worksList');
@@ -1615,9 +1733,18 @@
     var target = e.target;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
     if (this._worksModalEl) return;
+    if (this._helpModalEl) {
+      if (e.key === 'F1') e.preventDefault();
+      return;
+    }
+    if (e.key === 'F1') {
+      e.preventDefault();
+      this._openHelpModal();
+      return;
+    }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (this.selectedId) { e.preventDefault(); this._deleteSelected(); }
-    } else if (e.key === 'Insert') {
+    } else if (e.key === 'Insert' || e.key === '+') {
       e.preventDefault();
       this._insertArrow();
     } else if (e.key === 'Enter') {
@@ -1626,10 +1753,42 @@
     } else if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
       e.preventDefault();
       this._save();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+      if (this._copySelected()) e.preventDefault();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
+      if (this._pasteClone()) e.preventDefault();
     } else if (e.key === 'a' || e.key === 'A') this.setMode('arrow');
     else if (e.key === 't' || e.key === 'T') this.setMode('text');
     else if (e.key === 'v' || e.key === 'V') this.setMode('select');
     else if (e.key === 'h' || e.key === 'H') this.setMode('pan');
+  };
+  App.prototype._copySelected = function () {
+    var sel = this._getSelectedObject();
+    if (!sel) return false;
+    this.clipboard = JSON.parse(JSON.stringify(sel));
+    this._flashStatus('copy');
+    return true;
+  };
+  App.prototype._pasteClone = function () {
+    var clip = this.clipboard;
+    if (!clip) return false;
+    var offset = 20;
+    var created;
+    if (clip.type === 'arrow') {
+      var from = { x: clip.from.x + offset, y: clip.from.y + offset };
+      var to = { x: clip.to.x + offset, y: clip.to.y + offset };
+      created = this.store.addArrow(from, to, clip.color, clip.thickness);
+      clip.from = from;
+      clip.to = to;
+    } else {
+      var pos = { x: clip.pos.x + offset, y: clip.pos.y + offset };
+      created = this.store.addText(pos, clip.text, clip.fontSize, clip.color);
+      clip.pos = pos;
+    }
+    this.selectedId = created.id;
+    this.input.setSelected(created.id);
+    this._flashStatus('paste');
+    return true;
   };
   // Opens the text-input modal and places the typed text at the current
   // viewport center. Bound to Enter for keyboard-driven text entry.
@@ -1650,7 +1809,7 @@
   App.prototype._insertArrow = function () {
     var view = this.view;
     var visibleLogicalW = view.width / view.scale;
-    var gap = 10;
+    var gap = 5;
     var objects = this.store.get().objects;
     var arrows = [];
     for (var i = 0; i < objects.length; i++) {
@@ -1658,14 +1817,14 @@
     }
     var lengthLogical;
     if (arrows.length === 0) {
-      lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25));
+      lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25)) / 3;
     } else {
       var total = 0;
       for (var k = 0; k < arrows.length; k++) {
         var ak = arrows[k];
         total += Math.hypot(ak.to.x - ak.from.x, ak.to.y - ak.from.y);
       }
-      lengthLogical = Math.max(30, total / arrows.length);
+      lengthLogical = Math.max(30, total / arrows.length) / 3;
     }
     var from;
     if (arrows.length === 0) {
