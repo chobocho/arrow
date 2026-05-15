@@ -1,37 +1,67 @@
 import { CanvasView } from './canvas/CanvasView.js';
 import { Renderer } from './canvas/Renderer.js';
 import { SceneStore } from './models/SceneStore.js';
-import { ArrowObject, DEFAULT_CENTER_FONT_SIZE, HighlighterObject, SceneData, SceneObject, emptyScene } from './models/types.js';
-import { InputHandler, EditorMode } from './input/InputHandler.js';
+import {
+  ArrowObject,
+  DEFAULT_CENTER_FONT_SIZE,
+  HighlighterObject,
+  SceneData,
+  SceneObject,
+} from './models/types.js';
+import { EditorMode, InputHandler } from './input/InputHandler.js';
 import { IndexedDBStore, SceneSummary } from './storage/IndexedDBStore.js';
-import { LangCode, getLang, setLang, t } from './i18n/lang.js';
-import { MAX_CANVAS_SIZE, Vec, clampToCanvas } from './utils/geometry.js';
-import { customPrompt, customConfirm, ensureModalStyles } from './ui/CustomPrompt.js';
+import { t } from './i18n/lang.js';
+import { customPrompt } from './ui/CustomPrompt.js';
+import {
+  bindUi,
+  setMode,
+  syncCenterFontInput,
+  syncFontInputToSelection,
+  updateSelectionUi,
+  updateTitle,
+} from './ui/UiBindings.js';
+import { refreshWorks } from './ui/Modals.js';
+import { onKey } from './app/KeyboardActions.js';
 
-// Top-level controller that ties together the renderer, store, input handler,
-// and DOM toolbar/panel. Exposed via window.startApp by the bundled HTML.
+// Top-level controller: owns shared state, ties together the renderer, store,
+// input handler, and DOM. Behavior is split across:
+//   - ui/UiBindings.ts        toolbar wiring, mode/lang/title sync
+//   - ui/Modals.ts            works / help modals
+//   - app/FileActions.ts      save/load/import/export/new/delete/fit
+//   - app/KeyboardActions.ts  keyboard shortcuts + insert/copy/paste helpers
+// Fields below are App-internal — modified only from those modules and App's
+// own methods. They are not marked `private` so the split modules can read
+// and write them without going through accessor boilerplate.
 export class App {
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private view = new CanvasView();
-  private store = new SceneStore();
-  private renderer: Renderer;
-  private input!: InputHandler;
-  private db = new IndexedDBStore();
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  view = new CanvasView();
+  store = new SceneStore();
+  renderer: Renderer;
+  input!: InputHandler;
+  db = new IndexedDBStore();
 
-  private mode: EditorMode = 'select';
-  private color = '#222222';
-  private thickness = 4;
-  private fontSize = 28;
+  mode: EditorMode = 'select';
+  color = '#222222';
+  thickness = 4;
+  fontSize = 28;
 
-  private selectedId: string | null = null;
-  private draftArrow: ArrowObject | null = null;
-  private draftHighlighter: HighlighterObject | null = null;
-  private dirty = false;
-  private worksList: SceneSummary[] = [];
+  selectedId: string | null = null;
+  draftArrow: ArrowObject | null = null;
+  draftHighlighter: HighlighterObject | null = null;
+  dirty = false;
+  worksList: SceneSummary[] = [];
   // Internal clipboard for Ctrl+C / Ctrl+V cloning. Holds a deep snapshot so
   // edits to the original after Copy don't bleed into future Pastes.
-  private clipboard: SceneObject | null = null;
+  clipboard: SceneObject | null = null;
+
+  worksModalEl: HTMLElement | null = null;
+  worksModalCleanup: (() => void) | null = null;
+  worksSortKey: 'name' | 'date' = 'date';
+  helpModalEl: HTMLElement | null = null;
+  helpModalCleanup: (() => void) | null = null;
+
+  private renderScheduled = false;
 
   constructor(root: HTMLElement) {
     this.canvas = root.querySelector('#mainCanvas') as HTMLCanvasElement;
@@ -42,12 +72,16 @@ export class App {
     this.renderer = new Renderer(this.ctx, this.view);
     this.input = new InputHandler(this.canvas, this.view, this.store, {
       getMode: () => this.mode,
-      setMode: (m) => this.setMode(m),
+      setMode: (m) => setMode(this, m),
       getColor: () => this.color,
       getThickness: () => this.thickness,
       getFontSize: () => this.fontSize,
       onChange: () => this.requestRender(),
-      onSelect: (id) => { this.selectedId = id; this.updateSelectionUi(); this.syncFontInputToSelection(); },
+      onSelect: (id) => {
+        this.selectedId = id;
+        updateSelectionUi(this);
+        syncFontInputToSelection(this);
+      },
       onDoubleClickEmpty: () => {
         void customPrompt(t('promptCenter'), this.store.get().centerText).then((txt) => {
           if (txt !== null) this.store.setCenterText(txt);
@@ -62,7 +96,11 @@ export class App {
       onDraftHighlighter: (draft) => { this.draftHighlighter = draft; },
     });
 
-    this.store.subscribe(() => { this.dirty = true; this.syncFontInputToSelection(); this.requestRender(); });
+    this.store.subscribe(() => {
+      this.dirty = true;
+      syncFontInputToSelection(this);
+      this.requestRender();
+    });
     window.addEventListener('resize', () => { this.resize(); this.requestRender(); });
     // ResizeObserver catches container resizes that don't trigger window
     // resize (e.g. header wrapping on narrow widths). Keeps the canvas buffer
@@ -71,9 +109,9 @@ export class App {
       const wrap = this.canvas.parentElement;
       if (wrap) new ResizeObserver(() => { this.resize(); this.requestRender(); }).observe(wrap);
     }
-    window.addEventListener('keydown', (e) => this.onKey(e));
+    window.addEventListener('keydown', (e) => onKey(this, e));
     this.resize();
-    this.bindUi();
+    bindUi(this);
     this.requestRender();
     void this.bootstrap();
   }
@@ -91,49 +129,28 @@ export class App {
       // Storage may be unavailable (private mode, corrupted state). Continue with empty scene.
       console.warn('Could not restore last scene:', e);
     }
-    await this.refreshWorks();
+    await refreshWorks(this);
     this.requestRender();
   }
 
-  private adoptScene(scene: SceneData): void {
+  adoptScene(scene: SceneData): void {
     if (scene.centerFontSize == null) scene.centerFontSize = DEFAULT_CENTER_FONT_SIZE;
     this.store.replace(scene);
     this.view.offset = { x: scene.viewOffsetX, y: scene.viewOffsetY };
     this.view.scale = scene.viewScale > 0 ? scene.viewScale : 1;
     this.selectedId = null;
     this.dirty = false;
-    this.updateTitle();
-    this.syncCenterFontInput();
+    updateTitle(this);
+    syncCenterFontInput(this);
     this.requestRender();
   }
 
-  private syncCenterFontInput(): void {
-    const el = document.getElementById('inputCenterFontSize') as HTMLInputElement | null;
-    if (el) el.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
-  }
-
-  private getSelectedObject() {
+  getSelectedObject(): SceneObject | null {
     if (!this.selectedId) return null;
     return this.store.get().objects.find((o) => o.id === this.selectedId) || null;
   }
 
-  // When the selection changes, mirror the font-size input to the selected
-  // text's size so the user sees the current value and edits it in place.
-  // For non-text selections, fall back to the default for new text.
-  private syncFontInputToSelection(): void {
-    const el = document.getElementById('inputFontSize') as HTMLInputElement | null;
-    if (!el) return;
-    // Don't clobber the user's in-progress typing. The clamp on commit would
-    // otherwise jump "1" → "8" mid-typing and prevent ever reaching "12".
-    if (document.activeElement === el) return;
-    const sel = this.getSelectedObject();
-    if (sel && sel.type === 'text') el.value = String(sel.fontSize);
-    else el.value = String(this.fontSize);
-  }
-
-  // --- Rendering ---
-  private renderScheduled = false;
-  private requestRender(): void {
+  requestRender(): void {
     if (this.renderScheduled) return;
     this.renderScheduled = true;
     requestAnimationFrame(() => {
@@ -165,697 +182,7 @@ export class App {
     this.view.resize(rect.width, rect.height, dpr);
   }
 
-  // --- UI wiring ---
-  private bindUi(): void {
-    const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
-    ($('#btnSelect')).addEventListener('click', () => this.setMode('select'));
-    ($('#btnArrow')).addEventListener('click', () => this.setMode('arrow'));
-    ($('#btnText')).addEventListener('click', () => this.setMode('text'));
-    ($('#btnHighlighter')).addEventListener('click', () => this.setMode('highlighter'));
-    ($('#btnPan')).addEventListener('click', () => this.setMode('pan'));
-    ($('#btnSave')).addEventListener('click', () => void this.save());
-    ($('#btnSaveAs')).addEventListener('click', () => void this.saveAs());
-    ($('#btnNew')).addEventListener('click', () => this.newScene());
-    ($('#btnExportPng')).addEventListener('click', () => this.exportPng());
-    ($('#btnExportJson')).addEventListener('click', () => void this.exportJson());
-    ($('#btnImportJson')).addEventListener('click', () => this.importJsonClick());
-    ($('#fileImport')).addEventListener('change', (e) => this.handleImportFile(e));
-    ($('#btnLang')).addEventListener('click', () => this.toggleLang());
-    ($('#btnEditCenter')).addEventListener('click', () => {
-      void customPrompt(t('promptCenter'), this.store.get().centerText).then((txt) => {
-        if (txt !== null) this.store.setCenterText(txt);
-      });
-    });
-    ($('#btnFit')).addEventListener('click', () => this.fitToScreen());
-    ($('#btnZoomIn')).addEventListener('click', () => {
-      this.view.zoomAt({ x: this.view.width / 2, y: this.view.height / 2 }, 1.2);
-      this.requestRender();
-    });
-    ($('#btnZoomOut')).addEventListener('click', () => {
-      this.view.zoomAt({ x: this.view.width / 2, y: this.view.height / 2 }, 1 / 1.2);
-      this.requestRender();
-    });
-    ($('#btnDelete')).addEventListener('click', () => this.deleteSelected());
-    ($('#btnWorks')).addEventListener('click', () => this.openWorksModal());
-    ($('#btnHelp')).addEventListener('click', () => this.openHelpModal());
-
-    const colorEl = $('#inputColor') as HTMLInputElement;
-    colorEl.value = this.color;
-    const paletteEl = $('#colorPalette') as HTMLDivElement;
-    const updatePaletteActive = (hex: string): void => {
-      const target = hex.toLowerCase();
-      paletteEl.querySelectorAll<HTMLButtonElement>('.swatch').forEach((b) => {
-        b.classList.toggle('active', (b.dataset.color || '').toLowerCase() === target);
-      });
-    };
-    const PALETTE_16: readonly string[] = [
-      '#000000', '#424242', '#9e9e9e', '#ffffff',
-      '#f44336', '#ff9800', '#ffeb3b', '#4caf50',
-      '#00bcd4', '#2196f3', '#3f51b5', '#9c27b0',
-      '#e91e63', '#795548', '#009688', '#607d8b',
-    ];
-    for (const hex of PALETTE_16) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'swatch';
-      btn.style.background = hex;
-      btn.dataset.color = hex;
-      btn.title = hex.toUpperCase();
-      btn.addEventListener('click', () => {
-        this.color = hex;
-        colorEl.value = hex;
-        updatePaletteActive(hex);
-        // Return focus to body so keyboard shortcuts (+, Enter, Delete, ...) keep working.
-        colorEl.blur();
-        btn.blur();
-      });
-      paletteEl.appendChild(btn);
-    }
-    updatePaletteActive(this.color);
-    colorEl.addEventListener('input', () => {
-      this.color = colorEl.value;
-      updatePaletteActive(colorEl.value);
-    });
-    // After the native color picker commits, hand focus back to the body so
-    // keyboard shortcuts (+ to insert arrow, Enter, Delete, ...) work again.
-    colorEl.addEventListener('change', () => { colorEl.blur(); });
-    const thickEl = $('#inputThickness') as HTMLInputElement;
-    thickEl.value = String(this.thickness);
-    thickEl.addEventListener('input', () => { this.thickness = parseFloat(thickEl.value) || 4; });
-    const fontEl = $('#inputFontSize') as HTMLInputElement;
-    fontEl.value = String(this.fontSize);
-    fontEl.addEventListener('input', () => {
-      const n = parseFloat(fontEl.value);
-      if (!Number.isFinite(n)) return;
-      const sel = this.getSelectedObject();
-      if (sel && sel.type === 'text') {
-        // Resize the currently selected text instead of changing the default.
-        this.store.update(sel.id, (o) => { if (o.type === 'text') o.fontSize = Math.max(8, Math.min(200, n)); });
-      } else {
-        this.fontSize = n || 28;
-      }
-    });
-    // On commit (blur / Enter), snap the field to the actual clamped value
-    // so an out-of-range entry like "5" visually corrects to "8".
-    fontEl.addEventListener('change', () => {
-      const sel = this.getSelectedObject();
-      if (sel && sel.type === 'text') fontEl.value = String(sel.fontSize);
-      else fontEl.value = String(this.fontSize);
-    });
-    const centerFontEl = $('#inputCenterFontSize') as HTMLInputElement;
-    centerFontEl.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
-    centerFontEl.addEventListener('input', () => {
-      const n = parseFloat(centerFontEl.value);
-      if (!Number.isFinite(n)) return;
-      this.store.setCenterFontSize(n);
-    });
-    centerFontEl.addEventListener('change', () => {
-      centerFontEl.value = String(this.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
-    });
-
-    this.applyLangToUi();
-    this.updateModeUi();
-    this.updateSelectionUi();
-    this.updateTitle();
-  }
-
-  private setMode(m: EditorMode): void {
-    this.mode = m;
-    this.updateModeUi();
-  }
-
-  private updateModeUi(): void {
-    const map: Record<EditorMode, string> = {
-      select: 'btnSelect',
-      arrow: 'btnArrow',
-      text: 'btnText',
-      highlighter: 'btnHighlighter',
-      pan: 'btnPan',
-    };
-    for (const k of Object.keys(map) as EditorMode[]) {
-      const el = document.getElementById(map[k]);
-      if (!el) continue;
-      el.classList.toggle('active', k === this.mode);
-    }
-    document.body.dataset.mode = this.mode;
-  }
-
-  private updateSelectionUi(): void {
-    const btn = document.getElementById('btnDelete');
-    if (btn) btn.toggleAttribute('disabled', !this.selectedId);
-  }
-
-  private updateTitle(): void {
-    const el = document.getElementById('titleName');
-    if (el) el.textContent = this.store.get().name || t('untitled');
-  }
-
-  private applyLangToUi(): void {
-    const setText = (id: string, key: string) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = t(key);
-    };
-    // Icon buttons keep their emoji and use title for the i18n tooltip.
-    const setTip = (id: string, key: string) => {
-      const el = document.getElementById(id);
-      if (el) el.title = t(key);
-    };
-    setTip('btnSelect', 'modeSelect');
-    setTip('btnArrow', 'modeArrow');
-    setTip('btnText', 'modeText');
-    setTip('btnHighlighter', 'modeHighlighter');
-    setTip('btnPan', 'modePan');
-    setTip('btnSave', 'save');
-    setTip('btnSaveAs', 'saveAs');
-    setTip('btnNew', 'newWork');
-    setTip('btnExportPng', 'exportPng');
-    setTip('btnExportJson', 'exportJson');
-    setTip('btnImportJson', 'importJson');
-    setTip('btnEditCenter', 'editCenter');
-    setTip('btnFit', 'fit');
-    setTip('btnZoomIn', 'zoomIn');
-    setTip('btnZoomOut', 'zoomOut');
-    setTip('btnDelete', 'delete');
-    setTip('btnWorks', 'works');
-    setTip('btnHelp', 'help');
-    // Language toggle: tooltip describes the target language.
-    const langEl = document.getElementById('btnLang');
-    if (langEl) langEl.title = getLang() === 'ko' ? 'Switch to English' : '한국어로 전환';
-    setText('labelColor', 'selectColor');
-    setText('labelThickness', 'thickness');
-    setText('labelFontSize', 'fontSize');
-    setText('labelCenterFontSize', 'centerFontSize');
-    document.title = t('appTitle');
-    this.updateTitle();
-    this.renderWorks();
-  }
-
-  private toggleLang(): void {
-    const next: LangCode = getLang() === 'ko' ? 'en' : 'ko';
-    setLang(next);
-    this.applyLangToUi();
-  }
-
-  // --- File / DB actions ---
-  private async ensureName(): Promise<string | null> {
-    let name = this.store.get().name;
-    if (!name || name === '새 작업' || name === 'Untitled') {
-      const input = await customPrompt(t('promptName'), '');
-      if (input === null) return null;
-      name = input.trim() || t('untitled');
-      this.store.setName(name);
-    }
-    return name;
-  }
-
-  private async save(): Promise<void> {
-    const name = await this.ensureName();
-    if (name === null) return;
-    const scene = this.store.get();
-    scene.viewOffsetX = this.view.offset.x;
-    scene.viewOffsetY = this.view.offset.y;
-    scene.viewScale = this.view.scale;
-    await this.db.saveScene(scene);
-    await this.db.setMeta('lastSceneId', scene.id);
-    this.dirty = false;
-    await this.refreshWorks();
-    this.flashStatus(t('saved'));
-  }
-
-  private async saveAs(): Promise<void> {
-    const input = await customPrompt(t('promptName'), this.store.get().name);
-    if (input === null) return;
-    const next: SceneData = JSON.parse(JSON.stringify(this.store.get()));
-    next.id = 'scene_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
-    next.name = input.trim() || t('untitled');
-    next.createdAt = Date.now();
-    next.updatedAt = Date.now();
-    this.store.replace(next);
-    await this.db.saveScene(next);
-    await this.db.setMeta('lastSceneId', next.id);
-    await this.refreshWorks();
-    this.updateTitle();
-    this.flashStatus(t('saved'));
-  }
-
-  private async newScene(): Promise<void> {
-    if (this.dirty && !(await customConfirm(t('unsavedNew')))) {
-      return;
-    }
-    this.adoptScene(emptyScene(t('untitled')));
-    this.view.scale = 1;
-    this.view.offset = { x: MAX_CANVAS_SIZE / 2 - this.view.width / 2, y: MAX_CANVAS_SIZE / 2 - this.view.height / 2 };
-    this.requestRender();
-  }
-
-  private async deleteSelected(): Promise<void> {
-    if (!this.selectedId) return;
-    if (!(await customConfirm(t('confirmDeleteSelected')))) return;
-    this.store.remove(this.selectedId);
-    this.selectedId = null;
-    this.updateSelectionUi();
-  }
-
-  private exportPng(): void {
-    const cropped = this.renderer.renderToImage(this.store.get());
-    const url = cropped.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = (this.store.get().name || 'arrow') + '.png';
-    a.click();
-  }
-
-  private async exportJson(): Promise<void> {
-    const all = await this.db.exportAll();
-    const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'arrow-mindmap-export.json';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  private importJsonClick(): void {
-    const inp = document.getElementById('fileImport') as HTMLInputElement;
-    inp.value = '';
-    inp.click();
-  }
-
-  private async handleImportFile(e: Event): Promise<void> {
-    const inp = e.target as HTMLInputElement;
-    const file = inp.files && inp.files[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const payload = JSON.parse(text);
-      const count = await this.db.importAll(payload, true);
-      await this.refreshWorks();
-      this.flashStatus(count + t('importedCount'));
-    } catch (err) {
-      console.warn(err);
-      window.alert(t('invalidJson'));
-    }
-  }
-
-  private async refreshWorks(): Promise<void> {
-    try {
-      this.worksList = await this.db.listScenes();
-    } catch {
-      this.worksList = [];
-    }
-    this.renderWorks();
-  }
-
-  private worksModalEl: HTMLElement | null = null;
-  private worksModalCleanup: (() => void) | null = null;
-  private worksSortKey: 'name' | 'date' = 'date';
-  private helpModalEl: HTMLElement | null = null;
-  private helpModalCleanup: (() => void) | null = null;
-
-  private openHelpModal(): void {
-    if (this.helpModalEl) return;
-    // The shared modal CSS is injected lazily by customPrompt/customConfirm.
-    // Ensure it's mounted now so the help modal is visible on first open.
-    ensureModalStyles();
-    const overlay = document.createElement('div');
-    overlay.className = 'ap-overlay';
-    const card = document.createElement('div');
-    card.className = 'ap-card ap-help-card';
-    const header = document.createElement('div');
-    header.className = 'ap-works-head';
-    const title = document.createElement('div');
-    title.className = 'ap-title';
-    title.textContent = t('helpTitle');
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'ap-btn';
-    closeBtn.textContent = t('close');
-    header.append(title, closeBtn);
-
-    const body = document.createElement('div');
-    body.className = 'ap-help-body';
-    const sections: Array<[string, string]> = [
-      ['helpSecModes', 'helpModes'],
-      ['helpSecKeys', 'helpKeys'],
-      ['helpSecMouse', 'helpMouse'],
-      ['helpSecMobile', 'helpMobile'],
-    ];
-    for (const [titleKey, bodyKey] of sections) {
-      const sec = document.createElement('div');
-      sec.className = 'sec';
-      sec.textContent = '[' + t(titleKey) + ']';
-      const txt = document.createElement('div');
-      txt.textContent = t(bodyKey);
-      body.append(sec, txt);
-      const spacer = document.createElement('div');
-      body.appendChild(spacer);
-    }
-
-    card.append(header, body);
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    this.helpModalEl = overlay;
-
-    const onKey = (ev: KeyboardEvent): void => {
-      if (ev.key === 'Escape' || ev.key === 'F1') {
-        ev.preventDefault();
-        ev.stopPropagation();
-        this.closeHelpModal();
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-    this.helpModalCleanup = () => document.removeEventListener('keydown', onKey, true);
-    closeBtn.addEventListener('click', () => this.closeHelpModal());
-    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) this.closeHelpModal(); });
-  }
-
-  private closeHelpModal(): void {
-    if (!this.helpModalEl) return;
-    if (this.helpModalCleanup) this.helpModalCleanup();
-    this.helpModalEl.remove();
-    this.helpModalEl = null;
-    this.helpModalCleanup = null;
-  }
-
-  private openWorksModal(): void {
-    if (this.worksModalEl) return;
-    ensureModalStyles();
-    void this.refreshWorks();
-    const overlay = document.createElement('div');
-    overlay.className = 'ap-overlay';
-    const card = document.createElement('div');
-    card.className = 'ap-card ap-works-card';
-    const header = document.createElement('div');
-    header.className = 'ap-works-head';
-    const title = document.createElement('div');
-    title.className = 'ap-title';
-    title.textContent = t('works');
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'ap-btn';
-    closeBtn.textContent = t('close');
-    header.append(title, closeBtn);
-
-    const sortBar = document.createElement('div');
-    sortBar.className = 'ap-works-sort';
-    const sortLabel = document.createElement('span');
-    sortLabel.className = 'ap-sort-label';
-    sortLabel.textContent = t('sortLabel') + ':';
-    const makeSortBtn = (key: 'name' | 'date', label: string): HTMLButtonElement => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'ap-btn ap-btn-sm ap-sort-btn' + (this.worksSortKey === key ? ' active' : '');
-      b.textContent = label;
-      b.dataset.sort = key;
-      b.addEventListener('click', () => {
-        this.worksSortKey = key;
-        this.renderWorks();
-      });
-      return b;
-    };
-    sortBar.append(sortLabel, makeSortBtn('name', t('sortByName')), makeSortBtn('date', t('sortByDate')));
-
-    const listEl = document.createElement('ul');
-    listEl.className = 'ap-works-list';
-    listEl.id = 'worksList';
-    card.append(header, sortBar, listEl);
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    this.worksModalEl = overlay;
-
-    const onKey = (ev: KeyboardEvent): void => {
-      if (ev.key === 'Escape') { ev.preventDefault(); this.closeWorksModal(); }
-    };
-    document.addEventListener('keydown', onKey, true);
-    this.worksModalCleanup = () => document.removeEventListener('keydown', onKey, true);
-    closeBtn.addEventListener('click', () => this.closeWorksModal());
-    overlay.addEventListener('mousedown', (ev) => { if (ev.target === overlay) this.closeWorksModal(); });
-
-    this.renderWorks();
-  }
-
-  private renderWorks(): void {
-    if (!this.worksModalEl) return;
-    const ul = this.worksModalEl.querySelector('#worksList') as HTMLUListElement | null;
-    if (!ul) return;
-    // Sync sort-button active state.
-    const sortBtns = this.worksModalEl.querySelectorAll('.ap-sort-btn');
-    sortBtns.forEach((b) => {
-      const el = b as HTMLElement;
-      el.classList.toggle('active', el.dataset.sort === this.worksSortKey);
-    });
-    ul.innerHTML = '';
-    const current = this.store.get().id;
-    if (this.worksList.length === 0) {
-      const empty = document.createElement('li');
-      empty.className = 'ap-works-empty';
-      empty.textContent = t('noWorks');
-      ul.appendChild(empty);
-      return;
-    }
-    const sorted = this.worksList.slice().sort((a, b) => {
-      if (this.worksSortKey === 'name') return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-      return b.updatedAt - a.updatedAt;
-    });
-    for (const w of sorted) {
-      const li = document.createElement('li');
-      li.className = 'ap-works-item' + (w.id === current ? ' current' : '');
-      const name = document.createElement('span');
-      name.className = 'work-name';
-      name.textContent = w.name;
-      name.title = new Date(w.updatedAt).toLocaleString();
-      const loadBtn = document.createElement('button');
-      loadBtn.type = 'button';
-      loadBtn.className = 'ap-btn ap-btn-sm';
-      loadBtn.textContent = t('load');
-      loadBtn.addEventListener('click', () => void this.loadWork(w.id));
-      const renameBtn = document.createElement('button');
-      renameBtn.type = 'button';
-      renameBtn.className = 'ap-btn ap-btn-sm';
-      renameBtn.textContent = t('rename');
-      renameBtn.addEventListener('click', () => void this.renameWork(w));
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'ap-btn ap-btn-sm';
-      delBtn.textContent = t('delete');
-      delBtn.addEventListener('click', () => void this.deleteWork(w));
-      li.append(name, loadBtn, renameBtn, delBtn);
-      ul.appendChild(li);
-    }
-  }
-
-  private async loadWork(id: string): Promise<void> {
-    if (this.dirty && !(await customConfirm(t('unsavedLoad')))) return;
-    const scene = await this.db.loadScene(id);
-    if (!scene) return;
-    this.adoptScene(scene);
-    await this.db.setMeta('lastSceneId', id);
-    this.closeWorksModal();
-  }
-
-  private closeWorksModal(): void {
-    if (!this.worksModalEl) return;
-    if (this.worksModalCleanup) this.worksModalCleanup();
-    this.worksModalEl.remove();
-    this.worksModalEl = null;
-    this.worksModalCleanup = null;
-  }
-
-  private async renameWork(w: SceneSummary): Promise<void> {
-    const name = await customPrompt(t('promptRename'), w.name);
-    if (name === null) return;
-    await this.db.renameScene(w.id, name.trim() || t('untitled'));
-    if (w.id === this.store.get().id) {
-      this.store.setName(name.trim() || t('untitled'));
-    }
-    await this.refreshWorks();
-  }
-
-  private async deleteWork(w: SceneSummary): Promise<void> {
-    if (!(await customConfirm(t('confirmDelete')))) return;
-    await this.db.deleteScene(w.id);
-    if (w.id === this.store.get().id) {
-      this.newScene();
-    }
-    await this.refreshWorks();
-  }
-
-  private fitToScreen(): void {
-    const scene = this.store.get();
-    if (scene.objects.length === 0) {
-      const center: Vec = { x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 };
-      this.view.scale = 1;
-      this.view.centerOn(center);
-      this.requestRender();
-      return;
-    }
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const o of scene.objects) {
-      if (o.type === 'arrow') {
-        minX = Math.min(minX, o.from.x, o.to.x);
-        minY = Math.min(minY, o.from.y, o.to.y);
-        maxX = Math.max(maxX, o.from.x, o.to.x);
-        maxY = Math.max(maxY, o.from.y, o.to.y);
-      } else if (o.type === 'highlighter') {
-        for (const p of o.points) {
-          if (p.x < minX) minX = p.x;
-          if (p.y < minY) minY = p.y;
-          if (p.x > maxX) maxX = p.x;
-          if (p.y > maxY) maxY = p.y;
-        }
-      } else {
-        minX = Math.min(minX, o.pos.x);
-        minY = Math.min(minY, o.pos.y);
-        maxX = Math.max(maxX, o.pos.x + o.fontSize * Math.max(2, o.text.length));
-        maxY = Math.max(maxY, o.pos.y + o.fontSize * 1.4);
-      }
-    }
-    const padding = 80;
-    const w = maxX - minX + padding * 2;
-    const h = maxY - minY + padding * 2;
-    const scale = Math.max(0.1, Math.min(2, Math.min(this.view.width / w, this.view.height / h)));
-    this.view.scale = scale;
-    this.view.centerOn({ x: (minX + maxX) / 2, y: (minY + maxY) / 2 });
-    this.requestRender();
-  }
-
-  private onKey(e: KeyboardEvent): void {
-    if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
-    if (this.worksModalEl) return;
-    if (this.helpModalEl) {
-      if (e.key === 'F1') e.preventDefault();
-      return;
-    }
-    if (e.key === 'F1') {
-      e.preventDefault();
-      this.openHelpModal();
-      return;
-    }
-    if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (this.selectedId) {
-        e.preventDefault();
-        this.deleteSelected();
-      }
-    } else if (e.key === 'Insert' || e.key === '+') {
-      e.preventDefault();
-      this.insertArrow();
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      this.insertTextAtViewportCenter();
-    } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      void this.save();
-    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
-      if (this.copySelected()) e.preventDefault();
-    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
-      if (this.pasteClone()) e.preventDefault();
-    } else if (e.altKey && e.code === 'KeyL') {
-      e.preventDefault();
-      this.openWorksModal();
-    } else if (e.altKey && e.code === 'KeyN') {
-      e.preventDefault();
-      void this.newScene();
-    } else if (e.key === 'a') this.setMode('arrow');
-    else if (e.key === 't') this.setMode('text');
-    else if (e.key === 'g') this.setMode('highlighter');
-    else if (e.key === 'v') this.setMode('select');
-    else if (e.key === 'h') this.setMode('pan');
-  }
-
-  // Copy the currently selected object to the internal clipboard. Returns
-  // true if something was copied so callers can suppress the default
-  // browser copy (which would otherwise copy empty text selection).
-  private copySelected(): boolean {
-    const sel = this.getSelectedObject();
-    if (!sel) return false;
-    this.clipboard = JSON.parse(JSON.stringify(sel));
-    this.flashStatus('copy');
-    return true;
-  }
-
-  // Paste the clipboard object as a new scene object, offset slightly so the
-  // user sees the clone. Subsequent pastes continue to offset from the last
-  // paste position so repeated Ctrl+V spreads copies out.
-  private pasteClone(): boolean {
-    const clip = this.clipboard;
-    if (!clip) return false;
-    const offset = 20;
-    let created: SceneObject;
-    if (clip.type === 'arrow') {
-      const from: Vec = { x: clip.from.x + offset, y: clip.from.y + offset };
-      const to: Vec = { x: clip.to.x + offset, y: clip.to.y + offset };
-      created = this.store.addArrow(from, to, clip.color, clip.thickness);
-      clip.from = from;
-      clip.to = to;
-    } else if (clip.type === 'highlighter') {
-      const shifted: Vec[] = clip.points.map((p) => ({ x: p.x + offset, y: p.y + offset }));
-      created = this.store.addHighlighter(shifted, clip.color, clip.thickness);
-      clip.points = shifted;
-    } else {
-      const pos: Vec = { x: clip.pos.x + offset, y: clip.pos.y + offset };
-      created = this.store.addText(pos, clip.text, clip.fontSize, clip.color);
-      clip.pos = pos;
-    }
-    this.selectedId = created.id;
-    this.input.setSelected(created.id);
-    this.flashStatus('paste');
-    return true;
-  }
-
-  // Opens the text-input modal and places the typed text at the current
-  // viewport center. Bound to Enter for keyboard-driven text entry.
-  private insertTextAtViewportCenter(): void {
-    const center = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });
-    void customPrompt(t('promptText'), '').then((text) => {
-      if (!text || !text.trim()) return;
-      const obj = this.store.addText(center, text.trim(), this.fontSize, this.color);
-      this.selectedId = obj.id;
-      this.input.setSelected(obj.id);
-      this.setMode('select');
-    });
-  }
-
-  // Adds a horizontal arrow positioned to the upper-right of any existing
-  // arrows so consecutive Insert presses stagger outward. When no arrows
-  // exist yet, fall back to the current viewport center.
-  private insertArrow(): void {
-    const visibleLogicalW = this.view.width / this.view.scale;
-    const gap = 5;
-    const arrows = this.store.get().objects.filter((o) => o.type === 'arrow') as ArrowObject[];
-    // Auto length: 1/3 of the previous default (viewport-based or avg of
-    // existing arrows) so a quick + spam grows the diagram in finer steps.
-    let lengthLogical: number;
-    if (arrows.length === 0) {
-      lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25)) / 3;
-    } else {
-      let total = 0;
-      for (const a of arrows) total += Math.hypot(a.to.x - a.from.x, a.to.y - a.from.y);
-      lengthLogical = Math.max(30, total / arrows.length) / 3;
-    }
-    let from: Vec;
-    if (arrows.length === 0) {
-      const c = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });
-      from = { x: c.x - lengthLogical / 2, y: c.y };
-    } else {
-      let maxX = -Infinity, minY = Infinity;
-      for (const a of arrows) {
-        maxX = Math.max(maxX, a.from.x, a.to.x);
-        minY = Math.min(minY, a.from.y, a.to.y);
-      }
-      from = { x: maxX + gap, y: minY - gap };
-    }
-    const to: Vec = { x: from.x + lengthLogical, y: from.y };
-    const fromC = clampToCanvas(from);
-    const toC: Vec = { x: clampToCanvas(to).x, y: fromC.y };
-    const created = this.store.addArrow(fromC, toC, this.color, this.thickness);
-    this.selectedId = created.id;
-    this.input.setSelected(created.id);
-    this.setMode('select');
-    this.flashStatus('+ arrow');
-  }
-
-  private flashStatus(msg: string): void {
+  flashStatus(msg: string): void {
     const el = document.getElementById('statusBar');
     if (!el) return;
     el.textContent = msg;

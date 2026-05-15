@@ -4,6 +4,20 @@
 
 ## 2026-05-15
 
+### `app.ts` 모듈 분리 (865 → 192 줄)
+
+- 동기: 단일 파일이 50개+ 메서드로 비대해져 추후 기능 추가/리팩터 시 충돌 위험. 책임 그룹별로 쪼개 가독성과 협업성 확보.
+- 접근: `App` 클래스는 **상태/오케스트레이터**로만 남기고, 메서드를 `App` 인스턴스를 인자로 받는 **free function**으로 추출. (TS prototype 패치 패턴 회피 → 호출 위치가 명시적.) 모듈 간 접근을 위해 `App` 필드의 `private` 키워드는 제거. 클래스 상단 주석으로 "App-internal" 컨벤션 명시.
+- 신규 모듈:
+  - `src/ui/UiBindings.ts` (230줄) — `bindUi`, `setMode`, `updateModeUi/Selection/Title`, `applyLangToUi`, `toggleLang`, `syncCenterFontInput`, `syncFontInputToSelection`, `PALETTE_16`.
+  - `src/ui/Modals.ts` (222줄) — `openHelpModal`/`closeHelpModal`/`openWorksModal`/`closeWorksModal`/`renderWorks`/`loadWork`/`renameWork`/`deleteWork`/`refreshWorks`.
+  - `src/app/FileActions.ts` (147줄) — `ensureName`/`save`/`saveAs`/`newScene`/`deleteSelected`/`exportPng`/`exportJson`/`importJsonClick`/`handleImportFile`/`fitToScreen`.
+  - `src/app/KeyboardActions.ts` (143줄) — `onKey`/`copySelected`/`pasteClone`/`insertTextAtViewportCenter`/`insertArrow`.
+- `src/app.ts` (192줄) — 클래스 상태 + 생성자 + `bootstrap`/`adoptScene`/`getSelectedObject`/`requestRender`/`draw`/`resize`/`flashStatus`. 모든 외부 호출 진입점은 import → free function 호출로 단순화.
+- 모듈 간 함수 단위 순환 import(`UiBindings`↔`FileActions`, `Modals`↔`FileActions`)는 TS/ESM 표준 동작상 안전. `import type { App }`로 App 타입만 가져와 런타임 cycle 차단.
+- `dist/bundle.js`는 손 유지 IIFE라 이번 분리는 **소스 구조만** 변경. 번들/HTML/릴리즈 파일은 미변경.
+- 검증: `tsc --noEmit --ignoreDeprecations 6.0` 클린, `node test/run_node.js` 35/35 통과.
+
 ### 테스트 커버리지 보강 (12 → 35 케이스)
 
 - 동기: v0.1까지 기능은 충분히 누적됐지만 회귀 보호가 12개 케이스로 빈약했음. 새 기능을 안전하게 추가하려면 핵심 모듈(SceneStore / CanvasView / geometry / i18n)의 엣지 케이스부터 막아야 함.
