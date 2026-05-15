@@ -4,6 +4,13 @@
 
 ## 2026-05-15
 
+### 주제 크기 입력에도 Enter → 선택 버튼 포커스 이양 적용
+
+- 동기: 직전 변경으로 `inputFontSize`(글자 크기)만 Enter→focus 이양이 적용됐는데, 주제 크기(`inputCenterFontSize`)도 동일 동작을 요청.
+- 변경(`src/ui/UiBindings.ts`): `centerFontEl`에 동일 패턴의 `keydown` 리스너 추가 — Enter면 `preventDefault`, 표시값을 현재 `centerFontSize`로 스냅, `#btnSelect`로 `.focus()`.
+- 번들 동기화(`dist/bundle.js`): `_bindUi` 안 centerFontEl `change` 직후에 동일 `keydown` 핸들러 삽입.
+- 검증: `tsc --noEmit` 무에러, `node test/run_node.js` 40/40 통과, `./build.sh`로 `release/index.html` 98,129 bytes 재생성.
+
 ### 글자 크기 입력에서 Enter → 선택 버튼으로 포커스 이동
 
 - 동기: `inputFontSize`에서 값 조정 후 곧장 키보드 단축키(V/A/T/G/Delete 등)를 쓰려고 했지만, `onKey`가 `(e.target as HTMLElement).tagName === 'INPUT'`인 경우 일찍 return하므로 포커스가 인풋에 있으면 단축키가 먹지 않았음. Enter로 값 커밋 후 자연스럽게 단축키 사용 가능하도록 포커스 이양.

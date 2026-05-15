@@ -150,6 +150,15 @@ export function bindUi(app: App): void {
   centerFontEl.addEventListener('change', () => {
     centerFontEl.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
   });
+  // Mirror of #inputFontSize: Enter commits the value and hands focus back to
+  // the Select-mode button so keyboard shortcuts resume working.
+  centerFontEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    centerFontEl.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
+    const btnSelect = document.getElementById('btnSelect');
+    btnSelect?.focus();
+  });
 
   applyLangToUi(app);
   updateModeUi(app);

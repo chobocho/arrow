@@ -1476,6 +1476,15 @@
     centerFontEl.addEventListener('change', function () {
       centerFontEl.value = String(self.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
     });
+    // Mirror of inputFontSize: Enter snaps to the clamped value and hands
+    // focus back to the Select-mode button so keyboard shortcuts resume.
+    centerFontEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      centerFontEl.value = String(self.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
+      var btnSelect = document.getElementById('btnSelect');
+      if (btnSelect) btnSelect.focus();
+    });
     this._applyLangToUi();
     this._updateModeUi();
     this._updateSelectionUi();
