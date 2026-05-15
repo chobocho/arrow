@@ -61,6 +61,10 @@ export class App {
   helpModalEl: HTMLElement | null = null;
   helpModalCleanup: (() => void) | null = null;
 
+  // Virtual Ctrl toggle (mobile): when true, the next pointer-drag on an
+  // object body is treated as a clone-and-drag, same as physical Ctrl/⌘.
+  modifierClone = false;
+
   private renderScheduled = false;
 
   constructor(root: HTMLElement) {
@@ -94,6 +98,7 @@ export class App {
       },
       onDraftChange: (draft) => { this.draftArrow = draft; },
       onDraftHighlighter: (draft) => { this.draftHighlighter = draft; },
+      getModifierClone: () => this.modifierClone,
     });
 
     this.store.subscribe(() => {

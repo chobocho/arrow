@@ -58,7 +58,8 @@ const strings: Record<LangCode, Dict> = {
     helpModes: 'V — 선택\nA — 화살표\nT — 글자\nG — 형광펜\nH — 이동',
     helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
     helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝',
-    helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝',
+    helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동',
+    cloneToggle: 'Ctrl (복제 드래그 토글)',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -115,7 +116,8 @@ const strings: Record<LangCode, Dict> = {
     helpModes: 'V — Select\nA — Arrow\nT — Text\nG — Highlighter\nH — Pan',
     helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
     helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan',
-    helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan',
+    helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move',
+    cloneToggle: 'Ctrl (clone-drag toggle)',
   },
 };
 

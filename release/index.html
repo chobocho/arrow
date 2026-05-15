@@ -96,6 +96,32 @@
     opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
   }
   #statusBar.visible { opacity: 1; }
+  /* Virtual Ctrl key (TODO #15) — mobile-only floating toggle that mirrors
+     physical Ctrl/⌘ so touch users can also trigger clone-by-drag. */
+  #btnVirtualCtrl {
+    display: none;
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    width: 56px; height: 56px;
+    border-radius: 28px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    font-size: 14px; font-weight: 700;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    user-select: none;
+  }
+  #btnVirtualCtrl.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(58, 122, 254, 0.45);
+  }
+  @media (max-width: 720px) {
+    #btnVirtualCtrl { display: block; }
+  }
   .ap-help-card {
     min-width: 360px;
     max-width: 540px;
@@ -163,6 +189,7 @@
   </header>
   <div id="canvasWrap">
     <canvas id="mainCanvas"></canvas>
+    <button type="button" id="btnVirtualCtrl" title="Ctrl (복제 드래그 토글)">Ctrl</button>
     <div id="statusBar"></div>
   </div>
 </div>
@@ -245,7 +272,8 @@
       helpModes: 'V — 선택\nA — 화살표\nT — 글자\nG — 형광펜\nH — 이동',
       helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
       helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝',
-      helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝'
+      helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동',
+      cloneToggle: 'Ctrl (복제 드래그 토글)'
     },
     en: {
       appTitle: 'Arrow Mind Map',
@@ -277,7 +305,8 @@
       helpModes: 'V — Select\nA — Arrow\nT — Text\nG — Highlighter\nH — Pan',
       helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
       helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan',
-      helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan'
+      helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move',
+      cloneToggle: 'Ctrl (clone-drag toggle)'
     }
   };
   var currentLang = 'ko';
@@ -977,7 +1006,8 @@
       this.drag = { kind: 'pan', startLogical: logical, lastScreen: screen };
       return;
     }
-    this._begin(screen, logical);
+    var wantsClone = !!(e.ctrlKey || e.metaKey || (this.cb.getModifierClone && this.cb.getModifierClone()));
+    this._begin(screen, logical, wantsClone);
   };
   InputHandler.prototype._onMouseMove = function (e) {
     var screen = this._screenFromEvent(e);
@@ -1009,7 +1039,8 @@
       }
       this.lastTapTime = now;
       this.lastTapPos = screen;
-      this._begin(screen, logical);
+      var wantsClone = !!(this.cb.getModifierClone && this.cb.getModifierClone());
+      this._begin(screen, logical, wantsClone);
     } else if (e.touches.length === 2) {
       this.drag = { kind: 'none' };
       var a = this._screenFromEvent(e.touches[0]);
@@ -1043,7 +1074,7 @@
       this.pinch = null;
     }
   };
-  InputHandler.prototype._begin = function (screen, logical) {
+  InputHandler.prototype._begin = function (screen, logical, wantsClone) {
     var mode = this.cb.getMode();
     var tol = this._tolLogical();
     var hit = this.store.hitTest(logical, tol);
@@ -1064,11 +1095,18 @@
         };
         return;
       }
+      // Ctrl/⌘ (or virtual Ctrl toggle on mobile) + body-handle drag clones
+      // first, then translates the clone — original stays put. (TODO #16)
+      var target = wantsClone ? this._clone(hit.object) : hit.object;
+      if (wantsClone) {
+        this.selectedId = target.id;
+        this.cb.onSelect(target.id);
+      }
       this.drag = {
         kind: 'move-object',
-        objectId: hit.object.id,
+        objectId: target.id,
         startLogical: logical,
-        origin: this._snap(hit.object),
+        origin: this._snap(target),
         lastScreen: screen
       };
       this.cb.onChange();
@@ -1234,6 +1272,26 @@
     }
     return { pos: { x: obj.pos.x, y: obj.pos.y } };
   };
+  // Duplicate the object at its current position so a Ctrl+drag can grab the
+  // duplicate and translate it while the original stays put.
+  InputHandler.prototype._clone = function (obj) {
+    if (obj.type === 'arrow') {
+      return this.store.addArrow(
+        { x: obj.from.x, y: obj.from.y },
+        { x: obj.to.x, y: obj.to.y },
+        obj.color, obj.thickness
+      );
+    }
+    if (obj.type === 'highlighter') {
+      var pts = [];
+      for (var i = 0; i < obj.points.length; i++) pts.push({ x: obj.points[i].x, y: obj.points[i].y });
+      return this.store.addHighlighter(pts, obj.color, obj.thickness);
+    }
+    return this.store.addText(
+      { x: obj.pos.x, y: obj.pos.y },
+      obj.text, obj.fontSize, obj.color
+    );
+  };
 
   // ---------- App controller ----------
   function App(root) {
@@ -1259,6 +1317,8 @@
     this.renderScheduled = false;
     // Internal clipboard for Ctrl+C / Ctrl+V cloning of scene objects.
     this.clipboard = null;
+    // Virtual Ctrl toggle for mobile clone-by-drag (TODO #15/#16).
+    this.modifierClone = false;
 
     this.input = new InputHandler(this.canvas, this.view, this.store, {
       getMode: function () { return self.mode; },
@@ -1279,7 +1339,8 @@
         });
       },
       onDraftChange: function (d) { self.draftArrow = d; },
-      onDraftHighlighter: function (d) { self.draftHighlighter = d; }
+      onDraftHighlighter: function (d) { self.draftHighlighter = d; },
+      getModifierClone: function () { return self.modifierClone; }
     });
 
     this.store.subscribe(function () { self.dirty = true; self._syncFontInputToSelection(); self._requestRender(); });
@@ -1401,6 +1462,15 @@
     byId('btnDelete').addEventListener('click', function () { self._deleteSelected(); });
     byId('btnWorks').addEventListener('click', function () { self._openWorksModal(); });
     byId('btnHelp').addEventListener('click', function () { self._openHelpModal(); });
+    // Virtual Ctrl: sticky toggle that mirrors physical Ctrl/⌘ for drag-clone
+    // on mobile (TODO #15). Tapping toggles; stays active until tapped again.
+    var ctrlBtn = byId('btnVirtualCtrl');
+    if (ctrlBtn) {
+      ctrlBtn.addEventListener('click', function () {
+        self.modifierClone = !self.modifierClone;
+        ctrlBtn.classList.toggle('active', self.modifierClone);
+      });
+    }
     var colorEl = byId('inputColor');
     colorEl.value = this.color;
     var paletteEl = byId('colorPalette');
@@ -1536,6 +1606,7 @@
     setTip('btnDelete', 'delete');
     setTip('btnWorks', 'works');
     setTip('btnHelp', 'help');
+    setTip('btnVirtualCtrl', 'cloneToggle');
     var langEl = document.getElementById('btnLang');
     if (langEl) langEl.title = currentLang === 'ko' ? 'Switch to English' : '한국어로 전환';
     setText('labelColor', 'selectColor');

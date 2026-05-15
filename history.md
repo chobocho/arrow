@@ -4,6 +4,36 @@
 
 ## 2026-05-15
 
+### TODO #15·#16: Ctrl+드래그 객체 복제 + 모바일용 가상 Ctrl 버튼
+
+- 동기: TODO.md에 남아 있던 두 미완료 항목. #16(Ctrl+드래그 복제)이 본 기능, #15(우측 하단 가상 Ctrl)는 물리 Ctrl 키 없는 모바일에서 #16을 트리거하기 위한 UI. 한 쌍이라 같이 구현.
+- 동작:
+  - 데스크톱: 객체 본체에 Ctrl/⌘ + 마우스 드래그 → 즉시 복제 후 그 클론을 드래그. 원본은 제자리.
+  - 모바일: 우측 하단 둥근 "Ctrl" 토글 버튼을 탭해 활성화 → 객체 드래그 시 동일 복제 동작. sticky 토글이라 여러 번 복제 후 다시 탭해 끔.
+  - 안전장치: arrow의 끝점/중간 리사이즈 핸들(`arrow-from`, `arrow-to`)과 text 리사이즈 핸들(`text-resize`)은 클론 대상에서 제외 — 리사이즈 도중 복제는 의도와 어긋남. body 계열 핸들(`arrow-body`, `arrow-mid`, `text-body`, `highlighter-body`)만 복제 트리거.
+- 구현 (TS 소스):
+  - `src/input/InputHandler.ts`: `InputCallbacks`에 `getModifierClone?: () => boolean` 추가. `onMouseDown`은 `e.ctrlKey || e.metaKey || cb.getModifierClone?.()`로 `wantsClone` 계산해 `beginPointer`에 전달. `onTouchStart`도 동일하게 가상 Ctrl만 읽음. `beginPointer`는 body 핸들이고 `wantsClone`이면 `cloneForDrag(obj)`로 원본을 그대로 복제하여 새 객체를 드래그 대상으로 설정. 신규 헬퍼 `cloneForDrag`는 `store.addArrow/addText/addHighlighter`를 호출.
+  - `src/app.ts`: `modifierClone = false` 필드 추가. InputHandler 콜백에 `getModifierClone: () => this.modifierClone` 추가.
+  - `src/ui/UiBindings.ts`: `btnVirtualCtrl` 클릭 → `app.modifierClone` 토글 + `.active` 클래스. `applyLangToUi`에 `cloneToggle` 키 매핑. 첫 구현에서 mouseup/touchend 자동 해제를 넣었으나 버튼 자체 클릭의 mouseup이 즉시 토글을 꺼버려 제거 → sticky 토글로 정착.
+  - `src/i18n/lang.ts`: ko/en에 `cloneToggle` 문자열, 도움말 `helpMobile` 끝줄에 Ctrl 토글 사용법 추가.
+- HTML/CSS (`index.html`):
+  - `#canvasWrap` 내부에 `<button id="btnVirtualCtrl">Ctrl</button>` 추가.
+  - 56px 둥근 floating 버튼. `display: none` 기본, `@media (max-width: 720px)`에서만 노출. active 시 accent 컬러 강조.
+- 번들 동기화 (`dist/bundle.js`):
+  - i18n STRINGS에 `cloneToggle` + `helpMobile` 추가.
+  - `_onMouseDown` / `_onTouchStart`가 `wantsClone` 계산해 `_begin(screen, logical, wantsClone)` 호출.
+  - `_begin`은 body 핸들이고 `wantsClone`이면 `_clone(obj)` 호출 후 클론을 move-object 대상으로.
+  - 신규 `_clone(obj)` — TS의 `cloneForDrag`와 동일 동작.
+  - App 생성자에 `this.modifierClone = false`, InputHandler 콜백에 `getModifierClone`.
+  - `_bindUi`에 `btnVirtualCtrl` 토글 핸들러. `_applyLangToUi`에 `setTip('btnVirtualCtrl', 'cloneToggle')`.
+- 검증:
+  - `tsc --noEmit --ignoreDeprecations 6.0` 클린.
+  - `node test/run_node.js` 35/35 통과 (기존 케이스 회귀 없음).
+  - `./build.sh` → `release/index.html` 91,889 bytes 빌드 성공.
+  - `python3 -m http.server 8001`로 `index.html` / `release/index.html` 모두 200 응답, `btnVirtualCtrl` / `modifierClone` / `cloneToggle` 토큰 12회 매칭.
+- 사전 드리프트 메모: 번들이 이전 우클릭-선택 커밋(`003458f`)을 반영하지 못해 `_onMouseDown`에 `e.button === 2 → pan`이 남아 있음. 이번 작업과 무관하여 손대지 않았으나 추후 보정 권장.
+- TODO.md: #15, #16 ✅ 처리. 남은 항목 없음.
+
 ### `app.ts` 모듈 분리 (865 → 192 줄)
 
 - 동기: 단일 파일이 50개+ 메서드로 비대해져 추후 기능 추가/리팩터 시 충돌 위험. 책임 그룹별로 쪼개 가독성과 협업성 확보.

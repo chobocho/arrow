@@ -56,6 +56,17 @@ export function bindUi(app: App): void {
   ($('#btnWorks')).addEventListener('click', () => openWorksModal(app));
   ($('#btnHelp')).addEventListener('click', () => openHelpModal(app));
 
+  // Virtual Ctrl: sticky toggle that mirrors physical Ctrl/⌘ for drag-clone.
+  // Tapping toggles; remains active until tapped again, so users can clone
+  // several objects without re-tapping the button each time (TODO #15).
+  const ctrlBtn = document.getElementById('btnVirtualCtrl');
+  if (ctrlBtn) {
+    ctrlBtn.addEventListener('click', () => {
+      app.modifierClone = !app.modifierClone;
+      ctrlBtn.classList.toggle('active', app.modifierClone);
+    });
+  }
+
   const colorEl = $('#inputColor') as HTMLInputElement;
   colorEl.value = app.color;
   const paletteEl = $('#colorPalette') as HTMLDivElement;
@@ -192,6 +203,7 @@ export function applyLangToUi(app: App): void {
   setTip('btnDelete', 'delete');
   setTip('btnWorks', 'works');
   setTip('btnHelp', 'help');
+  setTip('btnVirtualCtrl', 'cloneToggle');
   // Language toggle: tooltip describes the target language.
   const langEl = document.getElementById('btnLang');
   if (langEl) langEl.title = getLang() === 'ko' ? 'Switch to English' : '한국어로 전환';

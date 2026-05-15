@@ -19,6 +19,10 @@ export interface InputCallbacks {
   onDoubleClickText: (text: TextObject) => void;
   onDraftChange: (draft: ArrowObject | null) => void;
   onDraftHighlighter: (draft: HighlighterObject | null) => void;
+  // Returns true when a "clone modifier" is active (mobile virtual Ctrl button).
+  // The Ctrl/⌘ physical key already counts on desktop; this is the touch
+  // equivalent so mobile users can also clone-by-drag (TODO #15/#16).
+  getModifierClone?: () => boolean;
 }
 
 interface DragState {
@@ -109,7 +113,8 @@ export class InputHandler {
       this.dragging = { kind: 'pan', startLogical: logical, startScreen: screen, lastScreen: screen };
       return;
     }
-    this.beginPointer(screen, logical);
+    const wantsClone = e.ctrlKey || e.metaKey || !!this.cb.getModifierClone?.();
+    this.beginPointer(screen, logical, wantsClone);
   };
 
   private onMouseMove = (e: MouseEvent): void => {
@@ -154,7 +159,8 @@ export class InputHandler {
       }
       this.lastTapTime = now;
       this.lastTapPos = screen;
-      this.beginPointer(screen, logical);
+      const wantsClone = !!this.cb.getModifierClone?.();
+      this.beginPointer(screen, logical, wantsClone);
     } else if (e.touches.length === 2) {
       this.dragging.kind = 'none';
       const a = this.getScreenFromEvent(e.touches[0]);
@@ -206,7 +212,7 @@ export class InputHandler {
   };
 
   // --- Shared pointer flow ---
-  private beginPointer(screen: Vec, logical: Vec): void {
+  private beginPointer(screen: Vec, logical: Vec, wantsClone = false): void {
     const mode = this.cb.getMode();
     const tol = this.toleranceLogical();
     const hit = this.store.hitTest(logical, tol);
@@ -238,13 +244,22 @@ export class InputHandler {
         };
         return;
       }
+      // Ctrl/⌘ + drag on a body handle clones the object first, then the move
+      // operates on the new clone — leaving the original in place (TODO #16).
+      // Resize handles above are skipped so reshaping doesn't accidentally
+      // duplicate.
+      const target = wantsClone ? this.cloneForDrag(hit.object) : hit.object;
+      if (wantsClone) {
+        this.selectedId = target.id;
+        this.cb.onSelect(target.id);
+      }
       this.dragging = {
         kind: 'move-object',
-        objectId: hit.object.id,
+        objectId: target.id,
         startLogical: logical,
         startScreen: screen,
         lastScreen: screen,
-        origin: this.snapshotObject(hit.object),
+        origin: this.snapshotObject(target),
       };
       this.cb.onChange();
       return;
@@ -437,5 +452,17 @@ export class InputHandler {
     if (obj.type === 'arrow') return { from: { ...obj.from }, to: { ...obj.to } };
     if (obj.type === 'highlighter') return { points: obj.points.map((p) => ({ ...p })) };
     return { pos: { ...obj.pos } };
+  }
+
+  // Create a duplicate of `obj` at the same position so a Ctrl+drag can grab
+  // the duplicate and translate it while the original stays put.
+  private cloneForDrag(obj: SceneObject): SceneObject {
+    if (obj.type === 'arrow') {
+      return this.store.addArrow({ ...obj.from }, { ...obj.to }, obj.color, obj.thickness);
+    }
+    if (obj.type === 'highlighter') {
+      return this.store.addHighlighter(obj.points.map((p) => ({ ...p })), obj.color, obj.thickness);
+    }
+    return this.store.addText({ ...obj.pos }, obj.text, obj.fontSize, obj.color);
   }
 }
