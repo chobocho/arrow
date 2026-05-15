@@ -20,7 +20,18 @@ export interface TextObject {
   color: string;
 }
 
-export type SceneObject = ArrowObject | TextObject;
+export interface HighlighterObject {
+  id: ObjectId;
+  type: 'highlighter';
+  points: Vec[];     // polyline in logical coordinates (>= 2 points)
+  color: string;
+  thickness: number; // base thickness in logical units; renderer multiplies for marker width
+}
+
+export type SceneObject = ArrowObject | TextObject | HighlighterObject;
+
+export const HIGHLIGHTER_OPACITY = 0.35;
+export const HIGHLIGHTER_WIDTH_MULT = 4;
 
 export interface SceneData {
   id: string;

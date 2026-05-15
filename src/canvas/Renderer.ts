@@ -1,10 +1,20 @@
 import { Vec, MAX_CANVAS_SIZE } from '../utils/geometry.js';
-import { ArrowObject, DEFAULT_CENTER_FONT_SIZE, SceneData, SceneObject, TextObject } from '../models/types.js';
+import {
+  ArrowObject,
+  DEFAULT_CENTER_FONT_SIZE,
+  HighlighterObject,
+  HIGHLIGHTER_OPACITY,
+  HIGHLIGHTER_WIDTH_MULT,
+  SceneData,
+  SceneObject,
+  TextObject,
+} from '../models/types.js';
 import { CanvasView } from './CanvasView.js';
 
 export interface RenderOptions {
   selectedId: string | null;
-  draftArrow: ArrowObject | null;   // arrow currently being drawn
+  draftArrow: ArrowObject | null;             // arrow currently being drawn
+  draftHighlighter: HighlighterObject | null; // highlighter stroke in progress
   showGrid: boolean;
 }
 
@@ -26,8 +36,13 @@ export class Renderer {
     // Center topic indicator (visual anchor).
     this.drawCenter(scene);
 
+    // Draw highlighter strokes first so arrows/text sit on top of the marker.
     for (const obj of scene.objects) {
-      this.drawObject(obj, obj.id === opts.selectedId);
+      if (obj.type === 'highlighter') this.drawHighlighter(obj, obj.id === opts.selectedId, false);
+    }
+    if (opts.draftHighlighter) this.drawHighlighter(opts.draftHighlighter, false, true);
+    for (const obj of scene.objects) {
+      if (obj.type !== 'highlighter') this.drawObject(obj, obj.id === opts.selectedId);
     }
     if (opts.draftArrow) this.drawArrow(opts.draftArrow, false, true);
 
@@ -56,10 +71,13 @@ export class Renderer {
     (this as any).ctx = ctx;
     (this as any).view = tmpView;
 
-    // Center marker first, then objects.
+    // Center marker first, then objects (highlighter under everything else).
     this.drawCenter(scene);
     for (const obj of scene.objects) {
-      this.drawObject(obj, false);
+      if (obj.type === 'highlighter') this.drawHighlighter(obj, false, false);
+    }
+    for (const obj of scene.objects) {
+      if (obj.type !== 'highlighter') this.drawObject(obj, false);
     }
 
     (this as any).ctx = realCtx;
@@ -90,6 +108,14 @@ export class Renderer {
         minY = Math.min(minY, o.from.y, o.to.y);
         maxX = Math.max(maxX, o.from.x, o.to.x);
         maxY = Math.max(maxY, o.from.y, o.to.y);
+      } else if (o.type === 'highlighter') {
+        const pad = o.thickness * HIGHLIGHTER_WIDTH_MULT * 0.5;
+        for (const p of o.points) {
+          minX = Math.min(minX, p.x - pad);
+          minY = Math.min(minY, p.y - pad);
+          maxX = Math.max(maxX, p.x + pad);
+          maxY = Math.max(maxY, p.y + pad);
+        }
       } else {
         minX = Math.min(minX, o.pos.x);
         minY = Math.min(minY, o.pos.y);
@@ -180,7 +206,55 @@ export class Renderer {
 
   private drawObject(obj: SceneObject, selected: boolean): void {
     if (obj.type === 'arrow') this.drawArrow(obj, selected, false);
+    else if (obj.type === 'highlighter') this.drawHighlighter(obj, selected, false);
     else this.drawText(obj, selected);
+  }
+
+  private drawHighlighter(hl: HighlighterObject, selected: boolean, isDraft: boolean): void {
+    const { ctx, view } = this;
+    if (hl.points.length < 1) return;
+    const width = Math.max(1, hl.thickness * HIGHLIGHTER_WIDTH_MULT * view.scale);
+    ctx.save();
+    ctx.globalAlpha = isDraft ? HIGHLIGHTER_OPACITY * 0.7 : HIGHLIGHTER_OPACITY;
+    ctx.strokeStyle = hl.color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    const first = view.logicalToScreen(hl.points[0]);
+    ctx.moveTo(first.x, first.y);
+    if (hl.points.length === 1) {
+      // Single tap — render a round dot by closing a 0-length segment.
+      ctx.lineTo(first.x, first.y);
+    } else {
+      for (let i = 1; i < hl.points.length; i++) {
+        const p = view.logicalToScreen(hl.points[i]);
+        ctx.lineTo(p.x, p.y);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    if (selected) {
+      // Dashed bounding box around the stroke so users can see the selection
+      // without obscuring the translucent stroke itself.
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const p of hl.points) {
+        const s = view.logicalToScreen(p);
+        if (s.x < minX) minX = s.x;
+        if (s.y < minY) minY = s.y;
+        if (s.x > maxX) maxX = s.x;
+        if (s.y > maxY) maxY = s.y;
+      }
+      const pad = width * 0.5 + 4;
+      ctx.save();
+      ctx.strokeStyle = '#3a7afe';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(minX - pad, minY - pad, (maxX - minX) + pad * 2, (maxY - minY) + pad * 2);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
   }
 
   private drawArrow(arrow: ArrowObject, selected: boolean, isDraft: boolean): void {

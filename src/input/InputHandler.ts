@@ -1,11 +1,11 @@
 import { Vec, clampToCanvas, vecDist } from '../utils/geometry.js';
 import { CanvasView } from '../canvas/CanvasView.js';
 import { SceneStore, HitHandle } from '../models/SceneStore.js';
-import { ArrowObject, SceneObject, TextObject } from '../models/types.js';
+import { ArrowObject, HighlighterObject, SceneObject, TextObject } from '../models/types.js';
 import { customPrompt } from '../ui/CustomPrompt.js';
 import { t } from '../i18n/lang.js';
 
-export type EditorMode = 'select' | 'arrow' | 'text' | 'pan';
+export type EditorMode = 'select' | 'arrow' | 'text' | 'pan' | 'highlighter';
 
 export interface InputCallbacks {
   getMode: () => EditorMode;
@@ -18,10 +18,11 @@ export interface InputCallbacks {
   onDoubleClickEmpty: (logical: Vec) => void;
   onDoubleClickText: (text: TextObject) => void;
   onDraftChange: (draft: ArrowObject | null) => void;
+  onDraftHighlighter: (draft: HighlighterObject | null) => void;
 }
 
 interface DragState {
-  kind: 'pan' | 'draft-arrow' | 'move-object' | 'resize-arrow' | 'resize-text' | 'none';
+  kind: 'pan' | 'draft-arrow' | 'draft-highlighter' | 'move-object' | 'resize-arrow' | 'resize-text' | 'none';
   objectId?: string;
   startLogical: Vec;
   startScreen: Vec;
@@ -29,6 +30,11 @@ interface DragState {
   origin?: any;
   lastScreen: Vec;
 }
+
+// Minimum distance between consecutive captured points in a highlighter
+// stroke (screen pixels). Keeps the saved polyline lean without losing the
+// shape of the gesture.
+const HL_MIN_STEP_SCREEN = 2.5;
 
 const TOUCH_TAP_TIME = 250;
 const TOUCH_TAP_DIST = 8;
@@ -235,6 +241,27 @@ export class InputHandler {
     }
 
     // Empty space behavior depends on mode.
+    if (mode === 'highlighter') {
+      const draft: HighlighterObject = {
+        id: 'draft',
+        type: 'highlighter',
+        points: [logical],
+        color: this.cb.getColor(),
+        thickness: this.cb.getThickness(),
+      };
+      this.cb.onDraftHighlighter(draft);
+      this.dragging = {
+        kind: 'draft-highlighter',
+        startLogical: logical,
+        startScreen: screen,
+        lastScreen: screen,
+        origin: { draft },
+      };
+      this.selectedId = null;
+      this.cb.onSelect(null);
+      this.cb.onChange();
+      return;
+    }
     if (mode === 'arrow') {
       const draft: ArrowObject = {
         id: 'draft',
@@ -296,6 +323,17 @@ export class InputHandler {
       this.cb.onChange();
       return;
     }
+    if (drag.kind === 'draft-highlighter' && drag.origin?.draft) {
+      const draft: HighlighterObject = drag.origin.draft;
+      const last = draft.points[draft.points.length - 1];
+      const lastScreen = this.view.logicalToScreen(last);
+      if (vecDist(lastScreen, screen) >= HL_MIN_STEP_SCREEN) {
+        draft.points.push(clampToCanvas(logical));
+        this.cb.onDraftHighlighter(draft);
+        this.cb.onChange();
+      }
+      return;
+    }
     if (drag.kind === 'resize-arrow' && drag.objectId) {
       const end = drag.origin?.end as 'arrow-from' | 'arrow-to';
       this.store.update(drag.objectId, (o) => {
@@ -314,6 +352,9 @@ export class InputHandler {
           const orig = drag.origin as { from: Vec; to: Vec };
           o.from = clampToCanvas({ x: orig.from.x + dxLog, y: orig.from.y + dyLog });
           o.to = clampToCanvas({ x: orig.to.x + dxLog, y: orig.to.y + dyLog });
+        } else if (o.type === 'highlighter') {
+          const orig = drag.origin as { points: Vec[] };
+          o.points = orig.points.map((p) => clampToCanvas({ x: p.x + dxLog, y: p.y + dyLog }));
         } else {
           const orig = drag.origin as { pos: Vec };
           o.pos = clampToCanvas({ x: orig.pos.x + dxLog, y: orig.pos.y + dyLog });
@@ -351,6 +392,20 @@ export class InputHandler {
       this.cb.onDraftChange(null);
       // Stay in arrow mode so users can chain multiple arrows without
       // re-selecting the tool each time.
+    } else if (drag.kind === 'draft-highlighter' && drag.origin?.draft) {
+      const draft: HighlighterObject = drag.origin.draft;
+      // Single tap (one point) still commits as a dot; multi-point strokes
+      // commit when total path length passes a tiny threshold so accidental
+      // micro-drags don't pollute the scene.
+      let total = 0;
+      for (let i = 1; i < draft.points.length; i++) total += vecDist(draft.points[i - 1], draft.points[i]);
+      if (draft.points.length === 1 || total > 4 / this.view.scale) {
+        const created = this.store.addHighlighter(draft.points, draft.color, draft.thickness);
+        this.selectedId = created.id;
+        this.cb.onSelect(created.id);
+      }
+      this.cb.onDraftHighlighter(null);
+      // Stay in highlighter mode for consecutive strokes.
     }
     this.dragging = { kind: 'none', startLogical: { x: 0, y: 0 }, startScreen: { x: 0, y: 0 }, lastScreen: { x: 0, y: 0 } };
     this.cb.onChange();
@@ -370,6 +425,7 @@ export class InputHandler {
 
   private snapshotObject(obj: SceneObject): any {
     if (obj.type === 'arrow') return { from: { ...obj.from }, to: { ...obj.to } };
+    if (obj.type === 'highlighter') return { points: obj.points.map((p) => ({ ...p })) };
     return { pos: { ...obj.pos } };
   }
 }

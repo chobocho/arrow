@@ -1,7 +1,7 @@
 import { CanvasView } from './canvas/CanvasView.js';
 import { Renderer } from './canvas/Renderer.js';
 import { SceneStore } from './models/SceneStore.js';
-import { ArrowObject, DEFAULT_CENTER_FONT_SIZE, SceneData, SceneObject, emptyScene } from './models/types.js';
+import { ArrowObject, DEFAULT_CENTER_FONT_SIZE, HighlighterObject, SceneData, SceneObject, emptyScene } from './models/types.js';
 import { InputHandler, EditorMode } from './input/InputHandler.js';
 import { IndexedDBStore, SceneSummary } from './storage/IndexedDBStore.js';
 import { LangCode, getLang, setLang, t } from './i18n/lang.js';
@@ -20,12 +20,13 @@ export class App {
   private db = new IndexedDBStore();
 
   private mode: EditorMode = 'select';
-  private color = '#222';
+  private color = '#222222';
   private thickness = 4;
   private fontSize = 28;
 
   private selectedId: string | null = null;
   private draftArrow: ArrowObject | null = null;
+  private draftHighlighter: HighlighterObject | null = null;
   private dirty = false;
   private worksList: SceneSummary[] = [];
   // Internal clipboard for Ctrl+C / Ctrl+V cloning. Holds a deep snapshot so
@@ -58,6 +59,7 @@ export class App {
         });
       },
       onDraftChange: (draft) => { this.draftArrow = draft; },
+      onDraftHighlighter: (draft) => { this.draftHighlighter = draft; },
     });
 
     this.store.subscribe(() => { this.dirty = true; this.syncFontInputToSelection(); this.requestRender(); });
@@ -144,6 +146,7 @@ export class App {
     this.renderer.render(this.store.get(), {
       selectedId: this.selectedId,
       draftArrow: this.draftArrow,
+      draftHighlighter: this.draftHighlighter,
       showGrid: true,
     });
   }
@@ -168,6 +171,7 @@ export class App {
     ($('#btnSelect')).addEventListener('click', () => this.setMode('select'));
     ($('#btnArrow')).addEventListener('click', () => this.setMode('arrow'));
     ($('#btnText')).addEventListener('click', () => this.setMode('text'));
+    ($('#btnHighlighter')).addEventListener('click', () => this.setMode('highlighter'));
     ($('#btnPan')).addEventListener('click', () => this.setMode('pan'));
     ($('#btnSave')).addEventListener('click', () => void this.save());
     ($('#btnSaveAs')).addEventListener('click', () => void this.saveAs());
@@ -197,7 +201,44 @@ export class App {
 
     const colorEl = $('#inputColor') as HTMLInputElement;
     colorEl.value = this.color;
-    colorEl.addEventListener('input', () => { this.color = colorEl.value; });
+    const paletteEl = $('#colorPalette') as HTMLDivElement;
+    const updatePaletteActive = (hex: string): void => {
+      const target = hex.toLowerCase();
+      paletteEl.querySelectorAll<HTMLButtonElement>('.swatch').forEach((b) => {
+        b.classList.toggle('active', (b.dataset.color || '').toLowerCase() === target);
+      });
+    };
+    const PALETTE_16: readonly string[] = [
+      '#000000', '#424242', '#9e9e9e', '#ffffff',
+      '#f44336', '#ff9800', '#ffeb3b', '#4caf50',
+      '#00bcd4', '#2196f3', '#3f51b5', '#9c27b0',
+      '#e91e63', '#795548', '#009688', '#607d8b',
+    ];
+    for (const hex of PALETTE_16) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'swatch';
+      btn.style.background = hex;
+      btn.dataset.color = hex;
+      btn.title = hex.toUpperCase();
+      btn.addEventListener('click', () => {
+        this.color = hex;
+        colorEl.value = hex;
+        updatePaletteActive(hex);
+        // Return focus to body so keyboard shortcuts (+, Enter, Delete, ...) keep working.
+        colorEl.blur();
+        btn.blur();
+      });
+      paletteEl.appendChild(btn);
+    }
+    updatePaletteActive(this.color);
+    colorEl.addEventListener('input', () => {
+      this.color = colorEl.value;
+      updatePaletteActive(colorEl.value);
+    });
+    // After the native color picker commits, hand focus back to the body so
+    // keyboard shortcuts (+ to insert arrow, Enter, Delete, ...) work again.
+    colorEl.addEventListener('change', () => { colorEl.blur(); });
     const thickEl = $('#inputThickness') as HTMLInputElement;
     thickEl.value = String(this.thickness);
     thickEl.addEventListener('input', () => { this.thickness = parseFloat(thickEl.value) || 4; });
@@ -248,6 +289,7 @@ export class App {
       select: 'btnSelect',
       arrow: 'btnArrow',
       text: 'btnText',
+      highlighter: 'btnHighlighter',
       pan: 'btnPan',
     };
     for (const k of Object.keys(map) as EditorMode[]) {
@@ -281,6 +323,7 @@ export class App {
     setTip('btnSelect', 'modeSelect');
     setTip('btnArrow', 'modeArrow');
     setTip('btnText', 'modeText');
+    setTip('btnHighlighter', 'modeHighlighter');
     setTip('btnPan', 'modePan');
     setTip('btnSave', 'save');
     setTip('btnSaveAs', 'saveAs');
@@ -654,6 +697,13 @@ export class App {
         minY = Math.min(minY, o.from.y, o.to.y);
         maxX = Math.max(maxX, o.from.x, o.to.x);
         maxY = Math.max(maxY, o.from.y, o.to.y);
+      } else if (o.type === 'highlighter') {
+        for (const p of o.points) {
+          if (p.x < minX) minX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y > maxY) maxY = p.y;
+        }
       } else {
         minX = Math.min(minX, o.pos.x);
         minY = Math.min(minY, o.pos.y);
@@ -708,6 +758,7 @@ export class App {
       void this.newScene();
     } else if (e.key === 'a') this.setMode('arrow');
     else if (e.key === 't') this.setMode('text');
+    else if (e.key === 'g') this.setMode('highlighter');
     else if (e.key === 'v') this.setMode('select');
     else if (e.key === 'h') this.setMode('pan');
   }
@@ -737,6 +788,10 @@ export class App {
       created = this.store.addArrow(from, to, clip.color, clip.thickness);
       clip.from = from;
       clip.to = to;
+    } else if (clip.type === 'highlighter') {
+      const shifted: Vec[] = clip.points.map((p) => ({ x: p.x + offset, y: p.y + offset }));
+      created = this.store.addHighlighter(shifted, clip.color, clip.thickness);
+      clip.points = shifted;
     } else {
       const pos: Vec = { x: clip.pos.x + offset, y: clip.pos.y + offset };
       created = this.store.addText(pos, clip.text, clip.fontSize, clip.color);

@@ -1,5 +1,6 @@
 import {
   ArrowObject,
+  HighlighterObject,
   SceneData,
   SceneObject,
   TextObject,
@@ -84,6 +85,21 @@ export class SceneStore {
     return arrow;
   }
 
+  addHighlighter(points: Vec[], color: string, thickness: number): HighlighterObject {
+    const clamped = points.map((p) => clampToCanvas(p));
+    const obj: HighlighterObject = {
+      id: newId('hl'),
+      type: 'highlighter',
+      points: clamped,
+      color,
+      thickness,
+    };
+    this.scene.objects.push(obj);
+    this.touch();
+    this.emit();
+    return obj;
+  }
+
   addText(pos: Vec, text: string, fontSize: number, color: string): TextObject {
     const obj: TextObject = {
       id: newId('text'),
@@ -134,6 +150,12 @@ export class SceneStore {
       if (vecDist(point, mid) <= tolerance) return { handle: 'arrow-mid' };
       const d = pointToSegmentDistance(point, obj.from, obj.to);
       if (d <= Math.max(tolerance, obj.thickness)) return { handle: 'arrow-body' };
+    } else if (obj.type === 'highlighter') {
+      const margin = Math.max(tolerance, obj.thickness * 2);
+      for (let i = 0; i + 1 < obj.points.length; i++) {
+        const d = pointToSegmentDistance(point, obj.points[i], obj.points[i + 1]);
+        if (d <= margin) return { handle: 'highlighter-body' };
+      }
     } else {
       // Rough bounding box; renderer measures width but we don't have ctx here.
       const charWidth = obj.fontSize * 0.6;
@@ -161,7 +183,8 @@ export type HitHandle =
   | 'arrow-mid'
   | 'arrow-body'
   | 'text-body'
-  | 'text-resize';
+  | 'text-resize'
+  | 'highlighter-body';
 
 export interface HitResult {
   object: SceneObject | null;

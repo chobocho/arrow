@@ -4,6 +4,36 @@
 
 ## 2026-05-15
 
+### 형광펜(Highlighter) 도구 추가
+
+- 새 객체 유형 `HighlighterObject { points: Vec[], color, thickness }` 추가. `SceneObject` 유니온에 합류시켜 저장/불러오기/내보내기 흐름에 그대로 편승.
+- 입력 흐름: 새 모드 `'highlighter'`. 빈 곳에서 드래그 시 폴리라인을 캡처(연속 점 사이 화면 거리 ≥ 2.5px 만 기록하여 객체 크기를 작게 유지), 마우스/터치 업에서 누적 길이 > 4px 일 때 커밋. 단일 탭은 점 1개의 짧은 마커로 커밋.
+- 렌더: `globalAlpha=0.35`, `lineCap/lineJoin='round'`, 폭은 `thickness × 4`. 화살표/글자 *아래* 레이어에 먼저 그려서 실제 형광펜처럼 강조 표시가 뒤로 깔리도록 함. 선택 시 점선 바운딩 박스 표시.
+- 선택/이동/삭제: 폴리라인 각 세그먼트와 거리 기반 히트테스트(`highlighter-body`). 본체 드래그로 전체 점 평행이동. Delete/Backspace, Ctrl+C/V도 그대로 동작 (`pasteClone`에서 highlighter 분기 추가).
+- 툴바: 글자/이동 사이에 `🖍️ btnHighlighter` 버튼. 커서는 `cell`. 키보드 단축키 `G` 추가하고 도움말 모달 `helpModes`에 노출.
+- i18n: `modeHighlighter` 추가 (`형광펜` / `Highlighter`).
+- 적용 위치: `src/models/types.ts`, `src/models/SceneStore.ts`, `src/canvas/Renderer.ts`, `src/input/InputHandler.ts`, `src/app.ts`, `src/i18n/lang.ts`, `index.html`, `dist/bundle.js`.
+- 검증: `tsc --noEmit` 클린, `node test/run_node.js` 12/12 통과, `python3 -m http.server 8001`로 `release/index.html` 200 응답 + `btnHighlighter`/`addHighlighter`/`_drawHighlighter`/`modeHighlighter`/`draft-highlighter` 토큰 모두 매칭.
+
+### 색상 입력 관련 버그 2건 수정
+
+- 증상 1: 콘솔에 `The specified value "#222" does not conform to the required format. "#rrggbb"` 에러가 떴고, 색상 입력 초깃값이 의도(`#222222`, 짙은 회색)와 달리 `#000000`(검정)으로 표시됨.
+- 원인 1: 앱의 기본 색상이 `#222`(3자리 단축형)였는데, `<input type="color">`는 6자리 `#rrggbb`만 허용. 생성자에서 `colorEl.value = this.color` 시 형식이 맞지 않아 브라우저가 거부하면서 콘솔 에러 발생 + 입력값이 검정으로 폴백.
+- 수정 1: `App.color` 기본값을 `#222` → `#222222`로 변경(`src/app.ts`, `dist/bundle.js`). 캔버스 fillStyle/strokeStyle은 두 형식 모두 허용하므로 렌더링에 영향 없음.
+
+- 증상 2: 색상을 한 번 바꾼 뒤 키보드 `+`(화살표 추가) 단축키가 동작하지 않음.
+- 원인 2: 네이티브 색상 다이얼로그를 닫으면 포커스가 `inputColor`(INPUT)에 남음. `onKey`는 `target.tagName === 'INPUT'`일 때 즉시 return하므로 단축키가 차단됨.
+- 수정 2: 색상 입력의 `change` 이벤트와 16색 스와치 click 핸들러에서 `colorEl.blur()` 호출하여 포커스를 body로 반환. 입력 중인 thickness/fontSize 같은 숫자 입력은 그대로 두어 타이핑 흐름 방해 없음.
+
+### 색상 입력에 16색 기본 팔레트 추가 (데스크톱)
+
+- 헤더 색상 입력 옆에 16개 스와치(`#colorPalette`)를 추가하여 데스크톱에서 클릭 한 번으로 자주 쓰는 색을 선택 가능하도록 함.
+- 팔레트 16색: 흑/회/백 4종 + Material 계열 12색(빨강/주황/노랑/초록/시안/파랑/인디고/보라/핑크/갈색/틸/블루그레이).
+- 네이티브 `<input type="color">`도 그대로 유지. 한쪽에서 변경하면 다른 쪽의 active 표시가 동기화됨.
+- 모바일에서는 헤더 공간이 좁아 `@media (max-width: 720px)`로 팔레트 영역 숨김 처리.
+- 적용 위치: `index.html`(스와치 컨테이너 + CSS), `src/app.ts`(팔레트 생성/이벤트 와이어링), `dist/bundle.js`(IIFE 번들 동기화).
+- 검증: `python3 -m http.server 8001`로 `index.html` 200 응답 및 `#colorPalette` / `PALETTE_16` 문자열 매칭 확인.
+
 ### 목록 보기 / 새 문서 단축키 추가 (Alt+L / Alt+N)
 
 - 키보드 단축키 추가: `Alt + L` → 작업 목록(`openWorksModal`), `Alt + N` → 새 문서(`newScene`).

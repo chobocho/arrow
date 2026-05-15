@@ -57,6 +57,20 @@
     width: 56px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;
   }
   label.field input[type=color] { width: 30px; height: 26px; padding: 0; }
+  .color-palette { display: inline-flex; gap: 2px; align-items: center; margin-left: 2px; }
+  .color-palette .swatch {
+    width: 16px; height: 16px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 0;
+    appearance: none;
+    background: transparent;
+    transition: transform 0.1s ease;
+  }
+  .color-palette .swatch:hover { transform: scale(1.2); border-color: #888; }
+  .color-palette .swatch.active { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+  @media (max-width: 720px) { .color-palette { display: none; } }
   #canvasWrap {
     position: relative;
     background: #fafafa;
@@ -72,6 +86,7 @@
   body[data-mode="select"] canvas#mainCanvas { cursor: default; }
   body[data-mode="pan"] canvas#mainCanvas { cursor: grab; }
   body[data-mode="text"] canvas#mainCanvas { cursor: text; }
+  body[data-mode="highlighter"] canvas#mainCanvas { cursor: cell; }
   #statusBar {
     position: absolute;
     bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -113,10 +128,12 @@
       <button class="tool active icon" id="btnSelect" title="선택">🖱️</button>
       <button class="tool icon" id="btnArrow" title="화살표">➡️</button>
       <button class="tool icon" id="btnText" title="글자">🔤</button>
+      <button class="tool icon" id="btnHighlighter" title="형광펜">🖍️</button>
       <button class="tool icon" id="btnPan" title="이동">✋</button>
     </div>
     <div class="group">
       <label class="field"><span id="labelColor">색상</span><input type="color" id="inputColor" value="#222222"></label>
+      <div class="color-palette" id="colorPalette"></div>
       <label class="field"><span id="labelThickness">굵기</span><input type="number" id="inputThickness" min="1" max="40" value="4"></label>
       <label class="field"><span id="labelFontSize">글자크기</span><input type="number" id="inputFontSize" min="1" max="200" value="28"></label>
       <label class="field"><span id="labelCenterFontSize">주제크기</span><input type="number" id="inputCenterFontSize" min="1" max="200" value="28"></label>
@@ -178,6 +195,8 @@
     return prefix + '_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
   }
   var DEFAULT_CENTER_FONT_SIZE = 28;
+  var HIGHLIGHTER_OPACITY = 0.35;
+  var HIGHLIGHTER_WIDTH_MULT = 4;
   function emptyScene(name) {
     var now = Date.now();
     return {
@@ -198,7 +217,7 @@
   var STRINGS = {
     ko: {
       appTitle: '화살표 마인드맵',
-      modeSelect: '선택', modeArrow: '화살표', modeText: '글자', modePan: '이동',
+      modeSelect: '선택', modeArrow: '화살표', modeText: '글자', modeHighlighter: '형광펜', modePan: '이동',
       save: '저장', saveAs: '새이름저장', newWork: '새 작업',
       delete: '삭제', rename: '이름변경',
       exportPng: 'PNG 내보내기', exportJson: 'JSON 내보내기', importJson: 'JSON 가져오기',
@@ -223,14 +242,14 @@
       help: '도움말', helpTitle: '도움말',
       helpSecModes: '모드 전환', helpSecKeys: '키보드 단축키',
       helpSecMouse: '마우스', helpSecMobile: '모바일',
-      helpModes: 'V — 선택\nA — 화살표\nT — 글자\nH — 이동',
+      helpModes: 'V — 선택\nA — 화살표\nT — 글자\nG — 형광펜\nH — 이동',
       helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
       helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝',
       helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝'
     },
     en: {
       appTitle: 'Arrow Mind Map',
-      modeSelect: 'Select', modeArrow: 'Arrow', modeText: 'Text', modePan: 'Pan',
+      modeSelect: 'Select', modeArrow: 'Arrow', modeText: 'Text', modeHighlighter: 'Highlighter', modePan: 'Pan',
       save: 'Save', saveAs: 'Save As', newWork: 'New',
       delete: 'Delete', rename: 'Rename',
       exportPng: 'Export PNG', exportJson: 'Export JSON', importJson: 'Import JSON',
@@ -255,7 +274,7 @@
       help: 'Help', helpTitle: 'Help',
       helpSecModes: 'Modes', helpSecKeys: 'Keyboard',
       helpSecMouse: 'Mouse', helpSecMobile: 'Mobile',
-      helpModes: 'V — Select\nA — Arrow\nT — Text\nH — Pan',
+      helpModes: 'V — Select\nA — Arrow\nT — Text\nG — Highlighter\nH — Pan',
       helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
       helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan',
       helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan'
@@ -467,8 +486,16 @@
     this._fillWorld();
     if (opts.showGrid) this._drawGrid();
     this._drawCenter(scene);
+    // Highlighter strokes render under arrows/text so the marker sits in the
+    // background like a real highlighter.
+    for (var hi = 0; hi < scene.objects.length; hi++) {
+      var ho = scene.objects[hi];
+      if (ho.type === 'highlighter') this._drawHighlighter(ho, ho.id === opts.selectedId, false);
+    }
+    if (opts.draftHighlighter) this._drawHighlighter(opts.draftHighlighter, false, true);
     for (var i = 0; i < scene.objects.length; i++) {
-      this._drawObject(scene.objects[i], scene.objects[i].id === opts.selectedId, false);
+      var o2 = scene.objects[i];
+      if (o2.type !== 'highlighter') this._drawObject(o2, o2.id === opts.selectedId, false);
     }
     if (opts.draftArrow) this._drawArrow(opts.draftArrow, false, true);
     ctx.restore();
@@ -490,7 +517,14 @@
     tmpView.offset = { x: 0, y: 0 };
     this.ctx = ctx; this.view = tmpView;
     this._drawCenter(scene);
-    for (var i = 0; i < scene.objects.length; i++) this._drawObject(scene.objects[i], false, false);
+    for (var ei = 0; ei < scene.objects.length; ei++) {
+      var eo = scene.objects[ei];
+      if (eo.type === 'highlighter') this._drawHighlighter(eo, false, false);
+    }
+    for (var i = 0; i < scene.objects.length; i++) {
+      var io = scene.objects[i];
+      if (io.type !== 'highlighter') this._drawObject(io, false, false);
+    }
     this.ctx = realCtx; this.view = realView;
 
     var b = this._contentBounds(scene, padding);
@@ -515,6 +549,15 @@
         minY = Math.min(minY, o.from.y, o.to.y);
         maxX = Math.max(maxX, o.from.x, o.to.x);
         maxY = Math.max(maxY, o.from.y, o.to.y);
+      } else if (o.type === 'highlighter') {
+        var hpad = o.thickness * HIGHLIGHTER_WIDTH_MULT * 0.5;
+        for (var hpi = 0; hpi < o.points.length; hpi++) {
+          var hp = o.points[hpi];
+          if (hp.x - hpad < minX) minX = hp.x - hpad;
+          if (hp.y - hpad < minY) minY = hp.y - hpad;
+          if (hp.x + hpad > maxX) maxX = hp.x + hpad;
+          if (hp.y + hpad > maxY) maxY = hp.y + hpad;
+        }
       } else {
         minX = Math.min(minX, o.pos.x);
         minY = Math.min(minY, o.pos.y);
@@ -587,7 +630,50 @@
   };
   Renderer.prototype._drawObject = function (obj, selected, _isDraft) {
     if (obj.type === 'arrow') this._drawArrow(obj, selected, false);
+    else if (obj.type === 'highlighter') this._drawHighlighter(obj, selected, false);
     else this._drawText(obj, selected);
+  };
+  Renderer.prototype._drawHighlighter = function (hl, selected, isDraft) {
+    var ctx = this.ctx, view = this.view;
+    if (!hl.points || hl.points.length < 1) return;
+    var width = Math.max(1, hl.thickness * HIGHLIGHTER_WIDTH_MULT * view.scale);
+    ctx.save();
+    ctx.globalAlpha = isDraft ? HIGHLIGHTER_OPACITY * 0.7 : HIGHLIGHTER_OPACITY;
+    ctx.strokeStyle = hl.color;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    var first = view.logicalToScreen(hl.points[0]);
+    ctx.moveTo(first.x, first.y);
+    if (hl.points.length === 1) {
+      ctx.lineTo(first.x, first.y);
+    } else {
+      for (var i = 1; i < hl.points.length; i++) {
+        var p = view.logicalToScreen(hl.points[i]);
+        ctx.lineTo(p.x, p.y);
+      }
+    }
+    ctx.stroke();
+    ctx.restore();
+    if (selected) {
+      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (var k = 0; k < hl.points.length; k++) {
+        var s = view.logicalToScreen(hl.points[k]);
+        if (s.x < minX) minX = s.x;
+        if (s.y < minY) minY = s.y;
+        if (s.x > maxX) maxX = s.x;
+        if (s.y > maxY) maxY = s.y;
+      }
+      var bpad = width * 0.5 + 4;
+      ctx.save();
+      ctx.strokeStyle = '#3a7afe';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(minX - bpad, minY - bpad, (maxX - minX) + bpad * 2, (maxY - minY) + bpad * 2);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
   };
   Renderer.prototype._drawArrow = function (a, selected, isDraft) {
     var ctx = this.ctx, view = this.view;
@@ -688,6 +774,13 @@
     this.scene.objects.push(o); this._touch(); this._emit();
     return o;
   };
+  SceneStore.prototype.addHighlighter = function (points, color, thickness) {
+    var clamped = [];
+    for (var i = 0; i < points.length; i++) clamped.push(clampToCanvas(points[i]));
+    var o = { id: newId('hl'), type: 'highlighter', points: clamped, color: color, thickness: thickness };
+    this.scene.objects.push(o); this._touch(); this._emit();
+    return o;
+  };
   SceneStore.prototype.update = function (id, mutator) {
     var obj = null;
     for (var i = 0; i < this.scene.objects.length; i++) if (this.scene.objects[i].id === id) { obj = this.scene.objects[i]; break; }
@@ -714,6 +807,11 @@
       var mid = { x: (obj.from.x + obj.to.x) / 2, y: (obj.from.y + obj.to.y) / 2 };
       if (vecDist(p, mid) <= tol) return 'arrow-mid';
       if (pointToSegmentDistance(p, obj.from, obj.to) <= Math.max(tol, obj.thickness)) return 'arrow-body';
+    } else if (obj.type === 'highlighter') {
+      var margin = Math.max(tol, obj.thickness * 2);
+      for (var i = 0; i + 1 < obj.points.length; i++) {
+        if (pointToSegmentDistance(p, obj.points[i], obj.points[i + 1]) <= margin) return 'highlighter-body';
+      }
     } else {
       var charW = obj.fontSize * 0.6;
       var w = Math.max(charW, (obj.text.length || 3) * charW);
@@ -985,6 +1083,19 @@
       this.cb.onChange();
       return;
     }
+    if (mode === 'highlighter') {
+      var hdraft = {
+        id: 'draft', type: 'highlighter',
+        points: [logical],
+        color: this.cb.getColor(), thickness: this.cb.getThickness()
+      };
+      this.cb.onDraftHighlighter(hdraft);
+      this.drag = { kind: 'draft-highlighter', draft: hdraft, lastScreen: screen };
+      this.selectedId = null;
+      this.cb.onSelect(null);
+      this.cb.onChange();
+      return;
+    }
     if (mode === 'text') {
       this.drag = { kind: 'none' };
       var self = this;
@@ -1022,6 +1133,17 @@
       this.cb.onChange();
       return;
     }
+    if (d.kind === 'draft-highlighter') {
+      var draft = d.draft;
+      var last = draft.points[draft.points.length - 1];
+      var lastScreen = this.view.logicalToScreen(last);
+      if (vecDist(lastScreen, screen) >= 2.5) {
+        draft.points.push(clampToCanvas(logical));
+        this.cb.onDraftHighlighter(draft);
+        this.cb.onChange();
+      }
+      return;
+    }
     if (d.kind === 'resize-arrow') {
       var which = d.end;
       this.store.update(d.objectId, function (o) {
@@ -1039,6 +1161,13 @@
         if (o.type === 'arrow') {
           o.from = clampToCanvas({ x: origin.from.x + dxLog, y: origin.from.y + dyLog });
           o.to = clampToCanvas({ x: origin.to.x + dxLog, y: origin.to.y + dyLog });
+        } else if (o.type === 'highlighter') {
+          var orig = origin.points;
+          var moved = [];
+          for (var k = 0; k < orig.length; k++) {
+            moved.push(clampToCanvas({ x: orig[k].x + dxLog, y: orig[k].y + dyLog }));
+          }
+          o.points = moved;
         } else {
           o.pos = clampToCanvas({ x: origin.pos.x + dxLog, y: origin.pos.y + dyLog });
         }
@@ -1066,6 +1195,19 @@
       }
       this.cb.onDraftChange(null);
       // Stay in arrow mode to allow chaining multiple arrows.
+    } else if (d.kind === 'draft-highlighter') {
+      var hdraft = d.draft;
+      var total = 0;
+      for (var hi = 1; hi < hdraft.points.length; hi++) {
+        total += vecDist(hdraft.points[hi - 1], hdraft.points[hi]);
+      }
+      if (hdraft.points.length === 1 || total > 4 / this.view.scale) {
+        var hcreated = this.store.addHighlighter(hdraft.points, hdraft.color, hdraft.thickness);
+        this.selectedId = hcreated.id;
+        this.cb.onSelect(hcreated.id);
+      }
+      this.cb.onDraftHighlighter(null);
+      // Stay in highlighter mode for consecutive strokes.
     }
     this.drag = { kind: 'none' };
     this.cb.onChange();
@@ -1081,6 +1223,11 @@
   };
   InputHandler.prototype._snap = function (obj) {
     if (obj.type === 'arrow') return { from: { x: obj.from.x, y: obj.from.y }, to: { x: obj.to.x, y: obj.to.y } };
+    if (obj.type === 'highlighter') {
+      var pts = [];
+      for (var i = 0; i < obj.points.length; i++) pts.push({ x: obj.points[i].x, y: obj.points[i].y });
+      return { points: pts };
+    }
     return { pos: { x: obj.pos.x, y: obj.pos.y } };
   };
 
@@ -1096,11 +1243,12 @@
     this.renderer = new Renderer(this.ctx, this.view);
     this.db = new IndexedDBStore();
     this.mode = 'select';
-    this.color = '#222';
+    this.color = '#222222';
     this.thickness = 4;
     this.fontSize = 28;
     this.selectedId = null;
     this.draftArrow = null;
+    this.draftHighlighter = null;
     this.dirty = false;
     this.worksList = [];
     this.worksSortKey = 'date';
@@ -1126,7 +1274,8 @@
           if (txt !== null) self.store.update(obj.id, function (o) { if (o.type === 'text') o.text = txt; });
         });
       },
-      onDraftChange: function (d) { self.draftArrow = d; }
+      onDraftChange: function (d) { self.draftArrow = d; },
+      onDraftHighlighter: function (d) { self.draftHighlighter = d; }
     });
 
     this.store.subscribe(function () { self.dirty = true; self._syncFontInputToSelection(); self._requestRender(); });
@@ -1197,6 +1346,7 @@
     this.renderer.render(this.store.get(), {
       selectedId: this.selectedId,
       draftArrow: this.draftArrow,
+      draftHighlighter: this.draftHighlighter,
       showGrid: true
     });
   };
@@ -1220,6 +1370,7 @@
     byId('btnSelect').addEventListener('click', function () { self.setMode('select'); });
     byId('btnArrow').addEventListener('click', function () { self.setMode('arrow'); });
     byId('btnText').addEventListener('click', function () { self.setMode('text'); });
+    byId('btnHighlighter').addEventListener('click', function () { self.setMode('highlighter'); });
     byId('btnPan').addEventListener('click', function () { self.setMode('pan'); });
     byId('btnSave').addEventListener('click', function () { self._save(); });
     byId('btnSaveAs').addEventListener('click', function () { self._saveAs(); });
@@ -1248,7 +1399,52 @@
     byId('btnHelp').addEventListener('click', function () { self._openHelpModal(); });
     var colorEl = byId('inputColor');
     colorEl.value = this.color;
-    colorEl.addEventListener('input', function () { self.color = colorEl.value; });
+    var paletteEl = byId('colorPalette');
+    var PALETTE_16 = [
+      '#000000', '#424242', '#9e9e9e', '#ffffff',
+      '#f44336', '#ff9800', '#ffeb3b', '#4caf50',
+      '#00bcd4', '#2196f3', '#3f51b5', '#9c27b0',
+      '#e91e63', '#795548', '#009688', '#607d8b'
+    ];
+    function updatePaletteActive(hex) {
+      if (!paletteEl) return;
+      var target = String(hex || '').toLowerCase();
+      var nodes = paletteEl.querySelectorAll('.swatch');
+      for (var i = 0; i < nodes.length; i++) {
+        var b = nodes[i];
+        var bc = (b.dataset && b.dataset.color ? b.dataset.color : '').toLowerCase();
+        if (bc === target) b.classList.add('active'); else b.classList.remove('active');
+      }
+    }
+    if (paletteEl) {
+      for (var pi = 0; pi < PALETTE_16.length; pi++) {
+        (function (hex) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'swatch';
+          btn.style.background = hex;
+          btn.dataset.color = hex;
+          btn.title = hex.toUpperCase();
+          btn.addEventListener('click', function () {
+            self.color = hex;
+            colorEl.value = hex;
+            updatePaletteActive(hex);
+            // Return focus to body so keyboard shortcuts (+, Enter, Delete, ...) keep working.
+            colorEl.blur();
+            btn.blur();
+          });
+          paletteEl.appendChild(btn);
+        })(PALETTE_16[pi]);
+      }
+      updatePaletteActive(this.color);
+    }
+    colorEl.addEventListener('input', function () {
+      self.color = colorEl.value;
+      updatePaletteActive(colorEl.value);
+    });
+    // After the native color picker commits, hand focus back to the body so
+    // keyboard shortcuts (+ to insert arrow, Enter, Delete, ...) work again.
+    colorEl.addEventListener('change', function () { colorEl.blur(); });
     var thickEl = byId('inputThickness');
     thickEl.value = String(this.thickness);
     thickEl.addEventListener('input', function () { self.thickness = parseFloat(thickEl.value) || 4; });
@@ -1290,7 +1486,7 @@
   };
   App.prototype.setMode = function (m) { this.mode = m; this._updateModeUi(); };
   App.prototype._updateModeUi = function () {
-    var map = { select: 'btnSelect', arrow: 'btnArrow', text: 'btnText', pan: 'btnPan' };
+    var map = { select: 'btnSelect', arrow: 'btnArrow', text: 'btnText', highlighter: 'btnHighlighter', pan: 'btnPan' };
     for (var k in map) {
       var el = document.getElementById(map[k]);
       if (!el) continue;
@@ -1321,6 +1517,7 @@
     setTip('btnSelect', 'modeSelect');
     setTip('btnArrow', 'modeArrow');
     setTip('btnText', 'modeText');
+    setTip('btnHighlighter', 'modeHighlighter');
     setTip('btnPan', 'modePan');
     setTip('btnSave', 'save');
     setTip('btnSaveAs', 'saveAs');
@@ -1710,6 +1907,15 @@
         minY = Math.min(minY, o.from.y, o.to.y);
         maxX = Math.max(maxX, o.from.x, o.to.x);
         maxY = Math.max(maxY, o.from.y, o.to.y);
+      } else if (o.type === 'highlighter') {
+        var fpad = o.thickness * HIGHLIGHTER_WIDTH_MULT * 0.5;
+        for (var fpi = 0; fpi < o.points.length; fpi++) {
+          var fp = o.points[fpi];
+          if (fp.x - fpad < minX) minX = fp.x - fpad;
+          if (fp.y - fpad < minY) minY = fp.y - fpad;
+          if (fp.x + fpad > maxX) maxX = fp.x + fpad;
+          if (fp.y + fpad > maxY) maxY = fp.y + fpad;
+        }
       } else {
         minX = Math.min(minX, o.pos.x);
         minY = Math.min(minY, o.pos.y);
@@ -1766,6 +1972,7 @@
       this._newScene();
     } else if (e.key === 'a' || e.key === 'A') this.setMode('arrow');
     else if (e.key === 't' || e.key === 'T') this.setMode('text');
+    else if (e.key === 'g' || e.key === 'G') this.setMode('highlighter');
     else if (e.key === 'v' || e.key === 'V') this.setMode('select');
     else if (e.key === 'h' || e.key === 'H') this.setMode('pan');
   };
@@ -1787,6 +1994,13 @@
       created = this.store.addArrow(from, to, clip.color, clip.thickness);
       clip.from = from;
       clip.to = to;
+    } else if (clip.type === 'highlighter') {
+      var shifted = [];
+      for (var ci = 0; ci < clip.points.length; ci++) {
+        shifted.push({ x: clip.points[ci].x + offset, y: clip.points[ci].y + offset });
+      }
+      created = this.store.addHighlighter(shifted, clip.color, clip.thickness);
+      clip.points = shifted;
     } else {
       var pos = { x: clip.pos.x + offset, y: clip.pos.y + offset };
       created = this.store.addText(pos, clip.text, clip.fontSize, clip.color);
