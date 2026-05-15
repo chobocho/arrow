@@ -127,6 +127,18 @@ export function bindUi(app: App): void {
     if (sel && sel.type === 'text') fontEl.value = String(sel.fontSize);
     else fontEl.value = String(app.fontSize);
   });
+  // Enter in the font-size field hands focus back to the Select-mode button
+  // so the user can immediately use keyboard shortcuts (V/A/T/G, Delete, ...)
+  // — those are suppressed while focus is inside an INPUT.
+  fontEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const sel = app.getSelectedObject();
+    if (sel && sel.type === 'text') fontEl.value = String(sel.fontSize);
+    else fontEl.value = String(app.fontSize);
+    const btnSelect = document.getElementById('btnSelect');
+    btnSelect?.focus();
+  });
 
   const centerFontEl = $('#inputCenterFontSize') as HTMLInputElement;
   centerFontEl.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);

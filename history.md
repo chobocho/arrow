@@ -4,6 +4,14 @@
 
 ## 2026-05-15
 
+### 글자 크기 입력에서 Enter → 선택 버튼으로 포커스 이동
+
+- 동기: `inputFontSize`에서 값 조정 후 곧장 키보드 단축키(V/A/T/G/Delete 등)를 쓰려고 했지만, `onKey`가 `(e.target as HTMLElement).tagName === 'INPUT'`인 경우 일찍 return하므로 포커스가 인풋에 있으면 단축키가 먹지 않았음. Enter로 값 커밋 후 자연스럽게 단축키 사용 가능하도록 포커스 이양.
+- 변경(`src/ui/UiBindings.ts`): `inputFontSize`에 `keydown` 리스너 추가 — Enter면 기본 동작 차단 후 클램프 값으로 표시 동기화, `#btnSelect`로 `.focus()`. 기존 `change`(blur/Enter 공용) 핸들러는 그대로 둠.
+- 번들 동기화(`dist/bundle.js`): 동일 `keydown` 핸들러를 `_bindUi` 내 fontEl change 직후에 추가.
+- 영향 범위: `inputFontSize` 한정. `inputCenterFontSize`(주제 크기)는 사용자 요청 범위가 아니라 그대로 둠.
+- 검증: `tsc --noEmit` 무에러, `node test/run_node.js` 40/40 통과, `./build.sh`로 `release/index.html` 97,653 bytes 재생성.
+
 ### README 최신화 (자동 저장 · 직선 형광펜 · 글자 크기 정수화)
 
 - 동기: 최근 추가된 사용자 가시 기능 3종(자동 저장, Ctrl 직선 형광펜, 글자 크기 정수화)이 README에 누락되어 갱신.

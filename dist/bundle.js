@@ -1454,6 +1454,18 @@
       if (sel && sel.type === 'text') fontEl.value = String(sel.fontSize);
       else fontEl.value = String(self.fontSize);
     });
+    // Enter in the font-size field hands focus back to the Select-mode button
+    // so keyboard shortcuts (V/A/T/G, Delete, ...) work again — those are
+    // suppressed while focus is inside an INPUT.
+    fontEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var sel = self._getSelectedObject();
+      if (sel && sel.type === 'text') fontEl.value = String(sel.fontSize);
+      else fontEl.value = String(self.fontSize);
+      var btnSelect = document.getElementById('btnSelect');
+      if (btnSelect) btnSelect.focus();
+    });
     var centerFontEl = byId('inputCenterFontSize');
     centerFontEl.value = String(this.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
     centerFontEl.addEventListener('input', function () {
