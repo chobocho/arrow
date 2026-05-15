@@ -52,6 +52,24 @@ export function openHelpModal(app: App): void {
     body.appendChild(spacer);
   }
 
+  // Footer link to the source repository. Kept inline (no extra CSS file) so
+  // the help card stays self-contained.
+  const sourceWrap = document.createElement('div');
+  sourceWrap.className = 'ap-help-source';
+  sourceWrap.style.marginTop = '8px';
+  sourceWrap.style.fontSize = '12px';
+  sourceWrap.style.color = '#777';
+  const sourceLink = document.createElement('a');
+  sourceLink.href = 'https://github.com/chobocho/arrow';
+  sourceLink.target = '_blank';
+  sourceLink.rel = 'noopener noreferrer';
+  sourceLink.textContent = 'github.com/chobocho/arrow';
+  sourceLink.style.color = '#3a7afe';
+  sourceLink.style.textDecoration = 'none';
+  sourceWrap.appendChild(document.createTextNode('📦 '));
+  sourceWrap.appendChild(sourceLink);
+  body.appendChild(sourceWrap);
+
   card.append(header, body);
   overlay.appendChild(card);
   document.body.appendChild(overlay);
