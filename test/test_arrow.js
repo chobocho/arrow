@@ -110,6 +110,167 @@
     assert(hit.object && hit.object.id === txt.id, 'finds the text');
   });
 
+  // ---- SceneStore: arrow extras ----
+  test('SceneStore hitTest finds arrow-to endpoint', function () {
+    var s = new A.SceneStore();
+    var arrow = s.addArrow({ x: 100, y: 100 }, { x: 300, y: 100 }, '#000', 4);
+    var hit = s.hitTest({ x: 301, y: 99 }, 5);
+    assert(hit.object && hit.object.id === arrow.id, 'finds the arrow');
+    assert(hit.handle === 'arrow-to', 'hits the to handle, got ' + hit.handle);
+  });
+  test('SceneStore hitTest misses arrow when point is far', function () {
+    var s = new A.SceneStore();
+    s.addArrow({ x: 100, y: 100 }, { x: 300, y: 100 }, '#000', 4);
+    var hit = s.hitTest({ x: 200, y: 500 }, 5);
+    assert(hit.object === null, 'no hit, got ' + (hit.object && hit.object.id));
+    assert(hit.handle === 'none', 'handle is none, got ' + hit.handle);
+  });
+
+  // ---- SceneStore: text extras ----
+  test('SceneStore hitTest text-resize at bottom-right corner', function () {
+    var s = new A.SceneStore();
+    var txt = s.addText({ x: 100, y: 100 }, 'hello', 24, '#000');
+    // Bbox approx: width = 'hello'.length(5) * 24*0.6 = 72, height = 24*1.2 = 28.8.
+    // Resize corner is (pos.x + w + 4, pos.y + h + 4) = (176, 132.8).
+    var hit = s.hitTest({ x: 176, y: 133 }, 5);
+    assert(hit.object && hit.object.id === txt.id, 'finds the text');
+    assert(hit.handle === 'text-resize', 'hits resize handle, got ' + hit.handle);
+  });
+  test('SceneStore hitTest misses text far outside bbox', function () {
+    var s = new A.SceneStore();
+    s.addText({ x: 100, y: 100 }, 'hi', 20, '#000');
+    var hit = s.hitTest({ x: 1000, y: 1000 }, 5);
+    assert(hit.handle === 'none', 'no hit');
+  });
+
+  // ---- SceneStore: z-order ----
+  test('SceneStore hitTest returns topmost object on overlap', function () {
+    var s = new A.SceneStore();
+    var bottom = s.addText({ x: 100, y: 100 }, 'AAAA', 24, '#000');
+    var top = s.addText({ x: 100, y: 100 }, 'BBBB', 24, '#000');
+    var hit = s.hitTest({ x: 110, y: 110 }, 5);
+    assert(hit.object && hit.object.id === top.id, 'topmost wins, got ' + (hit.object && hit.object.id));
+    assert(bottom.id !== top.id, 'sanity: different ids');
+  });
+
+  // ---- SceneStore: highlighter ----
+  test('SceneStore single-point highlighter is hittable (regression)', function () {
+    var s = new A.SceneStore();
+    var hl = s.addHighlighter([{ x: 200, y: 200 }], '#ff0', 6);
+    var hit = s.hitTest({ x: 205, y: 205 }, 5);
+    assert(hit.object && hit.object.id === hl.id, 'single-point highlighter found');
+    assert(hit.handle === 'highlighter-body', 'hits body, got ' + hit.handle);
+  });
+  test('SceneStore multi-point highlighter hits along segment', function () {
+    var s = new A.SceneStore();
+    var hl = s.addHighlighter(
+      [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 200, y: 50 }],
+      '#ff0',
+      4
+    );
+    var hit = s.hitTest({ x: 50, y: 4 }, 3);
+    assert(hit.object && hit.object.id === hl.id, 'found on first segment');
+    assert(hit.handle === 'highlighter-body', 'hits body');
+  });
+  test('SceneStore highlighter misses outside margin', function () {
+    var s = new A.SceneStore();
+    s.addHighlighter([{ x: 0, y: 0 }, { x: 100, y: 0 }], '#ff0', 4);
+    var hit = s.hitTest({ x: 50, y: 500 }, 3);
+    assert(hit.handle === 'none', 'no hit far away');
+  });
+
+  // ---- SceneStore: clampToCanvas integration ----
+  test('SceneStore addArrow clamps out-of-bounds endpoints', function () {
+    var s = new A.SceneStore();
+    var arrow = s.addArrow({ x: -50, y: -50 }, { x: 99999, y: 99999 }, '#000', 4);
+    assert(arrow.from.x === 0 && arrow.from.y === 0, 'from clamps to min, got ' + arrow.from.x + ',' + arrow.from.y);
+    assert(arrow.to.x === A.MAX_CANVAS_SIZE && arrow.to.y === A.MAX_CANVAS_SIZE, 'to clamps to max');
+  });
+  test('SceneStore addText clamps negative position', function () {
+    var s = new A.SceneStore();
+    var txt = s.addText({ x: -10, y: -20 }, 'x', 20, '#000');
+    assert(txt.pos.x === 0 && txt.pos.y === 0, 'pos clamps to (0,0)');
+  });
+
+  // ---- SceneStore: mutators / events ----
+  test('SceneStore subscribe fires on add and unsubscribe stops it', function () {
+    var s = new A.SceneStore();
+    var calls = 0;
+    var off = s.subscribe(function () { calls++; });
+    s.addArrow({ x: 0, y: 0 }, { x: 10, y: 0 }, '#000', 4);
+    s.addArrow({ x: 0, y: 0 }, { x: 20, y: 0 }, '#000', 4);
+    assert(calls === 2, 'fired twice, got ' + calls);
+    off();
+    s.addArrow({ x: 0, y: 0 }, { x: 30, y: 0 }, '#000', 4);
+    assert(calls === 2, 'no more fires after unsubscribe, got ' + calls);
+  });
+  test('SceneStore setCenterFontSize clamps to 8..200', function () {
+    var s = new A.SceneStore();
+    s.setCenterFontSize(1);
+    assert(s.get().centerFontSize === 8, 'lower clamp, got ' + s.get().centerFontSize);
+    s.setCenterFontSize(9999);
+    assert(s.get().centerFontSize === 200, 'upper clamp, got ' + s.get().centerFontSize);
+    s.setCenterFontSize(42);
+    assert(s.get().centerFontSize === 42, 'in-range passthrough');
+  });
+  test('SceneStore setCenterText and setName fire listener and update fields', function () {
+    var s = new A.SceneStore();
+    var calls = 0;
+    s.subscribe(function () { calls++; });
+    s.setCenterText('hi');
+    s.setName('proj');
+    assert(s.get().centerText === 'hi', 'centerText updated');
+    assert(s.get().name === 'proj', 'name updated');
+    assert(calls === 2, 'two emits, got ' + calls);
+  });
+  test('SceneStore remove of unknown id is a no-op (no emit)', function () {
+    var s = new A.SceneStore();
+    var calls = 0;
+    s.subscribe(function () { calls++; });
+    s.remove('does-not-exist');
+    assert(calls === 0, 'no emit on no-op, got ' + calls);
+    assert(s.get().objects.length === 0, 'nothing changed');
+  });
+
+  // ---- CanvasView extras ----
+  test('CanvasView panBy shifts logical offset by dx/scale', function () {
+    var v = new A.CanvasView();
+    v.resize(800, 600, 1);
+    v.scale = 2; v.offset = { x: 100, y: 100 };
+    v.panBy(20, 40); // screen px
+    // offset.x -= 20/2 = 10, offset.y -= 40/2 = 20
+    approx(v.offset.x, 90);
+    approx(v.offset.y, 80);
+  });
+  test('CanvasView centerOn places logical point at screen center', function () {
+    var v = new A.CanvasView();
+    v.resize(800, 600, 1);
+    v.scale = 1;
+    v.centerOn({ x: 2000, y: 2000 });
+    var screenOfPoint = v.logicalToScreen({ x: 2000, y: 2000 });
+    approx(screenOfPoint.x, 400, 1e-6);
+    approx(screenOfPoint.y, 300, 1e-6);
+  });
+  test('CanvasView zoomAt clamps to minScale and maxScale', function () {
+    var v = new A.CanvasView();
+    v.resize(800, 600, 1);
+    v.scale = 1;
+    v.zoomAt({ x: 400, y: 300 }, 1000);
+    assert(v.scale === v.maxScale, 'clamps to max, got ' + v.scale);
+    v.zoomAt({ x: 400, y: 300 }, 0.00001);
+    assert(v.scale === v.minScale, 'clamps to min, got ' + v.scale);
+  });
+
+  // ---- geometry edge cases ----
+  test('pointToSegmentDistance with degenerate segment returns distance to point', function () {
+    var d = A.pointToSegmentDistance({ x: 3, y: 4 }, { x: 0, y: 0 }, { x: 0, y: 0 });
+    approx(d, 5);
+  });
+  test('clampToCanvas leaves in-bounds points unchanged', function () {
+    var p = A.clampToCanvas({ x: 100, y: 200 });
+    assert(p.x === 100 && p.y === 200, 'unchanged');
+  });
+
   // ---- i18n ----
   test('i18n falls back across languages', function () {
     A.setLang('ko');
@@ -118,6 +279,17 @@
     var en = A.t('save');
     assert(ko === '저장' && en === 'Save', 'translation works ko=' + ko + ' en=' + en);
   });
+  test('i18n unknown key returns the key itself', function () {
+    A.setLang('ko');
+    var v = A.t('definitelyNotAKey__xyz');
+    assert(v === 'definitelyNotAKey__xyz', 'fallback to key, got ' + v);
+  });
+  test('i18n getLang reflects setLang', function () {
+    A.setLang('en');
+    assert(A.getLang() === 'en', 'getLang is en');
+    A.setLang('ko');
+    assert(A.getLang() === 'ko', 'getLang is ko');
+  });
 
   // ---- emptyScene ----
   test('emptyScene returns sane defaults', function () {
@@ -125,6 +297,18 @@
     assert(s.name === 'x', 'name set');
     assert(Array.isArray(s.objects) && s.objects.length === 0, 'objects empty');
     assert(typeof s.id === 'string' && s.id.length > 0, 'id present');
+  });
+  test('emptyScene has zero view offset and unit scale', function () {
+    var s = A.emptyScene('y');
+    assert(s.viewOffsetX === 0 && s.viewOffsetY === 0, 'offset (0,0)');
+    assert(s.viewScale === 1, 'scale 1');
+    assert(typeof s.createdAt === 'number' && typeof s.updatedAt === 'number', 'timestamps');
+  });
+  test('newId yields unique ids with the requested prefix', function () {
+    var a = A.newId('foo');
+    var b = A.newId('foo');
+    assert(a !== b, 'ids differ');
+    assert(a.indexOf('foo_') === 0, 'prefix applied, got ' + a);
   });
 
   // ---- summary ----

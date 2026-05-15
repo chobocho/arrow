@@ -4,6 +4,23 @@
 
 ## 2026-05-15
 
+### 테스트 커버리지 보강 (12 → 35 케이스)
+
+- 동기: v0.1까지 기능은 충분히 누적됐지만 회귀 보호가 12개 케이스로 빈약했음. 새 기능을 안전하게 추가하려면 핵심 모듈(SceneStore / CanvasView / geometry / i18n)의 엣지 케이스부터 막아야 함.
+- 추가한 케이스 23건 (`test/test_arrow.js`):
+  - **하이라이터(회귀 보호 3건)**: 단일 점 히트(직전 버그), 다중 점 세그먼트 히트, 마진 밖 미스.
+  - **화살표 핸들 2건**: `arrow-to` 엔드포인트 핸들, 멀리 떨어진 점은 `none`.
+  - **글자 핸들 2건**: 우하단 `text-resize` 코너 핸들, bbox 밖에서 미스.
+  - **z-order 1건**: 겹친 객체에서 가장 나중에 추가된(최상단) 객체가 선택됨.
+  - **clampToCanvas 통합 2건**: `addArrow`/`addText`가 범위 밖 좌표를 0..MAX로 클램프.
+  - **이벤트/뮤테이터 4건**: `subscribe`/unsubscribe, `setCenterFontSize` 8..200 클램프, `setCenterText`+`setName` emit, `remove` 미존재 id no-op(emit 안 함).
+  - **CanvasView 3건**: `panBy`는 `dx/scale`만큼 logical offset 이동, `centerOn`이 logical 점을 화면 중앙에 배치, `zoomAt`이 `minScale`/`maxScale`에서 클램프.
+  - **geometry 2건**: 퇴화 세그먼트(`a==b`)에서 점까지 거리, 인바운드 점 패스스루.
+  - **i18n 2건**: 미확인 키는 키 자체 반환(폴백), `getLang` ↔ `setLang` 라운드트립.
+  - **scene/id 2건**: `emptyScene`의 view 기본값(offset 0, scale 1, 타임스탬프), `newId`의 고유성/접두사.
+- 검증: `node test/run_node.js` → `TOTAL 35 / PASS 35 / FAIL 0`.
+- 적용 위치: `test/test_arrow.js` 한 파일만 수정. 소스 변경 없음.
+
 ### 단일 점 형광펜 선택 불가 버그 수정
 
 - 증상: 모바일에서 펜으로 한 번 톡 찍어 만든 형광펜(점 1개짜리)을 다시 탭해도 선택되지 않아 삭제할 방법이 없었음.
