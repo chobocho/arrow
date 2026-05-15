@@ -4,6 +4,22 @@
 
 ## 2026-05-15
 
+### 목록 보기 / 새 문서 단축키 추가 (Alt+L / Alt+N)
+
+- 키보드 단축키 추가: `Alt + L` → 작업 목록(`openWorksModal`), `Alt + N` → 새 문서(`newScene`).
+- 초기 구현은 `Ctrl/⌘ + L` · `Ctrl/⌘ + N`이었으나, 브라우저 기본(주소창 포커스 / 새 창)과 충돌이 잦아 Alt 조합으로 변경.
+- 키 매칭은 `e.key` 대신 `e.code === 'KeyL'` / `'KeyN'` 사용. macOS에서 Option+L/N은 `e.key`로 ¬/˜ 같은 특수 문자를 반환하므로 물리 키 코드 기반 비교가 안전.
+- 도움말 모달 / `lang.ts`(ko, en) `helpKeys` 문자열에 두 단축키 노출. `Ctrl/⌘ + S`(저장) 행 다음에 배치.
+- 적용 위치: `src/app.ts`(`onKey`), `src/i18n/lang.ts`, `dist/bundle.js`, `release/index.html`.
+- 검증: `node test/run_node.js` 12/12 통과, `tsc --noEmit` 클린, `python -m http.server 8001`로 `index.html` 및 번들 200 응답 + 핸들러/문자열 매칭 확인.
+
+### 작업 목록 모달 첫 오픈 시 안 보이는 버그 수정
+
+- 증상: 앱 시작 후 다른 모달(글자 입력/확인/도움말)을 한 번도 안 띄운 상태에서 작업 목록 버튼을 누르면 모달 DOM은 추가되지만 공용 CSS가 없어 보이지 않음.
+- 원인: 도움말 모달 사례와 동일. `openWorksModal`이 `ensureModalStyles()` / `injectCustomPromptStyles()`를 호출하지 않아 lazy 주입이 일어나지 않았음.
+- 수정: `openWorksModal` 시작부에서 스타일 주입 함수를 명시적으로 호출. `src/app.ts`, `dist/bundle.js`, `release/index.html` 모두 동일 패치.
+- 사후 점검: `customPrompt`, `customConfirm`, `openHelpModal`, `openWorksModal` 네 개 모달 진입점이 모두 스타일 주입을 보장함을 확인.
+
 ### Ctrl+C / Ctrl+V로 선택 객체 복제
 
 - App에 내부 클립보드 필드 `clipboard: SceneObject | null` 추가. 시스템 클립보드는 사용하지 않음 (객체 구조를 그대로 보존하기 위함).

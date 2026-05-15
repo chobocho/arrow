@@ -497,6 +497,7 @@ export class App {
 
   private openWorksModal(): void {
     if (this.worksModalEl) return;
+    ensureModalStyles();
     void this.refreshWorks();
     const overlay = document.createElement('div');
     overlay.className = 'ap-overlay';
@@ -699,6 +700,12 @@ export class App {
       if (this.copySelected()) e.preventDefault();
     } else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
       if (this.pasteClone()) e.preventDefault();
+    } else if (e.altKey && e.code === 'KeyL') {
+      e.preventDefault();
+      this.openWorksModal();
+    } else if (e.altKey && e.code === 'KeyN') {
+      e.preventDefault();
+      void this.newScene();
     } else if (e.key === 'a') this.setMode('arrow');
     else if (e.key === 't') this.setMode('text');
     else if (e.key === 'v') this.setMode('select');
