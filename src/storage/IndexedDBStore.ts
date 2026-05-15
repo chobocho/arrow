@@ -1,4 +1,4 @@
-import { SceneData } from '../models/types.js';
+import { SceneData, normalizeSceneFontSizes } from '../models/types.js';
 
 // Simple IndexedDB wrapper for storing scenes by id, with a small metadata
 // table for the "resume" pointer (last opened scene id).
@@ -141,6 +141,9 @@ export class IndexedDBStore {
       let count = 0;
       for (const s of payload.scenes) {
         if (s && typeof s.id === 'string') {
+          // Floor any decimal font sizes from legacy/hand-edited JSON so the
+          // DB never grows fractional values.
+          normalizeSceneFontSizes(s);
           store.put(s);
           count++;
         }

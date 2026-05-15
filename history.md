@@ -4,6 +4,41 @@
 
 ## 2026-05-15
 
+### 자동 저장(120초) + 페이지 이탈 강제 저장
+
+- 동기: 그동안 저장은 사용자가 명시적으로 Ctrl+S/툴바를 눌러야만 발생. 장시간 편집 후 탭/창을 닫으면 작업이 통째로 날아갈 수 있었음.
+- 정책:
+  - 오브젝트 변화(스토어 emit)로 `dirty`가 처음 true가 될 때 120초 타이머 무장. 같은 윈도 안의 추가 변경은 타이머를 **리셋하지 않음** → 연속 편집에서도 첫 변경 후 2분 이내에는 한 번 저장. (디바운스 대신 "bounded staleness".)
+  - 수동 `Save`/`Save As` 성공 시 `dirty=false`로 내리고 대기 중인 타이머 취소.
+  - `adoptScene`(DB 로드, `newScene`) 진입 시 타이머 취소.
+  - 페이지 종료(`beforeunload`/`pagehide`/`visibilitychange→hidden`) 시 `dirty`면 즉시 `autosaveNow()` 호출(IDB 비동기지만 대부분 브라우저가 진행 중 트랜잭션 커밋 허용).
+  - 자동 저장은 이름 프롬프트를 띄우지 않고 현재 씬 이름 그대로 silent save. 실패는 콘솔 경고만, UI는 침묵.
+- TS 변경(`src/app.ts`):
+  - `autosaveTimer`/`AUTOSAVE_DELAY_MS=120_000` 필드 도입.
+  - `armAutosave`/`cancelAutosave`/`autosaveNow` 메서드 추가.
+  - 스토어 subscribe 콜백에 `armAutosave()` 끼움.
+  - 생성자에 `beforeunload`/`pagehide`/`visibilitychange` 리스너 등록.
+  - `adoptScene` 진입 시 `cancelAutosave()` 호출.
+- TS 변경(`src/app/FileActions.ts`): `save`/`saveAs` 성공 직후 `app.cancelAutosave()`. `saveAs`에 누락돼 있던 `dirty=false`도 함께 정리.
+- 번들 동기화: `dist/bundle.js`에 동일 로직 — `autosaveTimer` 필드, `_armAutosave`/`_cancelAutosave`/`_autosaveNow` 프로토타입 메서드, 스토어 subscribe·생성자 리스너·`_save`/`_saveAs`/`_adoptScene` 갱신.
+- 검증: `tsc --noEmit` 무에러, `node test/run_node.js` 40/40 통과, `./build.sh`로 `release/index.html` 95,654 bytes. release에서 `autosave`/`beforeunload`/`pagehide` 17회 매칭 확인.
+
+### 글자 크기 정수화 (소수점 차단)
+
+- 동기: 글자/중심 텍스트의 `fontSize`가 입력·리사이즈·과거 DB/JSON에서 소수값으로 흘러 들어와 렌더링 미세 변동과 비교 오류를 유발할 수 있었음. 모든 경로에서 정수만 허용하도록 정리.
+- 추가: `src/models/types.ts`에 `floorFontSize(n, fallback)`과 `normalizeSceneFontSizes(scene)` 헬퍼를 도입.
+  - `floorFontSize`: 유한 수면 `Math.floor`, 아니면 `fallback`(기본 `DEFAULT_CENTER_FONT_SIZE`)으로 대체하고 최소 1 보장.
+  - `normalizeSceneFontSizes`: 씬의 `centerFontSize`와 모든 `TextObject.fontSize`를 일괄 버림 처리.
+- 적용 지점(TS):
+  - `SceneStore.setCenterFontSize` / `SceneStore.addText`에서 진입값을 `floorFontSize`로 정리(기존 8~200 clamp 유지).
+  - `InputHandler` 텍스트 리사이즈 드래그에서 `Math.floor(orig.fontSize * ratio)`로 갱신.
+  - `UiBindings`의 글자 크기/중심 글자 크기 입력 핸들러에서 `Math.floor(parseFloat(...))` 적용.
+  - `App.adoptScene` 진입 시 `normalizeSceneFontSizes(scene)` 호출 — DB에서 불러온 레거시 씬과 `newScene` 모두 커버.
+  - `IndexedDBStore.importAll`에서 각 씬을 저장 전 `normalizeSceneFontSizes`로 보정(JSON 임포트 경로).
+- 번들 동기화: `dist/bundle.js`에도 동일 로직 반영 — 헬퍼 추가, `setCenterFontSize`/`addText`/리사이즈/`importAll`/`_adoptScene`/UI 핸들러 갱신, `floorFontSize`·`normalizeSceneFontSizes`·`DEFAULT_CENTER_FONT_SIZE`를 `ArrowApp` 익스포트에 노출.
+- 테스트: `test/test_arrow.js`에 5개 케이스 추가 — `setCenterFontSize` 버림, `addText` 버림, `floorFontSize`의 폴백 처리, `normalizeSceneFontSizes`의 레거시 씬 복구·결손 필드 처리. `node test/run_node.js` 40/40 통과.
+- 빌드: `tsc --noEmit` 무에러, `./build.sh`로 `release/index.html` 93,625 bytes 재생성. release에서 `floorFontSize`/`normalizeSceneFontSizes` 10회 매칭 확인.
+
 ### 다이어그램·README 최신화
 
 - 동기: `app.ts` 분리, Highlighter, Ctrl+드래그 클론·가상 Ctrl 버튼이 추가되면서 `docs/class-diagram.puml`과 `README.md`가 모두 낡았음. 다이어그램은 PNG도 함께 재생성.

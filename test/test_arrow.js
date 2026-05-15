@@ -213,6 +213,58 @@
     s.setCenterFontSize(42);
     assert(s.get().centerFontSize === 42, 'in-range passthrough');
   });
+
+  // ---- font size always integer ----
+  test('SceneStore setCenterFontSize floors decimals', function () {
+    var s = new A.SceneStore();
+    s.setCenterFontSize(23.9);
+    assert(s.get().centerFontSize === 23, 'floors 23.9, got ' + s.get().centerFontSize);
+    s.setCenterFontSize(40.1);
+    assert(s.get().centerFontSize === 40, 'floors 40.1, got ' + s.get().centerFontSize);
+  });
+  test('SceneStore addText floors decimal fontSize', function () {
+    var s = new A.SceneStore();
+    var t = s.addText({ x: 0, y: 0 }, 'hi', 24.7, '#000');
+    assert(t.fontSize === 24, 'floors to 24, got ' + t.fontSize);
+    assert(Number.isInteger(t.fontSize), 'is integer');
+  });
+  test('floorFontSize handles finite numbers and bad input', function () {
+    assert(A.floorFontSize(28) === 28, '28 → 28');
+    assert(A.floorFontSize(28.9) === 28, '28.9 → 28');
+    assert(A.floorFontSize(0.5) === 1, 'sub-1 clamps to 1');
+    assert(A.floorFontSize(NaN, 28) === 28, 'NaN falls back to 28');
+    assert(A.floorFontSize('abc', 16) === 16, 'string falls back to 16');
+    assert(A.floorFontSize(null, 12) === 12, 'null falls back to 12');
+  });
+  test('normalizeSceneFontSizes repairs legacy decimal scene data', function () {
+    var scene = {
+      id: 'x', name: 'x', centerText: '', centerFontSize: 33.7,
+      objects: [
+        { id: 't1', type: 'text', pos: { x: 0, y: 0 }, text: 'a', fontSize: 18.4, color: '#000' },
+        { id: 'a1', type: 'arrow', from: { x: 0, y: 0 }, to: { x: 1, y: 1 }, color: '#000', thickness: 4 },
+        { id: 't2', type: 'text', pos: { x: 0, y: 0 }, text: 'b', fontSize: 99.999, color: '#000' }
+      ],
+      createdAt: 0, updatedAt: 0, viewOffsetX: 0, viewOffsetY: 0, viewScale: 1
+    };
+    A.normalizeSceneFontSizes(scene);
+    assert(scene.centerFontSize === 33, 'centerFontSize floored, got ' + scene.centerFontSize);
+    assert(scene.objects[0].fontSize === 18, 'text fontSize floored, got ' + scene.objects[0].fontSize);
+    assert(scene.objects[2].fontSize === 99, 'text fontSize floored, got ' + scene.objects[2].fontSize);
+    // Arrow objects untouched.
+    assert(scene.objects[1].thickness === 4, 'arrow thickness unchanged');
+  });
+  test('normalizeSceneFontSizes survives missing centerFontSize and bad fontSize', function () {
+    var scene = {
+      id: 'y', name: 'y', centerText: '', objects: [
+        { id: 't', type: 'text', pos: { x: 0, y: 0 }, text: 'c', fontSize: 'oops', color: '#000' }
+      ],
+      createdAt: 0, updatedAt: 0, viewOffsetX: 0, viewOffsetY: 0, viewScale: 1
+    };
+    A.normalizeSceneFontSizes(scene);
+    assert(scene.centerFontSize == null, 'leaves centerFontSize absent');
+    assert(scene.objects[0].fontSize === A.DEFAULT_CENTER_FONT_SIZE,
+      'bad fontSize falls back to default, got ' + scene.objects[0].fontSize);
+  });
   test('SceneStore setCenterText and setName fire listener and update fields', function () {
     var s = new A.SceneStore();
     var calls = 0;

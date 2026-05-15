@@ -5,6 +5,7 @@ import {
   SceneObject,
   TextObject,
   emptyScene,
+  floorFontSize,
   newId,
 } from './types.js';
 import { clampToCanvas, pointToSegmentDistance, Vec, vecDist } from '../utils/geometry.js';
@@ -52,7 +53,7 @@ export class SceneStore {
   }
 
   setCenterFontSize(size: number): void {
-    this.scene.centerFontSize = Math.max(8, Math.min(200, size));
+    this.scene.centerFontSize = Math.max(8, Math.min(200, floorFontSize(size)));
     this.touch();
     this.emit();
   }
@@ -106,7 +107,7 @@ export class SceneStore {
       type: 'text',
       pos: clampToCanvas(pos),
       text,
-      fontSize,
+      fontSize: floorFontSize(fontSize),
       color,
     };
     this.scene.objects.push(obj);

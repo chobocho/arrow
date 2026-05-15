@@ -28,6 +28,28 @@
   var DEFAULT_CENTER_FONT_SIZE = 28;
   var HIGHLIGHTER_OPACITY = 0.35;
   var HIGHLIGHTER_WIDTH_MULT = 4;
+  // Font sizes are integers only. Floor inputs (and silently repair legacy
+  // decimals loaded from DB/JSON) so the renderer never sees fractional sizes.
+  function floorFontSize(n, fallback) {
+    if (fallback == null) fallback = DEFAULT_CENTER_FONT_SIZE;
+    var v = (typeof n === 'number' && isFinite(n)) ? n : fallback;
+    var f = Math.floor(v);
+    return f >= 1 ? f : 1;
+  }
+  function normalizeSceneFontSizes(scene) {
+    if (!scene) return;
+    if (scene.centerFontSize != null) {
+      scene.centerFontSize = floorFontSize(scene.centerFontSize, DEFAULT_CENTER_FONT_SIZE);
+    }
+    if (scene.objects && scene.objects.length) {
+      for (var i = 0; i < scene.objects.length; i++) {
+        var o = scene.objects[i];
+        if (o && o.type === 'text') {
+          o.fontSize = floorFontSize(o.fontSize, DEFAULT_CENTER_FONT_SIZE);
+        }
+      }
+    }
+  }
   function emptyScene(name) {
     var now = Date.now();
     return {
@@ -593,7 +615,7 @@
   SceneStore.prototype._emit = function () { for (var i = 0; i < this.listeners.length; i++) this.listeners[i](); };
   SceneStore.prototype.setCenterText = function (text) { this.scene.centerText = text; this._touch(); this._emit(); };
   SceneStore.prototype.setCenterFontSize = function (size) {
-    this.scene.centerFontSize = Math.max(8, Math.min(200, size));
+    this.scene.centerFontSize = Math.max(8, Math.min(200, floorFontSize(size)));
     this._touch(); this._emit();
   };
   SceneStore.prototype.setName = function (name) { this.scene.name = name; this._touch(); this._emit(); };
@@ -603,7 +625,7 @@
     return arrow;
   };
   SceneStore.prototype.addText = function (pos, text, fontSize, color) {
-    var o = { id: newId('text'), type: 'text', pos: clampToCanvas(pos), text: text, fontSize: fontSize, color: color };
+    var o = { id: newId('text'), type: 'text', pos: clampToCanvas(pos), text: text, fontSize: floorFontSize(fontSize), color: color };
     this.scene.objects.push(o); this._touch(); this._emit();
     return o;
   };
@@ -762,7 +784,12 @@
       var count = 0;
       for (var i = 0; i < payload.scenes.length; i++) {
         var s = payload.scenes[i];
-        if (s && typeof s.id === 'string') { store.put(s); count++; }
+        if (s && typeof s.id === 'string') {
+          // Repair decimal font sizes from legacy/hand-edited JSON.
+          normalizeSceneFontSizes(s);
+          store.put(s);
+          count++;
+        }
       }
       return count;
     });
@@ -1035,7 +1062,7 @@
       var ratio = Math.max(0.3, Math.min(6, (logical.x - orig.pos.x) / Math.max(20, orig.fontSize * 4)));
       this.store.update(d.objectId, function (o) {
         if (o.type !== 'text') return;
-        o.fontSize = Math.max(8, Math.min(160, orig.fontSize * ratio));
+        o.fontSize = Math.max(8, Math.min(160, Math.floor(orig.fontSize * ratio)));
       });
       return;
     }
@@ -1133,6 +1160,10 @@
     this.clipboard = null;
     // Virtual Ctrl toggle for mobile clone-by-drag (TODO #15/#16).
     this.modifierClone = false;
+    // Autosave timer handle (null when idle). First object change after a
+    // clean state arms a 120s timer; subsequent changes do not reset it, so
+    // even nonstop editing flushes to IndexedDB within two minutes.
+    this.autosaveTimer = null;
 
     this.input = new InputHandler(this.canvas, this.view, this.store, {
       getMode: function () { return self.mode; },
@@ -1157,8 +1188,21 @@
       getModifierClone: function () { return self.modifierClone; }
     });
 
-    this.store.subscribe(function () { self.dirty = true; self._syncFontInputToSelection(); self._requestRender(); });
+    this.store.subscribe(function () {
+      self.dirty = true;
+      self._armAutosave();
+      self._syncFontInputToSelection();
+      self._requestRender();
+    });
     window.addEventListener('resize', function () { self._resize(); self._requestRender(); });
+    // Force a save on tab close / mobile background. beforeunload covers desktop
+    // close+refresh; pagehide and visibilitychange catch iOS/mobile bfcache.
+    var flushOnLeave = function () { self._cancelAutosave(); if (self.dirty) self._autosaveNow(); };
+    window.addEventListener('beforeunload', flushOnLeave);
+    window.addEventListener('pagehide', flushOnLeave);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') flushOnLeave();
+    });
     if (typeof ResizeObserver !== 'undefined') {
       var wrap = this.canvas.parentElement;
       if (wrap) new ResizeObserver(function () { self._resize(); self._requestRender(); }).observe(wrap);
@@ -1181,6 +1225,9 @@
   };
   App.prototype._adoptScene = function (scene) {
     if (scene.centerFontSize == null) scene.centerFontSize = DEFAULT_CENTER_FONT_SIZE;
+    // Legacy DB/JSON may carry decimal font sizes; coerce to integers on load.
+    normalizeSceneFontSizes(scene);
+    this._cancelAutosave();
     this.store.replace(scene);
     this.view.offset = { x: scene.viewOffsetX || 0, y: scene.viewOffsetY || 0 };
     this.view.scale = scene.viewScale > 0 ? scene.viewScale : 1;
@@ -1190,6 +1237,35 @@
     this._updateSelectionUi();
     this._syncCenterFontInput();
     this._requestRender();
+  };
+  App.AUTOSAVE_DELAY_MS = 120000;
+  App.prototype._armAutosave = function () {
+    if (this.autosaveTimer != null) return;
+    var self = this;
+    this.autosaveTimer = setTimeout(function () {
+      self.autosaveTimer = null;
+      self._autosaveNow();
+    }, App.AUTOSAVE_DELAY_MS);
+  };
+  App.prototype._cancelAutosave = function () {
+    if (this.autosaveTimer != null) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+  };
+  // Silent save: skips the name prompt so the timer/unload paths can never
+  // block on the user. Failures are logged but do not surface to the UI.
+  App.prototype._autosaveNow = function () {
+    if (!this.dirty) return Promise.resolve();
+    var self = this;
+    var scene = this.store.get();
+    scene.viewOffsetX = this.view.offset.x;
+    scene.viewOffsetY = this.view.offset.y;
+    scene.viewScale = this.view.scale;
+    return self.db.saveScene(scene)
+      .then(function () { return self.db.setMeta('lastSceneId', scene.id); })
+      .then(function () { self.dirty = false; })
+      .catch(function (e) { console.warn('autosave failed', e); });
   };
   App.prototype._syncCenterFontInput = function () {
     var el = document.getElementById('inputCenterFontSize');
@@ -1339,8 +1415,9 @@
     var fontEl = byId('inputFontSize');
     fontEl.value = String(this.fontSize);
     fontEl.addEventListener('input', function () {
-      var n = parseFloat(fontEl.value);
-      if (!isFinite(n)) return;
+      var raw = parseFloat(fontEl.value);
+      if (!isFinite(raw)) return;
+      var n = Math.floor(raw);
       var sel = self._getSelectedObject();
       if (sel && sel.type === 'text') {
         self.store.update(sel.id, function (o) {
@@ -1360,9 +1437,9 @@
     var centerFontEl = byId('inputCenterFontSize');
     centerFontEl.value = String(this.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
     centerFontEl.addEventListener('input', function () {
-      var n = parseFloat(centerFontEl.value);
-      if (!isFinite(n)) return;
-      self.store.setCenterFontSize(n);
+      var raw = parseFloat(centerFontEl.value);
+      if (!isFinite(raw)) return;
+      self.store.setCenterFontSize(Math.floor(raw));
     });
     centerFontEl.addEventListener('change', function () {
       centerFontEl.value = String(self.store.get().centerFontSize || DEFAULT_CENTER_FONT_SIZE);
@@ -1459,7 +1536,7 @@
       scene.viewScale = self.view.scale;
       return self.db.saveScene(scene)
         .then(function () { return self.db.setMeta('lastSceneId', scene.id); })
-        .then(function () { self.dirty = false; return self._refreshWorks(); })
+        .then(function () { self.dirty = false; self._cancelAutosave(); return self._refreshWorks(); })
         .then(function () { self._flashStatus(t('saved')); })
         .catch(function (e) { console.error('save failed', e); window.alert('저장 실패 / Save failed'); });
     });
@@ -1476,7 +1553,7 @@
       self.store.replace(next);
       self.db.saveScene(next)
         .then(function () { return self.db.setMeta('lastSceneId', next.id); })
-        .then(function () { return self._refreshWorks(); })
+        .then(function () { self.dirty = false; self._cancelAutosave(); return self._refreshWorks(); })
         .then(function () { self._updateTitle(); self._flashStatus(t('saved')); });
     });
   };
@@ -1976,6 +2053,9 @@
     clampToCanvas: clampToCanvas,
     newId: newId,
     emptyScene: emptyScene,
+    floorFontSize: floorFontSize,
+    normalizeSceneFontSizes: normalizeSceneFontSizes,
+    DEFAULT_CENTER_FONT_SIZE: DEFAULT_CENTER_FONT_SIZE,
     CanvasView: CanvasView,
     Renderer: Renderer,
     SceneStore: SceneStore,

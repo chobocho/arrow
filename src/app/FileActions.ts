@@ -27,6 +27,7 @@ export async function save(app: App): Promise<void> {
   await app.db.saveScene(scene);
   await app.db.setMeta('lastSceneId', scene.id);
   app.dirty = false;
+  app.cancelAutosave();
   await refreshWorks(app);
   app.flashStatus(t('saved'));
 }
@@ -42,6 +43,8 @@ export async function saveAs(app: App): Promise<void> {
   app.store.replace(next);
   await app.db.saveScene(next);
   await app.db.setMeta('lastSceneId', next.id);
+  app.dirty = false;
+  app.cancelAutosave();
   await refreshWorks(app);
   updateTitle(app);
   app.flashStatus(t('saved'));

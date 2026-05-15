@@ -7,6 +7,7 @@ import {
   HighlighterObject,
   SceneData,
   SceneObject,
+  normalizeSceneFontSizes,
 } from './models/types.js';
 import { EditorMode, InputHandler } from './input/InputHandler.js';
 import { IndexedDBStore, SceneSummary } from './storage/IndexedDBStore.js';
@@ -66,6 +67,12 @@ export class App {
   modifierClone = false;
 
   private renderScheduled = false;
+  // Autosave: first object change after a clean state arms a 120s timer; on
+  // fire, the scene is silently persisted. Further changes within the window
+  // do NOT reset the timer (bounded staleness), so even continuous editing
+  // saves within two minutes of the first change.
+  private autosaveTimer: number | null = null;
+  private static readonly AUTOSAVE_DELAY_MS = 120_000;
 
   constructor(root: HTMLElement) {
     this.canvas = root.querySelector('#mainCanvas') as HTMLCanvasElement;
@@ -103,10 +110,21 @@ export class App {
 
     this.store.subscribe(() => {
       this.dirty = true;
+      this.armAutosave();
       syncFontInputToSelection(this);
       this.requestRender();
     });
     window.addEventListener('resize', () => { this.resize(); this.requestRender(); });
+    // Best-effort flush before the tab goes away. beforeunload handles desktop
+    // close/refresh; pagehide + visibilitychange catch mobile/iOS bfcache cases
+    // where beforeunload does not fire. We kick off the async IDB write — most
+    // browsers let in-flight transactions commit during teardown.
+    const flush = (): void => { this.cancelAutosave(); if (this.dirty) void this.autosaveNow(); };
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') flush();
+    });
     // ResizeObserver catches container resizes that don't trigger window
     // resize (e.g. header wrapping on narrow widths). Keeps the canvas buffer
     // sized to the container so no gap appears below it.
@@ -140,6 +158,11 @@ export class App {
 
   adoptScene(scene: SceneData): void {
     if (scene.centerFontSize == null) scene.centerFontSize = DEFAULT_CENTER_FONT_SIZE;
+    // Legacy scenes (DB or imported JSON) may carry decimal font sizes from
+    // pre-integer builds. Coerce to integers on entry so the rest of the app
+    // can assume integer math.
+    normalizeSceneFontSizes(scene);
+    this.cancelAutosave();
     this.store.replace(scene);
     this.view.offset = { x: scene.viewOffsetX, y: scene.viewOffsetY };
     this.view.scale = scene.viewScale > 0 ? scene.viewScale : 1;
@@ -148,6 +171,39 @@ export class App {
     updateTitle(this);
     syncCenterFontInput(this);
     this.requestRender();
+  }
+
+  armAutosave(): void {
+    if (this.autosaveTimer != null) return;
+    this.autosaveTimer = window.setTimeout(() => {
+      this.autosaveTimer = null;
+      void this.autosaveNow();
+    }, App.AUTOSAVE_DELAY_MS);
+  }
+
+  cancelAutosave(): void {
+    if (this.autosaveTimer != null) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+  }
+
+  // Silent persist of the current scene. Skips the name prompt so the timer
+  // and unload paths never block on user input. Failures are swallowed (logged
+  // only) because a failed autosave should not break the editor.
+  async autosaveNow(): Promise<void> {
+    if (!this.dirty) return;
+    const scene = this.store.get();
+    scene.viewOffsetX = this.view.offset.x;
+    scene.viewOffsetY = this.view.offset.y;
+    scene.viewScale = this.view.scale;
+    try {
+      await this.db.saveScene(scene);
+      await this.db.setMeta('lastSceneId', scene.id);
+      this.dirty = false;
+    } catch (e) {
+      console.warn('autosave failed', e);
+    }
   }
 
   getSelectedObject(): SceneObject | null {

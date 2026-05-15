@@ -109,8 +109,9 @@ export function bindUi(app: App): void {
   const fontEl = $('#inputFontSize') as HTMLInputElement;
   fontEl.value = String(app.fontSize);
   fontEl.addEventListener('input', () => {
-    const n = parseFloat(fontEl.value);
-    if (!Number.isFinite(n)) return;
+    const raw = parseFloat(fontEl.value);
+    if (!Number.isFinite(raw)) return;
+    const n = Math.floor(raw);
     const sel = app.getSelectedObject();
     if (sel && sel.type === 'text') {
       // Resize the currently selected text instead of changing the default.
@@ -130,9 +131,9 @@ export function bindUi(app: App): void {
   const centerFontEl = $('#inputCenterFontSize') as HTMLInputElement;
   centerFontEl.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
   centerFontEl.addEventListener('input', () => {
-    const n = parseFloat(centerFontEl.value);
-    if (!Number.isFinite(n)) return;
-    app.store.setCenterFontSize(n);
+    const raw = parseFloat(centerFontEl.value);
+    if (!Number.isFinite(raw)) return;
+    app.store.setCenterFontSize(Math.floor(raw));
   });
   centerFontEl.addEventListener('change', () => {
     centerFontEl.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);

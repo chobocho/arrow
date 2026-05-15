@@ -398,7 +398,7 @@ export class InputHandler {
       );
       this.store.update(drag.objectId, (o) => {
         if (o.type !== 'text') return;
-        o.fontSize = Math.max(8, Math.min(160, orig.fontSize * ratio));
+        o.fontSize = Math.max(8, Math.min(160, Math.floor(orig.fontSize * ratio)));
       });
       return;
     }

@@ -49,6 +49,29 @@ export interface SceneData {
 
 export const DEFAULT_CENTER_FONT_SIZE = 28;
 
+// Font sizes are always stored as integers. Truncate (floor) so an input of
+// 23.7 becomes 23, and a legacy decimal value loaded from DB/JSON is silently
+// repaired instead of throwing or rendering off-by-a-fraction.
+export function floorFontSize(n: unknown, fallback: number = DEFAULT_CENTER_FONT_SIZE): number {
+  const v = typeof n === 'number' && Number.isFinite(n) ? n : fallback;
+  return Math.max(1, Math.floor(v));
+}
+
+// Walks a loaded scene and floors any decimal font sizes in place so legacy
+// data from older builds (or hand-edited JSON) becomes integer-clean.
+export function normalizeSceneFontSizes(scene: SceneData): void {
+  if (scene.centerFontSize != null) {
+    scene.centerFontSize = floorFontSize(scene.centerFontSize, DEFAULT_CENTER_FONT_SIZE);
+  }
+  if (Array.isArray(scene.objects)) {
+    for (const obj of scene.objects) {
+      if (obj && obj.type === 'text') {
+        obj.fontSize = floorFontSize(obj.fontSize, DEFAULT_CENTER_FONT_SIZE);
+      }
+    }
+  }
+}
+
 export function newId(prefix: string): ObjectId {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
