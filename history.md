@@ -4,6 +4,25 @@
 
 ## 2026-05-15
 
+### 다이어그램·README 최신화
+
+- 동기: `app.ts` 분리, Highlighter, Ctrl+드래그 클론·가상 Ctrl 버튼이 추가되면서 `docs/class-diagram.puml`과 `README.md`가 모두 낡았음. 다이어그램은 PNG도 함께 재생성.
+- `docs/class-diagram.puml`:
+  - `app` 패키지에 `App` 외에 `FileActions`, `KeyboardActions` 모듈 추가.
+  - `ui` 패키지에 `UiBindings`, `Modals` 모듈 추가.
+  - `HighlighterObject` 인터페이스 추가, `SceneStore.addHighlighter` 노출.
+  - `EditorMode`에 `highlighter` 멤버 추가.
+  - `InputHandler`에 `cloneForDrag` 및 `beginPointer(screen, logical, wantsClone)` 시그니처 반영. 클론/리사이즈 핸들 제외 설명 노트 추가.
+  - `App`에 `modifierClone : boolean` 필드와 슬림 오케스트레이터 설명 노트.
+  - 분리 모듈 간 협력 관계(점선 화살표)와 `App` 의존 관계 명시.
+- `plantuml -tpng docs/*.puml`로 3종 PNG 재생성. 시퀀스 2종은 PUML 미변경이라 바이트 동일.
+- `README.md`(한글) 정비:
+  - 주요 기능에 형광펜, 16색 팔레트, Ctrl+드래그 클론, 모바일 가상 Ctrl 버튼 추가.
+  - 디렉토리 구조에 `src/ui/`, `src/app/` 하위 모듈 표기, 테스트 케이스 수 35개로 갱신, `TODO.md` 항목 추가.
+  - 사용 안내·키보드 단축키 섹션에 형광펜(`G`) / `Alt+N`·`Alt+L` / Ctrl+드래그 항목 보강.
+  - 아키텍처 설명을 "App이 직접 모든 걸 소유" → "슬림 오케스트레이터 + 네 모듈" 구조로 갱신.
+- 검증: PNG 파일 헤더(`file` 명령)로 유효성 확인. README 한글 유지.
+
 ### 번들 우클릭 드리프트 보정
 
 - 증상: 커밋 `003458f`(우클릭으로 객체 선택)에서 TS 소스만 갱신되고 `dist/bundle.js`는 누락. 번들의 `_onMouseDown`이 `e.button === 2`도 pan으로 묶어 처리해 우클릭 선택이 동작하지 않았음.

@@ -9,30 +9,77 @@ skinparam class {
   ArrowColor #555555
   HeaderBackgroundColor #EAF1FF
 }
+skinparam package {
+  BackgroundColor #FAFBFF
+  BorderColor #BFCDEE
+}
 skinparam note {
   BackgroundColor #FFFDF5
   BorderColor #C9A227
 }
 
-package "app" {
+package "app (orchestrator)" {
   class App {
-    - canvas : HTMLCanvasElement
-    - view : CanvasView
-    - store : SceneStore
-    - renderer : Renderer
-    - input : InputHandler
-    - db : IndexedDBStore
-    - mode : EditorMode
-    - selectedId : string?
-    - clipboard : SceneObject?
-    + bindUi()
-    + onKey(e)
-    + insertArrow()
-    + insertTextAtViewportCenter()
-    + copySelected() : boolean
-    + pasteClone() : boolean
-    + save() / saveAs() / newScene()
-    + exportPng() / exportJson() / importJson()
+    + canvas : HTMLCanvasElement
+    + view : CanvasView
+    + store : SceneStore
+    + renderer : Renderer
+    + input : InputHandler
+    + db : IndexedDBStore
+    + mode : EditorMode
+    + color / thickness / fontSize
+    + selectedId : string?
+    + clipboard : SceneObject?
+    + modifierClone : boolean
+    + dirty : boolean
+    + worksList : SceneSummary[]
+    + adoptScene(scene)
+    + getSelectedObject()
+    + requestRender()
+    + flashStatus(msg)
+  }
+  class KeyboardActions <<module>> {
+    + onKey(app, e)
+    + copySelected(app) : boolean
+    + pasteClone(app) : boolean
+    + insertArrow(app)
+    + insertTextAtViewportCenter(app)
+  }
+  class FileActions <<module>> {
+    + save(app) / saveAs(app)
+    + newScene(app) / deleteSelected(app)
+    + exportPng(app) / exportJson(app)
+    + importJsonClick() / handleImportFile(app, e)
+    + fitToScreen(app)
+    + ensureName(app)
+  }
+}
+
+package "ui" {
+  class UiBindings <<module>> {
+    + bindUi(app)
+    + setMode(app, mode)
+    + updateModeUi(app)
+    + updateSelectionUi(app)
+    + updateTitle(app)
+    + applyLangToUi(app)
+    + toggleLang(app)
+    + syncCenterFontInput(app)
+    + syncFontInputToSelection(app)
+  }
+  class Modals <<module>> {
+    + openHelpModal(app)
+    + openWorksModal(app)
+    + renderWorks(app)
+    + refreshWorks(app)
+    + loadWork(app, id)
+    + renameWork(app, w)
+    + deleteWork(app, w)
+  }
+  class CustomPrompt <<module>> {
+    + customPrompt(msg, default) : Promise<string?>
+    + customConfirm(msg) : Promise<boolean>
+    + ensureModalStyles()
   }
 }
 
@@ -53,10 +100,8 @@ package "canvas" {
     - view : CanvasView
     + render(scene, opts)
     + renderToImage(scene) : HTMLCanvasElement
-    - drawCenter(scene)
-    - drawArrow(a)
-    - drawText(t)
-    - drawSelection(obj)
+    - drawCenter / drawArrow / drawText
+    - drawHighlighter / drawSelection
   }
 }
 
@@ -67,41 +112,38 @@ package "models" {
     + get() : SceneData
     + replace(next)
     + subscribe(fn)
-    + setCenterText(s) / setCenterFontSize(n)
-    + setName(s)
+    + setCenterText / setCenterFontSize / setName
     + addArrow(from, to, color, thickness) : ArrowObject
     + addText(pos, text, fontSize, color) : TextObject
-    + update(id, mutator)
-    + remove(id)
+    + addHighlighter(points, color, thickness) : HighlighterObject
+    + update(id, mutator) / remove(id)
     + hitTest(p, tol) : HitResult
   }
   class SceneData <<interface>> {
-    id : string
-    name : string
-    centerText : string
+    id / name / centerText
     centerFontSize : number?
     objects : SceneObject[]
     viewOffsetX / viewOffsetY / viewScale
     createdAt / updatedAt
   }
   class ArrowObject <<interface>> {
-    id : string
     type = "arrow"
-    from : Vec
-    to : Vec
-    color : string
-    thickness : number
+    from / to : Vec
+    color / thickness
   }
   class TextObject <<interface>> {
-    id : string
     type = "text"
     pos : Vec
-    text : string
-    fontSize : number
-    color : string
+    text / fontSize / color
+  }
+  class HighlighterObject <<interface>> {
+    type = "highlighter"
+    points : Vec[]
+    color / thickness
   }
   SceneData "1" *-- "*" ArrowObject
   SceneData "1" *-- "*" TextObject
+  SceneData "1" *-- "*" HighlighterObject
 }
 
 package "input" {
@@ -109,17 +151,17 @@ package "input" {
     - dragging : DragState
     - selectedId : string?
     - pinch : PinchState?
-    + attach()
     + setSelected(id)
-    - beginPointer(screen, logical)
-    - movePointer(screen)
-    - endPointer(screen)
+    - beginPointer(screen, logical, wantsClone)
+    - movePointer(screen) / endPointer(screen)
+    - cloneForDrag(obj) : SceneObject
     - handleDoubleTap(logical)
   }
   enum EditorMode {
     select
     arrow
     text
+    highlighter
     pan
   }
 }
@@ -127,21 +169,11 @@ package "input" {
 package "storage" {
   class IndexedDBStore {
     - dbPromise : Promise<IDBDatabase>
-    + saveScene(scene)
-    + loadScene(id) : SceneData?
+    + saveScene(scene) / loadScene(id)
     + listScenes() : SceneSummary[]
-    + renameScene(id, name)
-    + deleteScene(id)
+    + renameScene(id, name) / deleteScene(id)
     + setMeta(k, v) / getMeta(k)
     + exportAll() / importAll(payload, merge)
-  }
-}
-
-package "ui" {
-  class CustomPrompt <<module>> {
-    + customPrompt(message, default) : Promise<string?>
-    + customConfirm(message) : Promise<boolean>
-    + ensureModalStyles()
   }
 }
 
@@ -162,31 +194,63 @@ package "utils" {
   }
 }
 
+' App owns runtime objects.
 App --> CanvasView
 App --> Renderer
 App --> SceneStore
 App --> InputHandler
 App --> IndexedDBStore
-App ..> CustomPrompt : opens modals
-App ..> lang : translates UI
+
+' Split modules act on App (free functions taking the App as first arg).
+UiBindings ..> App : mutates fields
+Modals ..> App : mutates fields
+FileActions ..> App : mutates fields
+KeyboardActions ..> App : mutates fields
+
+' Inter-module collaboration.
+UiBindings ..> Modals : opens help / works
+UiBindings ..> FileActions : toolbar handlers
+KeyboardActions ..> FileActions : Ctrl+S / Alt+N / Delete
+KeyboardActions ..> Modals : F1 / Alt+L
+Modals ..> FileActions : delete current work triggers newScene
+
+' Shared services.
+UiBindings ..> CustomPrompt : center / text prompts
+Modals ..> CustomPrompt : rename / confirm
+FileActions ..> CustomPrompt : ensure name / unsaved confirms
+KeyboardActions ..> CustomPrompt : insert text
+
+UiBindings ..> lang : i18n
+Modals ..> lang : i18n
+FileActions ..> lang : i18n
 
 Renderer --> CanvasView
 Renderer ..> SceneData : reads
 
 InputHandler --> CanvasView
 InputHandler --> SceneStore
-InputHandler ..> CustomPrompt : prompts text on click
 InputHandler ..> EditorMode
+InputHandler ..> CustomPrompt : prompts text on click
 
 SceneStore o-- SceneData
 IndexedDBStore ..> SceneData : persists
 
 note right of App
-  Top-level controller.
-  Owns DOM toolbar bindings,
-  routes keyboard shortcuts,
-  manages internal clipboard
-  for Ctrl+C / Ctrl+V cloning.
+  Slim orchestrator (~190 LOC).
+  Owns shared state and lifecycle;
+  toolbar / modal / file / keyboard
+  logic lives in the split modules
+  (free functions taking App as
+  first argument).
+end note
+
+note bottom of InputHandler
+  Ctrl/⌘ (or virtual Ctrl toggle
+  on mobile) + body-handle drag
+  clones the object via
+  cloneForDrag, then drags the
+  clone. Resize handles are
+  excluded from cloning.
 end note
 
 note bottom of SceneStore
