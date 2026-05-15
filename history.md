@@ -4,6 +4,20 @@
 
 ## 2026-05-15
 
+### 형광펜 직선 모드 (Ctrl + 드래그)
+
+- 동기: 자유 곡선 외에 강조 박스/밑줄용 깔끔한 직선이 자주 필요. 별도 도구 추가 없이 Ctrl 수정자로 토글.
+- 동작: 형광펜 모드에서 마우스를 드래그할 때 `Ctrl`(또는 `⌘`)을 누르고 있으면 draft의 `points`를 `[시작점, 현재 포인터]` 단일 세그먼트로 압축. Ctrl을 떼면 그 지점부터 자유 곡선 재개. 즉 스트로크 도중에 Ctrl을 토글하면 누적된 곡선이 즉시 직선으로 "스냅"되고, 떼면 새 자유 구간을 이어 그릴 수 있음.
+- 모바일: 물리 Ctrl이 없으므로 좌측 하단 가상 Ctrl 토글 버튼(`modifierClone`)을 동일 modifier로 재사용 — 형광펜 모드에서는 "직선", 선택 모드에서는 기존대로 "복제 드래그".
+- 변경:
+  - `InputHandler.movePointer(screen, wantsStraight=false)`로 시그니처 확장.
+  - `onMouseMove`: `e.ctrlKey || e.metaKey || cb.getModifierClone()` 결과를 전달.
+  - `onTouchMove`: `cb.getModifierClone()` 결과를 전달.
+  - `draft-highlighter` 분기에서 `wantsStraight`면 `draft.points = [drag.startLogical, clampToCanvas(logical)]`로 덮어쓰기. 자유 곡선 경로(`HL_MIN_STEP_SCREEN` 임계 체크)는 기존 그대로.
+  - 번들(`dist/bundle.js`)에는 `draft.points[0]`를 시작점으로 사용(번들 drag state에 `startLogical` 미보관)하여 동일 로직 적용.
+- 도움말 갱신: `helpMouse`/`helpMobile`(ko·en) 항목에 "Ctrl + 드래그 (형광펜) — 직선 형광펜" / "Ctrl + drag (highlighter) — Straight stroke" 추가.
+- 검증: `tsc --noEmit` 무에러, `node test/run_node.js` 40/40 통과, `./build.sh`로 `release/index.html` 97,055 bytes.
+
 ### 형광펜이 텍스트를 잡아 끄는 버그 수정
 
 - 증상: 형광펜 모드에서 글자(텍스트 객체) 위를 시작점으로 드래그하면, 스트로크가 생성되지 않고 텍스트가 선택되며 따라 움직임. 그어진 형광펜 흔적은 없고 글자만 끌려가 화면이 "꼬임".

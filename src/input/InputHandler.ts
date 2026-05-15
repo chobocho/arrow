@@ -119,7 +119,10 @@ export class InputHandler {
 
   private onMouseMove = (e: MouseEvent): void => {
     const screen = this.getScreenFromEvent(e);
-    this.movePointer(screen);
+    // Ctrl/⌘ — or the mobile virtual-Ctrl toggle — constrains the highlighter
+    // to a single straight segment from where the stroke began.
+    const straight = e.ctrlKey || e.metaKey || !!this.cb.getModifierClone?.();
+    this.movePointer(screen, straight);
   };
 
   private onMouseUp = (e: MouseEvent): void => {
@@ -179,7 +182,10 @@ export class InputHandler {
     e.preventDefault();
     if (e.touches.length === 1 && !this.pinch) {
       const screen = this.getScreenFromEvent(e.touches[0]);
-      this.movePointer(screen);
+      // Touch has no physical Ctrl; the virtual-Ctrl toggle doubles as the
+      // straight-line modifier for highlighter strokes.
+      const straight = !!this.cb.getModifierClone?.();
+      this.movePointer(screen, straight);
     } else if (e.touches.length === 2 && this.pinch) {
       const a = this.getScreenFromEvent(e.touches[0]);
       const b = this.getScreenFromEvent(e.touches[1]);
@@ -335,7 +341,7 @@ export class InputHandler {
     this.cb.onChange();
   }
 
-  private movePointer(screen: Vec): void {
+  private movePointer(screen: Vec, wantsStraight = false): void {
     const drag = this.dragging;
     if (drag.kind === 'none') return;
     const logical = this.view.screenToLogical(screen);
@@ -357,6 +363,15 @@ export class InputHandler {
     }
     if (drag.kind === 'draft-highlighter' && drag.origin?.draft) {
       const draft: HighlighterObject = drag.origin.draft;
+      if (wantsStraight) {
+        // Collapse any freehand trail collected so far into a single segment
+        // from the stroke origin to the current pointer. Toggling Ctrl mid-
+        // stroke therefore snaps the existing trail to a straight line.
+        draft.points = [drag.startLogical, clampToCanvas(logical)];
+        this.cb.onDraftHighlighter(draft);
+        this.cb.onChange();
+        return;
+      }
       const last = draft.points[draft.points.length - 1];
       const lastScreen = this.view.logicalToScreen(last);
       if (vecDist(lastScreen, screen) >= HL_MIN_STEP_SCREEN) {

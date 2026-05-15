@@ -293,8 +293,8 @@
       helpSecMouse: '마우스', helpSecMobile: '모바일',
       helpModes: 'V — 선택\nA — 화살표\nT — 글자\nG — 형광펜\nH — 이동',
       helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
-      helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝',
-      helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동',
+      helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝\nCtrl + 드래그 (형광펜) — 직선 형광펜',
+      helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동\nCtrl 토글 + 형광펜 드래그 — 직선 형광펜',
       cloneToggle: 'Ctrl (복제 드래그 토글)'
     },
     en: {
@@ -326,8 +326,8 @@
       helpSecMouse: 'Mouse', helpSecMobile: 'Mobile',
       helpModes: 'V — Select\nA — Arrow\nT — Text\nG — Highlighter\nH — Pan',
       helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
-      helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan',
-      helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move',
+      helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan\nCtrl + drag (highlighter) — Straight stroke',
+      helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move\nCtrl toggle + highlighter drag — Straight stroke',
       cloneToggle: 'Ctrl (clone-drag toggle)'
     }
   };
@@ -1048,7 +1048,10 @@
   };
   InputHandler.prototype._onMouseMove = function (e) {
     var screen = this._screenFromEvent(e);
-    this._move(screen);
+    // Ctrl/⌘ (or the mobile virtual-Ctrl toggle) constrains the highlighter
+    // to a single straight segment from the stroke origin.
+    var straight = e.ctrlKey || e.metaKey || !!(this.cb.getModifierClone && this.cb.getModifierClone());
+    this._move(screen, straight);
   };
   InputHandler.prototype._onMouseUp = function () { this._end(); };
   InputHandler.prototype._onWheel = function (e) {
@@ -1089,7 +1092,10 @@
   InputHandler.prototype._onTouchMove = function (e) {
     e.preventDefault();
     if (e.touches.length === 1 && !this.pinch) {
-      this._move(this._screenFromEvent(e.touches[0]));
+      // No physical Ctrl on touch; the virtual-Ctrl toggle doubles as the
+      // straight-line modifier for highlighter strokes.
+      var straight = !!(this.cb.getModifierClone && this.cb.getModifierClone());
+      this._move(this._screenFromEvent(e.touches[0]), straight);
     } else if (e.touches.length === 2 && this.pinch) {
       var a = this._screenFromEvent(e.touches[0]);
       var b = this._screenFromEvent(e.touches[1]);
@@ -1199,7 +1205,7 @@
     this.drag = { kind: 'pan', lastScreen: screen };
     this.cb.onChange();
   };
-  InputHandler.prototype._move = function (screen) {
+  InputHandler.prototype._move = function (screen, straight) {
     var d = this.drag;
     if (d.kind === 'none') return;
     var logical = this.view.screenToLogical(screen);
@@ -1219,6 +1225,15 @@
     }
     if (d.kind === 'draft-highlighter') {
       var draft = d.draft;
+      if (straight) {
+        // Collapse the freehand trail into a single segment from the stroke
+        // origin (points[0]) to the current pointer. Toggling Ctrl mid-stroke
+        // snaps the trail to a straight line.
+        draft.points = [draft.points[0], clampToCanvas(logical)];
+        this.cb.onDraftHighlighter(draft);
+        this.cb.onChange();
+        return;
+      }
       var last = draft.points[draft.points.length - 1];
       var lastScreen = this.view.logicalToScreen(last);
       if (vecDist(lastScreen, screen) >= 2.5) {
