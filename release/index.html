@@ -1628,6 +1628,15 @@
     var thickEl = byId('inputThickness');
     thickEl.value = String(this.thickness);
     thickEl.addEventListener('input', function () { self.thickness = parseFloat(thickEl.value) || 4; });
+    // Mirror of inputFontSize: Enter commits and hands focus back to the
+    // Select-mode button so keyboard shortcuts resume working.
+    thickEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      thickEl.value = String(self.thickness);
+      var btnSelect = document.getElementById('btnSelect');
+      if (btnSelect) btnSelect.focus();
+    });
     var fontEl = byId('inputFontSize');
     fontEl.value = String(this.fontSize);
     fontEl.addEventListener('input', function () {

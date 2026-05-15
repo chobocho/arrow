@@ -105,6 +105,15 @@ export function bindUi(app: App): void {
   const thickEl = $('#inputThickness') as HTMLInputElement;
   thickEl.value = String(app.thickness);
   thickEl.addEventListener('input', () => { app.thickness = parseFloat(thickEl.value) || 4; });
+  // Mirror of #inputFontSize: Enter commits and hands focus back to the
+  // Select-mode button so keyboard shortcuts resume working.
+  thickEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    thickEl.value = String(app.thickness);
+    const btnSelect = document.getElementById('btnSelect');
+    btnSelect?.focus();
+  });
 
   const fontEl = $('#inputFontSize') as HTMLInputElement;
   fontEl.value = String(app.fontSize);

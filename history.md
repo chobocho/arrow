@@ -4,6 +4,13 @@
 
 ## 2026-05-15
 
+### 굵기 입력에도 Enter → 선택 버튼 포커스 이양 적용
+
+- 동기: 글자/주제 크기 입력에 적용한 Enter→focus 이양을 굵기(`inputThickness`)에도 동일하게.
+- 변경(`src/ui/UiBindings.ts`): `thickEl`에 `keydown` 리스너 추가 — Enter면 `preventDefault`, 표시값을 현재 `app.thickness`로 스냅, `#btnSelect`로 `.focus()`. 기존엔 `change` 핸들러도 없었음.
+- 번들 동기화(`dist/bundle.js`): `_bindUi` 안 thickEl `input` 직후에 동일 `keydown` 핸들러 삽입.
+- 검증: `tsc --noEmit` 무에러, `node test/run_node.js` 40/40 통과, `./build.sh`로 `release/index.html` 98,539 bytes 재생성.
+
 ### 주제 크기 입력에도 Enter → 선택 버튼 포커스 이양 적용
 
 - 동기: 직전 변경으로 `inputFontSize`(글자 크기)만 Enter→focus 이양이 적용됐는데, 주제 크기(`inputCenterFontSize`)도 동일 동작을 요청.
