@@ -363,6 +363,74 @@
     assert(a.indexOf('foo_') === 0, 'prefix applied, got ' + a);
   });
 
+  // ---- undo/redo (App methods, with stubbed DOM/IDB) ----
+  // The App class needs a DOM for full construction. Exercise only the
+  // history methods by handcrafting a partial instance that uses the real
+  // prototype but minimal collaborators.
+  test('App.pushHistory/undo/redo round-trip preserves objects', function () {
+    if (!A.App) return; // skip when not exported
+    var store = new A.SceneStore();
+    var stub = {
+      store: store,
+      view: { offset: { x: 0, y: 0 }, scale: 1 },
+      selectedId: null,
+      input: { setSelected: function () {} },
+      undoStack: [],
+      redoStack: [],
+      _updateUndoRedoUi: function () {},
+    };
+    // Use prototype methods.
+    var P = A.App.prototype;
+    var pushHistory = P.pushHistory, commit = P.commitHistorySnapshot;
+    var undo = P.undo, redo = P.redo, applySnap = P._applyHistorySnapshot;
+    var clone = P._cloneSceneData;
+    stub._cloneSceneData = clone;
+    stub.pushHistory = pushHistory;
+    stub.commitHistorySnapshot = commit;
+    stub.undo = undo;
+    stub.redo = redo;
+    stub._applyHistorySnapshot = applySnap;
+    // Take a snapshot, mutate, undo, redo.
+    stub.pushHistory();
+    store.addArrow({ x: 0, y: 0 }, { x: 100, y: 0 }, '#000', 4);
+    assert(store.get().objects.length === 1, 'after add: 1 obj, got ' + store.get().objects.length);
+    stub.undo();
+    assert(store.get().objects.length === 0, 'after undo: 0 obj, got ' + store.get().objects.length);
+    stub.redo();
+    assert(store.get().objects.length === 1, 'after redo: 1 obj, got ' + store.get().objects.length);
+  });
+  test('App.pushHistory caps at 8 entries (oldest dropped)', function () {
+    if (!A.App) return;
+    var store = new A.SceneStore();
+    var stub = {
+      store: store,
+      view: { offset: { x: 0, y: 0 }, scale: 1 },
+      selectedId: null,
+      input: { setSelected: function () {} },
+      undoStack: [],
+      redoStack: [],
+      _updateUndoRedoUi: function () {},
+      _cloneSceneData: A.App.prototype._cloneSceneData,
+    };
+    stub.pushHistory = A.App.prototype.pushHistory;
+    stub.commitHistorySnapshot = A.App.prototype.commitHistorySnapshot;
+    for (var i = 0; i < 12; i++) stub.pushHistory();
+    assert(stub.undoStack.length === 8, 'capped at 8, got ' + stub.undoStack.length);
+  });
+  test('App.commitHistorySnapshot clears redoStack', function () {
+    if (!A.App) return;
+    var stub = {
+      store: new A.SceneStore(),
+      undoStack: [],
+      redoStack: [{ marker: 'old' }],
+      _updateUndoRedoUi: function () {},
+    };
+    stub.commitHistorySnapshot = A.App.prototype.commitHistorySnapshot;
+    stub.commitHistorySnapshot({ marker: 'new' });
+    assert(stub.redoStack.length === 0, 'redo cleared on new commit');
+    assert(stub.undoStack.length === 1, 'undo has 1');
+  });
+
   // ---- summary ----
   var ok = results.length - failed;
   var msg = 'TOTAL ' + results.length + ' / PASS ' + ok + ' / FAIL ' + failed;

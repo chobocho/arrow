@@ -166,6 +166,8 @@
     </div>
     <div class="group">
       <button class="tool icon" id="btnEditCenter" title="주제 편집">🎯</button>
+      <button class="tool icon" id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↩️</button>
+      <button class="tool icon" id="btnRedo" title="다시 실행 (Ctrl+Y)" disabled>↪️</button>
       <button class="tool icon" id="btnDelete" title="삭제" disabled>🗑️</button>
     </div>
     <div class="spacer"></div>
@@ -288,11 +290,12 @@
       load: '불러오기', close: '닫기', noWorks: '저장된 작업이 없습니다',
       sortLabel: '정렬', sortByName: '이름순', sortByDate: '최근수정순',
       centerFontSize: '주제크기',
+      undo: '실행 취소 (Ctrl+Z)', redo: '다시 실행 (Ctrl+Y)',
       help: '도움말', helpTitle: '도움말',
       helpSecModes: '모드 전환', helpSecKeys: '키보드 단축키',
       helpSecMouse: '마우스', helpSecMobile: '모바일',
       helpModes: 'V — 선택\nA — 화살표\nT — 글자\nG — 형광펜\nH — 이동',
-      helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
+      helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + Z — 실행 취소 (최근 8단계)\nCtrl/⌘ + Y / Ctrl+Shift+Z — 다시 실행\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
       helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝\nCtrl + 드래그 (형광펜) — 직선 형광펜',
       helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동\nCtrl 토글 + 형광펜 드래그 — 직선 형광펜',
       cloneToggle: 'Ctrl (복제 드래그 토글)'
@@ -321,11 +324,12 @@
       load: 'Load', close: 'Close', noWorks: 'No saved works',
       sortLabel: 'Sort', sortByName: 'Name', sortByDate: 'Recent',
       centerFontSize: 'Topic Size',
+      undo: 'Undo (Ctrl+Z)', redo: 'Redo (Ctrl+Y)',
       help: 'Help', helpTitle: 'Help',
       helpSecModes: 'Modes', helpSecKeys: 'Keyboard',
       helpSecMouse: 'Mouse', helpSecMobile: 'Mobile',
       helpModes: 'V — Select\nA — Arrow\nT — Text\nG — Highlighter\nH — Pan',
-      helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
+      helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + Z — Undo (up to 8 steps)\nCtrl/⌘ + Y / Ctrl+Shift+Z — Redo\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
       helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan\nCtrl + drag (highlighter) — Straight stroke',
       helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move\nCtrl toggle + highlighter drag — Straight stroke',
       cloneToggle: 'Ctrl (clone-drag toggle)'
@@ -1000,8 +1004,20 @@
     this.lastTapTime = 0;
     this.lastTapPos = { x: 0, y: 0 };
     this.pinch = null;
+    // Pre-mutation scene snapshot captured at gesture start; committed to the
+    // undo stack only when the gesture actually changes the scene.
+    this.pendingHistorySnap = null;
     this._attach();
   }
+  InputHandler.prototype._snapshotScene = function () {
+    return JSON.parse(JSON.stringify(this.store.get()));
+  };
+  InputHandler.prototype._flushPendingHistory = function () {
+    if (this.pendingHistorySnap && this.cb.commitHistorySnapshot) {
+      this.cb.commitHistorySnapshot(this.pendingHistorySnap);
+    }
+    this.pendingHistorySnap = null;
+  };
   InputHandler.prototype.setSelected = function (id) {
     this.selectedId = id;
     this.cb.onSelect(id);
@@ -1142,10 +1158,14 @@
       this.cb.onSelect(this.selectedId);
       var handle = hit.handle;
       if (handle === 'arrow-from' || handle === 'arrow-to') {
+        // Stash snapshot for resize-arrow; flushed on first mutating move.
+        this.pendingHistorySnap = this._snapshotScene();
         this.drag = { kind: 'resize-arrow', objectId: hit.object.id, end: handle, lastScreen: screen };
         return;
       }
       if (handle === 'text-resize') {
+        // Stash snapshot for resize-text; flushed on first mutating move.
+        this.pendingHistorySnap = this._snapshotScene();
         this.drag = {
           kind: 'resize-text',
           objectId: hit.object.id,
@@ -1156,6 +1176,13 @@
       }
       // Ctrl/⌘ (or virtual Ctrl toggle on mobile) + body-handle drag clones
       // first, then translates the clone — original stays put. (TODO #16)
+      if (wantsClone) {
+        // Cloning IS a mutation — push undo immediately (pre-clone snapshot).
+        if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this._snapshotScene());
+      } else {
+        // Move-only: stash, flush on first mutating move.
+        this.pendingHistorySnap = this._snapshotScene();
+      }
       var target = wantsClone ? this._clone(hit.object) : hit.object;
       if (wantsClone) {
         this.selectedId = target.id;
@@ -1191,6 +1218,7 @@
       var self = this;
       customPrompt(t('promptText'), '').then(function (txt) {
         if (txt && txt.trim()) {
+          if (self.cb.commitHistorySnapshot) self.cb.commitHistorySnapshot(self._snapshotScene());
           var created = self.store.addText(logical, txt.trim(), self.cb.getFontSize(), self.cb.getColor());
           self.selectedId = created.id;
           self.cb.onSelect(created.id);
@@ -1244,6 +1272,7 @@
       return;
     }
     if (d.kind === 'resize-arrow') {
+      this._flushPendingHistory();
       var which = d.end;
       this.store.update(d.objectId, function (o) {
         if (o.type !== 'arrow') return;
@@ -1253,6 +1282,7 @@
       return;
     }
     if (d.kind === 'move-object') {
+      this._flushPendingHistory();
       var dxLog = logical.x - d.startLogical.x;
       var dyLog = logical.y - d.startLogical.y;
       var origin = d.origin;
@@ -1274,6 +1304,7 @@
       return;
     }
     if (d.kind === 'resize-text') {
+      this._flushPendingHistory();
       var orig = d.origin;
       var ratio = Math.max(0.3, Math.min(6, (logical.x - orig.pos.x) / Math.max(20, orig.fontSize * 4)));
       this.store.update(d.objectId, function (o) {
@@ -1288,6 +1319,7 @@
     if (d.kind === 'draft-arrow') {
       var draft = d.draft;
       if (vecDist(draft.from, draft.to) > 4 / this.view.scale) {
+        if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this._snapshotScene());
         var created = this.store.addArrow(draft.from, draft.to, draft.color, draft.thickness);
         this.selectedId = created.id;
         this.cb.onSelect(created.id);
@@ -1301,6 +1333,7 @@
         total += vecDist(hdraft.points[hi - 1], hdraft.points[hi]);
       }
       if (hdraft.points.length === 1 || total > 4 / this.view.scale) {
+        if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this._snapshotScene());
         var hcreated = this.store.addHighlighter(hdraft.points, hdraft.color, hdraft.thickness);
         this.selectedId = hcreated.id;
         this.cb.onSelect(hcreated.id);
@@ -1308,6 +1341,9 @@
       this.cb.onDraftHighlighter(null);
       // Stay in highlighter mode for consecutive strokes.
     }
+    // Pending snapshot belonged to a click-without-drag (or a no-op drag).
+    // Discard so undo doesn't get a no-op entry.
+    this.pendingHistorySnap = null;
     this.drag = { kind: 'none' };
     this.cb.onChange();
   };
@@ -1380,6 +1416,10 @@
     // clean state arms a 120s timer; subsequent changes do not reset it, so
     // even nonstop editing flushes to IndexedDB within two minutes.
     this.autosaveTimer = null;
+    // Snapshot-based undo/redo. Each entry is a deep clone of SceneData
+    // captured *before* a mutating user operation. Cap at App.UNDO_LIMIT.
+    this.undoStack = [];
+    this.redoStack = [];
 
     this.input = new InputHandler(this.canvas, this.view, this.store, {
       getMode: function () { return self.mode; },
@@ -1391,17 +1431,24 @@
       onSelect: function (id) { self.selectedId = id; self._updateSelectionUi(); self._syncFontInputToSelection(); },
       onDoubleClickEmpty: function () {
         customPrompt(t('promptCenter'), self.store.get().centerText).then(function (txt) {
-          if (txt !== null) self.store.setCenterText(txt);
+          if (txt !== null) {
+            self.pushHistory();
+            self.store.setCenterText(txt);
+          }
         });
       },
       onDoubleClickText: function (obj) {
         customPrompt(t('promptText'), obj.text).then(function (txt) {
-          if (txt !== null) self.store.update(obj.id, function (o) { if (o.type === 'text') o.text = txt; });
+          if (txt !== null) {
+            self.pushHistory();
+            self.store.update(obj.id, function (o) { if (o.type === 'text') o.text = txt; });
+          }
         });
       },
       onDraftChange: function (d) { self.draftArrow = d; },
       onDraftHighlighter: function (d) { self.draftHighlighter = d; },
-      getModifierClone: function () { return self.modifierClone; }
+      getModifierClone: function () { return self.modifierClone; },
+      commitHistorySnapshot: function (snap) { self.commitHistorySnapshot(snap); }
     });
 
     this.store.subscribe(function () {
@@ -1444,6 +1491,10 @@
     // Legacy DB/JSON may carry decimal font sizes; coerce to integers on load.
     normalizeSceneFontSizes(scene);
     this._cancelAutosave();
+    // Different scene = different timeline. Drop in-memory undo history so
+    // Undo right after Load doesn't restore the previous scene's state.
+    this.undoStack = [];
+    this.redoStack = [];
     this.store.replace(scene);
     this.view.offset = { x: scene.viewOffsetX || 0, y: scene.viewOffsetY || 0 };
     this.view.scale = scene.viewScale > 0 ? scene.viewScale : 1;
@@ -1452,7 +1503,63 @@
     this._updateTitle();
     this._updateSelectionUi();
     this._syncCenterFontInput();
+    this._updateUndoRedoUi();
     this._requestRender();
+  };
+  App.UNDO_LIMIT = 8;
+  App.prototype._cloneSceneData = function () {
+    return JSON.parse(JSON.stringify(this.store.get()));
+  };
+  App.prototype.pushHistory = function () {
+    this.commitHistorySnapshot(this._cloneSceneData());
+  };
+  App.prototype.commitHistorySnapshot = function (snap) {
+    this.undoStack.push(snap);
+    if (this.undoStack.length > App.UNDO_LIMIT) this.undoStack.shift();
+    // New action invalidates the redo branch — standard editor semantics.
+    this.redoStack = [];
+    this._updateUndoRedoUi();
+  };
+  App.prototype.undo = function () {
+    if (this.undoStack.length === 0) return;
+    var current = this._cloneSceneData();
+    this.redoStack.push(current);
+    if (this.redoStack.length > App.UNDO_LIMIT) this.redoStack.shift();
+    var prev = this.undoStack.pop();
+    this._applyHistorySnapshot(prev);
+    this._updateUndoRedoUi();
+  };
+  App.prototype.redo = function () {
+    if (this.redoStack.length === 0) return;
+    var current = this._cloneSceneData();
+    this.undoStack.push(current);
+    if (this.undoStack.length > App.UNDO_LIMIT) this.undoStack.shift();
+    var next = this.redoStack.pop();
+    this._applyHistorySnapshot(next);
+    this._updateUndoRedoUi();
+  };
+  App.prototype._applyHistorySnapshot = function (scene) {
+    // Preserve current pan/zoom so undo doesn't scroll the canvas.
+    scene.viewOffsetX = this.view.offset.x;
+    scene.viewOffsetY = this.view.offset.y;
+    scene.viewScale = this.view.scale;
+    this.store.replace(scene);
+    if (this.selectedId) {
+      var stillExists = false;
+      for (var i = 0; i < scene.objects.length; i++) {
+        if (scene.objects[i].id === this.selectedId) { stillExists = true; break; }
+      }
+      if (!stillExists) {
+        this.selectedId = null;
+        this.input.setSelected(null);
+      }
+    }
+  };
+  App.prototype._updateUndoRedoUi = function () {
+    var u = document.getElementById('btnUndo');
+    var r = document.getElementById('btnRedo');
+    if (u) { if (this.undoStack.length === 0) u.setAttribute('disabled', ''); else u.removeAttribute('disabled'); }
+    if (r) { if (this.redoStack.length === 0) r.setAttribute('disabled', ''); else r.removeAttribute('disabled'); }
   };
   App.AUTOSAVE_DELAY_MS = 120000;
   App.prototype._armAutosave = function () {
@@ -1553,9 +1660,16 @@
     byId('btnLang').addEventListener('click', function () { self._toggleLang(); });
     byId('btnEditCenter').addEventListener('click', function () {
       customPrompt(t('promptCenter'), self.store.get().centerText).then(function (txt) {
-        if (txt !== null) self.store.setCenterText(txt);
+        if (txt !== null) {
+          self.pushHistory();
+          self.store.setCenterText(txt);
+        }
       });
     });
+    var btnUndo = document.getElementById('btnUndo');
+    if (btnUndo) btnUndo.addEventListener('click', function () { self.undo(); });
+    var btnRedo = document.getElementById('btnRedo');
+    if (btnRedo) btnRedo.addEventListener('click', function () { self.redo(); });
     byId('btnFit').addEventListener('click', function () { self._fitToScreen(); });
     byId('btnZoomIn').addEventListener('click', function () {
       self.view.zoomAt({ x: self.view.width / 2, y: self.view.height / 2 }, 1.2);
@@ -1749,6 +1863,8 @@
     setTip('btnExportJson', 'exportJson');
     setTip('btnImportJson', 'importJson');
     setTip('btnEditCenter', 'editCenter');
+    setTip('btnUndo', 'undo');
+    setTip('btnRedo', 'redo');
     setTip('btnFit', 'fit');
     setTip('btnZoomIn', 'zoomIn');
     setTip('btnZoomOut', 'zoomOut');
@@ -1834,6 +1950,7 @@
     var self = this;
     customConfirm(t('confirmDeleteSelected')).then(function (ok) {
       if (!ok) return;
+      self.pushHistory();
       self.store.remove(self.selectedId);
       self.selectedId = null;
       self._updateSelectionUi();
@@ -2188,6 +2305,12 @@
       if (this._copySelected()) e.preventDefault();
     } else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
       if (this._pasteClone()) e.preventDefault();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+      e.preventDefault();
+      this.undo();
+    } else if ((e.ctrlKey || e.metaKey) && ((e.key === 'y' || e.key === 'Y') || ((e.key === 'z' || e.key === 'Z') && e.shiftKey))) {
+      e.preventDefault();
+      this.redo();
     } else if (e.altKey && e.code === 'KeyL') {
       e.preventDefault();
       this._openWorksModal();
@@ -2210,6 +2333,7 @@
   App.prototype._pasteClone = function () {
     var clip = this.clipboard;
     if (!clip) return false;
+    this.pushHistory();
     var offset = 20;
     var created;
     if (clip.type === 'arrow') {
@@ -2242,6 +2366,7 @@
     var center = this.view.screenToLogical({ x: this.view.width / 2, y: this.view.height / 2 });
     customPrompt(t('promptText'), '').then(function (text) {
       if (!text || !text.trim()) return;
+      self.pushHistory();
       var obj = self.store.addText(center, text.trim(), self.fontSize, self.color);
       self.selectedId = obj.id;
       self.input.setSelected(obj.id);
@@ -2289,6 +2414,7 @@
     var to = { x: from.x + lengthLogical, y: from.y };
     var fromC = clampToCanvas(from);
     var toC = { x: clampToCanvas(to).x, y: fromC.y };
+    this.pushHistory();
     var created = this.store.addArrow(fromC, toC, this.color, this.thickness);
     this.selectedId = created.id;
     this.input.setSelected(created.id);

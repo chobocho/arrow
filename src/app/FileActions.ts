@@ -63,6 +63,7 @@ export async function newScene(app: App): Promise<void> {
 export async function deleteSelected(app: App): Promise<void> {
   if (!app.selectedId) return;
   if (!(await customConfirm(t('confirmDeleteSelected')))) return;
+  app.pushHistory();
   app.store.remove(app.selectedId);
   app.selectedId = null;
   updateSelectionUi(app);

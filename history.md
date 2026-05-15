@@ -4,6 +4,32 @@
 
 ## 2026-05-15
 
+### 실행 취소 / 다시 실행 (Undo/Redo, 최대 8단계)
+
+- 동기: 잘못 추가/이동/삭제한 객체를 되돌릴 수 있어야 편집 사이클이 빨라짐. 영구 저장이나 무한 히스토리는 과한 비용 — 세션 메모리에 8단계만.
+- 데이터 모델: `SceneData`의 deep-clone 스냅샷 스택 2개 (`undoStack`, `redoStack`). 사용자 액션 직전에 push, 새 액션이 들어오면 `redoStack` 비움. 8 초과 시 `shift()`로 가장 오래된 항목 폐기.
+- 캡처 시점(모두 "변경 직전" 보장):
+  - `InputHandler.beginPointer`의 객체 hit 분기 — pending 스냅샷을 보관해두고, `movePointer`에서 실제로 mutating drag(move/resize)가 첫 프레임을 그릴 때 `flushPendingHistory`로 commit. 클릭만 하고 드래그 안 한 경우 `endPointer`에서 폐기 → no-op undo 진입 방지.
+  - Clone-and-drag(Ctrl/⌘ + 객체 본체 드래그): 클론 자체가 mutation이므로 즉시 commit.
+  - `endPointer`의 draft-arrow / draft-highlighter commit 직전.
+  - `beginPointer`의 text 모드 dialog 콜백, addText 직전.
+  - `KeyboardActions.insertArrow`, `insertTextAtViewportCenter`, `pasteClone` 진입부.
+  - `FileActions.deleteSelected` 진입부.
+  - `App` 콜백 `onDoubleClickEmpty`(중심 텍스트), `onDoubleClickText`(텍스트 내용) dialog OK 직후.
+  - `UiBindings`의 `#btnEditCenter` 클릭 dialog OK 직후.
+- 적용/복구: `applyHistorySnapshot`이 pan/zoom은 현재 값으로 유지(스크롤은 되돌리지 않음). 선택된 객체가 사라졌으면 selection clear.
+- 폐기 시점: `adoptScene`(DB 로드/`newScene`) 시 두 스택 모두 비움 — 다른 timeline.
+- UI:
+  - `index.html` 툴바 "주제 편집" 다음에 ↩️ Undo / ↪️ Redo 버튼 추가. 초기 `disabled`, 스택 변화마다 `updateUndoRedoUi`로 토글.
+  - `UiBindings`에서 setTip + click 핸들러 연결.
+  - i18n: `undo`/`redo` 한·영 키 추가, `helpKeys`에 단축키 안내 추가.
+- 단축키(`KeyboardActions.onKey`):
+  - `Ctrl/⌘ + Z` (shift 아님) → `undo()`
+  - `Ctrl/⌘ + Y` 또는 `Ctrl/⌘ + Shift + Z` → `redo()`
+- 번들 동기화(`dist/bundle.js`): 모든 변경 미러 — `App.UNDO_LIMIT`, `_cloneSceneData`, `pushHistory`, `commitHistorySnapshot`, `undo`, `redo`, `_applyHistorySnapshot`, `_updateUndoRedoUi`. `InputHandler`에 `pendingHistorySnap`/`_snapshotScene`/`_flushPendingHistory`. `_onKey`에 Ctrl+Z/Y 분기.
+- 테스트 추가(3건): pushHistory/undo/redo 라운드트립, 8단계 cap, commit이 redoStack을 비움. 총 40 → 43개 통과.
+- 검증: `tsc --noEmit` 무에러, `node test/run_node.js` 43/43, `./build.sh`로 `release/index.html` 104,880 bytes.
+
 ### 색상 입력에도 Enter / change → 선택 버튼 포커스 이양 적용
 
 - 동기: 글자/주제/굵기 입력과 통일성. 기존 `colorEl` `change` 핸들러는 `.blur()`로 body에 포커스를 떨궜는데, 명시적으로 `#btnSelect`로 보내 다른 입력과 동일한 destination 사용.

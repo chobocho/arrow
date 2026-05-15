@@ -37,6 +37,12 @@ export function onKey(app: App, e: KeyboardEvent): void {
     if (copySelected(app)) e.preventDefault();
   } else if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) {
     if (pasteClone(app)) e.preventDefault();
+  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+    e.preventDefault();
+    app.undo();
+  } else if ((e.ctrlKey || e.metaKey) && ((e.key === 'y' || e.key === 'Y') || ((e.key === 'z' || e.key === 'Z') && e.shiftKey))) {
+    e.preventDefault();
+    app.redo();
   } else if (e.altKey && e.code === 'KeyL') {
     e.preventDefault();
     openWorksModal(app);
@@ -67,6 +73,7 @@ export function copySelected(app: App): boolean {
 export function pasteClone(app: App): boolean {
   const clip = app.clipboard;
   if (!clip) return false;
+  app.pushHistory();
   const offset = 20;
   let created: SceneObject;
   if (clip.type === 'arrow') {
@@ -96,6 +103,7 @@ export function insertTextAtViewportCenter(app: App): void {
   const center = app.view.screenToLogical({ x: app.view.width / 2, y: app.view.height / 2 });
   void customPrompt(t('promptText'), '').then((text) => {
     if (!text || !text.trim()) return;
+    app.pushHistory();
     const obj = app.store.addText(center, text.trim(), app.fontSize, app.color);
     app.selectedId = obj.id;
     app.input.setSelected(obj.id);
@@ -135,6 +143,7 @@ export function insertArrow(app: App): void {
   const to: Vec = { x: from.x + lengthLogical, y: from.y };
   const fromC = clampToCanvas(from);
   const toC: Vec = { x: clampToCanvas(to).x, y: fromC.y };
+  app.pushHistory();
   const created = app.store.addArrow(fromC, toC, app.color, app.thickness);
   app.selectedId = created.id;
   app.input.setSelected(created.id);

@@ -18,6 +18,7 @@ HTML5 Canvas + TypeScript 기반의 변형 마인드맵 웹앱입니다.
 - 🎨 **16색 빠른 팔레트** (데스크톱) + 표준 색상 선택기
 - 🔍 **확대/축소**: 마우스 휠, ＋/－ 버튼, 모바일 두 손가락 핀치 줌
 - 📐 **고정 4096×4096 캔버스** + 자유 패닝 (Shift+드래그 / 가운데 버튼 / "이동" 모드)
+- ⏪ **실행 취소 / 다시 실행**: 최근 8단계까지 기억. `Ctrl/⌘+Z`(취소), `Ctrl/⌘+Y` 또는 `Ctrl+Shift+Z`(다시). 툴바의 ↩️ / ↪️ 버튼으로도 가능
 - 📋 **객체 클립보드**: `Ctrl/⌘ + C / V`로 선택 객체 복제 (내부 클립보드, 좌표 어긋남 자동)
 - 🪄 **Ctrl + 드래그 = 복제 이동**: 본체를 끌면 즉시 복제 후 클론을 끌어감, 원본은 제자리
   - 모바일: 좌측 하단 둥근 **Ctrl 토글 버튼**으로 동일 동작 (형광펜 모드에서는 직선 모드 토글 겸용)
@@ -114,7 +115,7 @@ arrow/
 │  ├─ storage/IndexedDBStore.ts
 │  ├─ i18n/lang.ts
 │  └─ utils/geometry.ts
-├─ test/                     # 단위 테스트 (브라우저 + Node, 40개 케이스)
+├─ test/                     # 단위 테스트 (브라우저 + Node, 43개 케이스)
 │  ├─ test_runner.html
 │  ├─ test_arrow.js
 │  └─ run_node.js
@@ -155,6 +156,8 @@ arrow/
 - `Enter` — 현재 화면 중앙에 글자 추가
 - `Delete` / `Backspace` — 선택 객체 삭제
 - `Ctrl/⌘ + C` / `Ctrl/⌘ + V` — 선택 객체 복사 / 붙여넣기 (내부 클립보드)
+- `Ctrl/⌘ + Z` — 실행 취소 (최근 8단계)
+- `Ctrl/⌘ + Y` / `Ctrl + Shift + Z` — 다시 실행
 - `Ctrl/⌘ + S` — 저장
 - `Alt + N` — 새 문서
 - `Alt + L` — 작업 목록 모달 열기
@@ -165,7 +168,7 @@ arrow/
 ## 테스트
 
 ```sh
-# Node — 핵심 모듈 (geometry / SceneStore / CanvasView / i18n) 40개 케이스
+# Node — 핵심 모듈 (geometry / SceneStore / CanvasView / i18n / undo·redo) 43개 케이스
 node test/run_node.js
 
 # 브라우저 — 전체 테스트 러너

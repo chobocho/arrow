@@ -40,9 +40,16 @@ export function bindUi(app: App): void {
   ($('#btnLang')).addEventListener('click', () => toggleLang(app));
   ($('#btnEditCenter')).addEventListener('click', () => {
     void customPrompt(t('promptCenter'), app.store.get().centerText).then((txt) => {
-      if (txt !== null) app.store.setCenterText(txt);
+      if (txt !== null) {
+        app.pushHistory();
+        app.store.setCenterText(txt);
+      }
     });
   });
+  const btnUndo = document.getElementById('btnUndo');
+  if (btnUndo) btnUndo.addEventListener('click', () => app.undo());
+  const btnRedo = document.getElementById('btnRedo');
+  if (btnRedo) btnRedo.addEventListener('click', () => app.redo());
   ($('#btnFit')).addEventListener('click', () => fitToScreen(app));
   ($('#btnZoomIn')).addEventListener('click', () => {
     app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, 1.2);
@@ -240,6 +247,8 @@ export function applyLangToUi(app: App): void {
   setTip('btnExportJson', 'exportJson');
   setTip('btnImportJson', 'importJson');
   setTip('btnEditCenter', 'editCenter');
+  setTip('btnUndo', 'undo');
+  setTip('btnRedo', 'redo');
   setTip('btnFit', 'fit');
   setTip('btnZoomIn', 'zoomIn');
   setTip('btnZoomOut', 'zoomOut');

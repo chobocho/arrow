@@ -1,7 +1,7 @@
 import { Vec, clampToCanvas, vecDist } from '../utils/geometry.js';
 import { CanvasView } from '../canvas/CanvasView.js';
 import { SceneStore, HitHandle } from '../models/SceneStore.js';
-import { ArrowObject, HighlighterObject, SceneObject, TextObject } from '../models/types.js';
+import { ArrowObject, HighlighterObject, SceneData, SceneObject, TextObject } from '../models/types.js';
 import { customPrompt } from '../ui/CustomPrompt.js';
 import { t } from '../i18n/lang.js';
 
@@ -23,6 +23,9 @@ export interface InputCallbacks {
   // The Ctrl/⌘ physical key already counts on desktop; this is the touch
   // equivalent so mobile users can also clone-by-drag (TODO #15/#16).
   getModifierClone?: () => boolean;
+  // Push a pre-mutation scene snapshot onto the undo stack. Called from the
+  // InputHandler at gesture/commit boundaries — see pendingHistorySnap below.
+  commitHistorySnapshot?: (snap: SceneData) => void;
 }
 
 interface DragState {
@@ -52,6 +55,10 @@ export class InputHandler {
   private lastTapTime = 0;
   private lastTapPos: Vec = { x: 0, y: 0 };
   private pinch: { startDist: number; startScale: number; startCenter: Vec; lastCenter: Vec } | null = null;
+  // Pre-mutation scene snapshot captured at gesture start, committed to the
+  // undo stack only when the gesture actually changes the scene. This avoids
+  // polluting undo with no-op entries from click-without-drag.
+  private pendingHistorySnap: SceneData | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -92,6 +99,22 @@ export class InputHandler {
 
   private toleranceLogical(): number {
     return 12 / this.view.scale;
+  }
+
+  // Deep-clone the current scene into a snapshot suitable for undo. Cheap
+  // enough at typical scene sizes; correctness > micro-optimization.
+  private snapshotScene(): SceneData {
+    return JSON.parse(JSON.stringify(this.store.get())) as SceneData;
+  }
+
+  // Push the pending snapshot to undo iff one was stashed at gesture start.
+  // Called from movePointer the moment a mutating drag first changes the
+  // scene, and from endPointer right before draft commits.
+  private flushPendingHistory(): void {
+    if (this.pendingHistorySnap && this.cb.commitHistorySnapshot) {
+      this.cb.commitHistorySnapshot(this.pendingHistorySnap);
+    }
+    this.pendingHistorySnap = null;
   }
 
   // --- Mouse handlers ---
@@ -255,6 +278,8 @@ export class InputHandler {
       this.cb.onSelect(this.selectedId);
       const handle: HitHandle = hit.handle;
       if (handle === 'arrow-from' || handle === 'arrow-to') {
+        // Stash snapshot for resize-arrow; flushed on first mutating move.
+        this.pendingHistorySnap = this.snapshotScene();
         this.dragging = {
           kind: 'resize-arrow',
           objectId: hit.object.id,
@@ -267,6 +292,8 @@ export class InputHandler {
       }
       if (handle === 'text-resize') {
         const t = hit.object as TextObject;
+        // Stash snapshot for resize-text; flushed on first mutating move.
+        this.pendingHistorySnap = this.snapshotScene();
         this.dragging = {
           kind: 'resize-text',
           objectId: hit.object.id,
@@ -281,6 +308,15 @@ export class InputHandler {
       // operates on the new clone — leaving the original in place (TODO #16).
       // Resize handles above are skipped so reshaping doesn't accidentally
       // duplicate.
+      if (wantsClone) {
+        // Cloning IS a mutation. Push undo immediately (snapshot is the
+        // pre-clone scene). The subsequent move on the clone is treated as
+        // part of the same undo step — undoing removes the clone entirely.
+        if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
+      } else {
+        // Move-only: stash, flush on first mutating move.
+        this.pendingHistorySnap = this.snapshotScene();
+      }
       const target = wantsClone ? this.cloneForDrag(hit.object) : hit.object;
       if (wantsClone) {
         this.selectedId = target.id;
@@ -326,6 +362,7 @@ export class InputHandler {
       this.dragging = { kind: 'none', startLogical: logical, startScreen: screen, lastScreen: screen };
       void customPrompt(t('promptText'), '').then((text) => {
         if (text && text.trim()) {
+          if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
           const obj = this.store.addText(logical, text.trim(), this.cb.getFontSize(), this.cb.getColor());
           this.selectedId = obj.id;
           this.cb.onSelect(obj.id);
@@ -382,6 +419,7 @@ export class InputHandler {
       return;
     }
     if (drag.kind === 'resize-arrow' && drag.objectId) {
+      this.flushPendingHistory();
       const end = drag.origin?.end as 'arrow-from' | 'arrow-to';
       this.store.update(drag.objectId, (o) => {
         if (o.type !== 'arrow') return;
@@ -391,6 +429,7 @@ export class InputHandler {
       return;
     }
     if (drag.kind === 'move-object' && drag.objectId && drag.origin) {
+      this.flushPendingHistory();
       const startLogical = drag.startLogical;
       const dxLog = logical.x - startLogical.x;
       const dyLog = logical.y - startLogical.y;
@@ -410,6 +449,7 @@ export class InputHandler {
       return;
     }
     if (drag.kind === 'resize-text' && drag.objectId && drag.origin) {
+      this.flushPendingHistory();
       const orig = drag.origin as { fontSize: number; pos: Vec };
       const ratio = Math.max(
         0.3,
@@ -432,6 +472,7 @@ export class InputHandler {
       const draft: ArrowObject = drag.origin.draft;
       const len = vecDist(draft.from, draft.to);
       if (len > 4 / this.view.scale) {
+        if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
         const created = this.store.addArrow(draft.from, draft.to, draft.color, draft.thickness);
         this.selectedId = created.id;
         this.cb.onSelect(created.id);
@@ -447,6 +488,7 @@ export class InputHandler {
       let total = 0;
       for (let i = 1; i < draft.points.length; i++) total += vecDist(draft.points[i - 1], draft.points[i]);
       if (draft.points.length === 1 || total > 4 / this.view.scale) {
+        if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
         const created = this.store.addHighlighter(draft.points, draft.color, draft.thickness);
         this.selectedId = created.id;
         this.cb.onSelect(created.id);
@@ -454,6 +496,9 @@ export class InputHandler {
       this.cb.onDraftHighlighter(null);
       // Stay in highlighter mode for consecutive strokes.
     }
+    // Pending snapshot belonged to a click-without-drag (or a drag that didn't
+    // mutate the scene). Discard it — no undo entry needed.
+    this.pendingHistorySnap = null;
     this.dragging = { kind: 'none', startLogical: { x: 0, y: 0 }, startScreen: { x: 0, y: 0 }, lastScreen: { x: 0, y: 0 } };
     this.cb.onChange();
   }

@@ -74,6 +74,14 @@ export class App {
   private autosaveTimer: number | null = null;
   private static readonly AUTOSAVE_DELAY_MS = 120_000;
 
+  // Snapshot-based undo/redo. Each entry is a deep clone of SceneData captured
+  // *before* a mutating user operation. Capped to UNDO_LIMIT — beyond that the
+  // oldest entry is dropped. View (pan/zoom) is intentionally preserved across
+  // undo so scrolling is not a step the user can accidentally undo.
+  private static readonly UNDO_LIMIT = 8;
+  undoStack: SceneData[] = [];
+  redoStack: SceneData[] = [];
+
   constructor(root: HTMLElement) {
     this.canvas = root.querySelector('#mainCanvas') as HTMLCanvasElement;
     if (!this.canvas) throw new Error('canvas #mainCanvas not found');
@@ -95,17 +103,24 @@ export class App {
       },
       onDoubleClickEmpty: () => {
         void customPrompt(t('promptCenter'), this.store.get().centerText).then((txt) => {
-          if (txt !== null) this.store.setCenterText(txt);
+          if (txt !== null) {
+            this.pushHistory();
+            this.store.setCenterText(txt);
+          }
         });
       },
       onDoubleClickText: (obj) => {
         void customPrompt(t('promptText'), obj.text).then((txt) => {
-          if (txt !== null) this.store.update(obj.id, (o) => { if (o.type === 'text') o.text = txt; });
+          if (txt !== null) {
+            this.pushHistory();
+            this.store.update(obj.id, (o) => { if (o.type === 'text') o.text = txt; });
+          }
         });
       },
       onDraftChange: (draft) => { this.draftArrow = draft; },
       onDraftHighlighter: (draft) => { this.draftHighlighter = draft; },
       getModifierClone: () => this.modifierClone,
+      commitHistorySnapshot: (snap) => { this.commitHistorySnapshot(snap); },
     });
 
     this.store.subscribe(() => {
@@ -163,6 +178,10 @@ export class App {
     // can assume integer math.
     normalizeSceneFontSizes(scene);
     this.cancelAutosave();
+    // Different scene = different timeline. Drop any in-memory undo history so
+    // pressing Undo right after Load doesn't restore the previous scene's state.
+    this.undoStack = [];
+    this.redoStack = [];
     this.store.replace(scene);
     this.view.offset = { x: scene.viewOffsetX, y: scene.viewOffsetY };
     this.view.scale = scene.viewScale > 0 ? scene.viewScale : 1;
@@ -170,7 +189,70 @@ export class App {
     this.dirty = false;
     updateTitle(this);
     syncCenterFontInput(this);
+    this.updateUndoRedoUi();
     this.requestRender();
+  }
+
+  // Capture the current scene state and push it onto the undo stack. Use this
+  // *immediately before* a synchronous mutation so the snapshot represents the
+  // pre-change state. For drags, prefer commitHistorySnapshot() which lets the
+  // InputHandler stash a snapshot at gesture start and only commit it once a
+  // real mutation occurs (avoids no-op undo entries from click-without-drag).
+  pushHistory(): void {
+    this.commitHistorySnapshot(this.cloneSceneData());
+  }
+
+  commitHistorySnapshot(snap: SceneData): void {
+    this.undoStack.push(snap);
+    if (this.undoStack.length > App.UNDO_LIMIT) this.undoStack.shift();
+    // New action invalidates the redo branch — standard editor semantics.
+    this.redoStack = [];
+    this.updateUndoRedoUi();
+  }
+
+  undo(): void {
+    if (this.undoStack.length === 0) return;
+    const current = this.cloneSceneData();
+    this.redoStack.push(current);
+    if (this.redoStack.length > App.UNDO_LIMIT) this.redoStack.shift();
+    const prev = this.undoStack.pop() as SceneData;
+    this.applyHistorySnapshot(prev);
+    this.updateUndoRedoUi();
+  }
+
+  redo(): void {
+    if (this.redoStack.length === 0) return;
+    const current = this.cloneSceneData();
+    this.undoStack.push(current);
+    if (this.undoStack.length > App.UNDO_LIMIT) this.undoStack.shift();
+    const next = this.redoStack.pop() as SceneData;
+    this.applyHistorySnapshot(next);
+    this.updateUndoRedoUi();
+  }
+
+  private cloneSceneData(): SceneData {
+    return JSON.parse(JSON.stringify(this.store.get())) as SceneData;
+  }
+
+  // Replace the scene with a historical snapshot. Pan/zoom is intentionally
+  // kept at its current value so undo doesn't scroll the canvas. If the
+  // selected object no longer exists in the restored scene, clear selection.
+  private applyHistorySnapshot(scene: SceneData): void {
+    scene.viewOffsetX = this.view.offset.x;
+    scene.viewOffsetY = this.view.offset.y;
+    scene.viewScale = this.view.scale;
+    this.store.replace(scene);
+    if (this.selectedId && !scene.objects.find((o) => o.id === this.selectedId)) {
+      this.selectedId = null;
+      this.input.setSelected(null);
+    }
+  }
+
+  updateUndoRedoUi(): void {
+    const u = document.getElementById('btnUndo');
+    const r = document.getElementById('btnRedo');
+    if (u) u.toggleAttribute('disabled', this.undoStack.length === 0);
+    if (r) r.toggleAttribute('disabled', this.redoStack.length === 0);
   }
 
   armAutosave(): void {
