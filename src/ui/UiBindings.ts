@@ -98,9 +98,21 @@ export function bindUi(app: App): void {
     app.color = colorEl.value;
     updatePaletteActive(colorEl.value);
   });
-  // After the native color picker commits, hand focus back to the body so
-  // keyboard shortcuts (+ to insert arrow, Enter, Delete, ...) work again.
-  colorEl.addEventListener('change', () => { colorEl.blur(); });
+  // After the native color picker commits, hand focus to the Select-mode
+  // button so keyboard shortcuts (+ / Enter / Delete / V·A·T·G·H) resume —
+  // same destination as the size / thickness inputs.
+  colorEl.addEventListener('change', () => {
+    const btnSelect = document.getElementById('btnSelect');
+    btnSelect?.focus();
+  });
+  // Some browsers also let users commit the color with Enter while the input
+  // itself has focus (without opening the picker). Mirror the same handoff.
+  colorEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const btnSelect = document.getElementById('btnSelect');
+    btnSelect?.focus();
+  });
 
   const thickEl = $('#inputThickness') as HTMLInputElement;
   thickEl.value = String(app.thickness);

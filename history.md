@@ -4,6 +4,15 @@
 
 ## 2026-05-15
 
+### 색상 입력에도 Enter / change → 선택 버튼 포커스 이양 적용
+
+- 동기: 글자/주제/굵기 입력과 통일성. 기존 `colorEl` `change` 핸들러는 `.blur()`로 body에 포커스를 떨궜는데, 명시적으로 `#btnSelect`로 보내 다른 입력과 동일한 destination 사용.
+- 변경(`src/ui/UiBindings.ts`):
+  - `colorEl` `change` 핸들러를 `colorEl.blur()` → `document.getElementById('btnSelect')?.focus()`로 변경. 네이티브 컬러 피커가 commit될 때 자동으로 선택 버튼으로 이양.
+  - `colorEl` `keydown` 추가: Enter면 `preventDefault` 후 `#btnSelect.focus()` — 일부 브라우저는 피커를 열지 않고 입력 자체에서 Enter를 받기도 함.
+- 번들 동기화(`dist/bundle.js`): 동일 변경.
+- 검증: `tsc --noEmit` 무에러, `node test/run_node.js` 40/40 통과, `./build.sh`로 `release/index.html` 99,044 bytes 재생성.
+
 ### 굵기 입력에도 Enter → 선택 버튼 포커스 이양 적용
 
 - 동기: 글자/주제 크기 입력에 적용한 Enter→focus 이양을 굵기(`inputThickness`)에도 동일하게.

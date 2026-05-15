@@ -1426,9 +1426,21 @@
       self.color = colorEl.value;
       updatePaletteActive(colorEl.value);
     });
-    // After the native color picker commits, hand focus back to the body so
-    // keyboard shortcuts (+ to insert arrow, Enter, Delete, ...) work again.
-    colorEl.addEventListener('change', function () { colorEl.blur(); });
+    // After the native color picker commits, hand focus to the Select-mode
+    // button so keyboard shortcuts (+ / Enter / Delete / V·A·T·G·H) resume —
+    // same destination as the size / thickness inputs.
+    colorEl.addEventListener('change', function () {
+      var btnSelect = document.getElementById('btnSelect');
+      if (btnSelect) btnSelect.focus();
+    });
+    // Some browsers also let users commit the color with Enter while the
+    // input itself has focus. Mirror the same handoff.
+    colorEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var btnSelect = document.getElementById('btnSelect');
+      if (btnSelect) btnSelect.focus();
+    });
     var thickEl = byId('inputThickness');
     thickEl.value = String(this.thickness);
     thickEl.addEventListener('input', function () { self.thickness = parseFloat(thickEl.value) || 4; });
