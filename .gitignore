@@ -6,4 +6,5 @@ node_modules/
 
 # Executable files
 upload.sh
+abuild.sh 
 
