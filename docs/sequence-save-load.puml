@@ -1,5 +1,5 @@
 @startuml sequence-save-load
-title Sequence — Save to IndexedDB and auto-restore on next visit
+title Sequence - Save, autosave, and load-with-unsaved guard
 
 skinparam shadowing false
 skinparam sequence {
@@ -13,45 +13,90 @@ skinparam sequence {
 
 actor User
 participant App as app
+participant FileActions as fa
 participant CustomPrompt as prompt
 participant SceneStore as store
 participant IndexedDBStore as db
 participant IndexedDB as idb
 
-== Save flow (Ctrl+S or Save button) ==
+== Manual save (Ctrl+S or Save button) ==
 User -> app : Ctrl+S
-app -> app : ensureName()
-alt no name yet
-  app -> prompt : customPrompt("Work name")
+app -> fa : save(app)
+fa -> fa : ensureName(app)
+alt name is a placeholder
+  fa -> prompt : customPrompt("Work name")
   prompt --> User : modal
-  User -> prompt : type name, press Enter
-  prompt --> app : "My Map"
-  app -> store : setName("My Map")
+  User -> prompt : type name, Enter
+  prompt --> fa : "My Map"
+  fa -> store : setName("My Map")
 end
-app -> store : get()
-store --> app : SceneData
-app -> app : copy view offset / scale into scene
-app -> db : saveScene(scene)
-db -> idb : put(scene) in "scenes" store
+fa -> store : get()
+store --> fa : SceneData
+fa -> fa : copy view offset / scale into scene
+fa -> db : saveScene(scene)
+db -> idb : put(scene) in "scenes"
 idb --> db : ok
-db --> app : ok
-app -> db : setMeta("lastSceneId", scene.id)
+fa -> db : setMeta("lastSceneId", scene.id)
 db -> idb : put(meta)
-idb --> db : ok
-app -> app : dirty = false, flashStatus("Saved")
+fa -> app : dirty = false, cancelAutosave()
+fa -> app : flashStatus("Saved")
 
-== Restore on next visit ==
+== Background autosave (120s after first edit) ==
+note over app
+  First object change after a clean
+  state arms a 120s timer via armAutosave().
+  Further changes within the window do NOT
+  reset the timer (bounded staleness).
+end note
+app -> app : autosave timer fires
+app -> store : get(), stamp view + scale
+app -> db : saveScene(scene)
+db -> idb : put(scene)
+app -> db : setMeta("lastSceneId", scene.id)
+app -> app : dirty = false (silent, no flash)
+
+== Load a different work with unsaved edits ==
+User -> app : click Load on a works-modal entry
+app -> fa : confirmUnsaved(app)
+alt dirty
+  fa -> prompt : customChoice("Unsaved changes...", [Cancel, Don't Save, Save])
+  prompt --> User : 3-button dialog
+  alt user picks "Cancel" / Esc
+    User -> prompt : Cancel
+    prompt --> fa : null
+    fa --> app : false (abort load)
+  else user picks "Don't Save"
+    User -> prompt : Don't Save
+    prompt --> fa : "discard"
+    fa --> app : true (proceed)
+  else user picks "Save"
+    User -> prompt : Save
+    prompt --> fa : "save"
+    fa -> fa : save(app)\n(may sub-prompt for name)
+    fa --> app : true if save succeeded (dirty == false)
+  end
+else clean
+  fa --> app : true (no prompt)
+end
+alt proceed
+  app -> db : loadScene(id)
+  db -> idb : get(id)
+  idb --> db : SceneData
+  db --> app : SceneData
+  app -> store : replace(scene)
+  store -> store : emit()
+  app -> app : restore view, render scene
+end
+
+== First-visit autorestore ==
 User -> app : open page
 app -> db : getMeta("lastSceneId")
 db -> idb : get(meta)
 idb --> db : "scene_abc"
-db --> app : "scene_abc"
 app -> db : loadScene("scene_abc")
 db -> idb : get("scene_abc")
 idb --> db : SceneData
-db --> app : SceneData
 app -> store : replace(scene)
-store -> store : emit()
-app -> app : restore view offset / scale,\nrender scene
+app -> app : restore view + scale, render
 
 @enduml

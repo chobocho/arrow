@@ -1,5 +1,5 @@
 @startuml class-diagram
-title Arrow Mind Map — Module / Class Overview
+title Arrow Mind Map - Module / Class Overview
 
 skinparam classAttributeIconSize 0
 skinparam shadowing false
@@ -33,7 +33,13 @@ package "app (orchestrator)" {
     + modifierClone : boolean
     + dirty : boolean
     + worksList : SceneSummary[]
+    + undoStack : SceneData[]
+    + redoStack : SceneData[]
     + adoptScene(scene)
+    + pushHistory() / commitHistorySnapshot(snap)
+    + undo() / redo()
+    + updateUndoRedoUi()
+    + armAutosave() / cancelAutosave() / autosaveNow()
     + getSelectedObject()
     + requestRender()
     + flashStatus(msg)
@@ -44,6 +50,8 @@ package "app (orchestrator)" {
     + pasteClone(app) : boolean
     + insertArrow(app)
     + insertTextAtViewportCenter(app)
+    + insertChain(app, raw) : number
+    + CHAIN_MAX_SEGMENTS = 10
   }
   class FileActions <<module>> {
     + save(app) / saveAs(app)
@@ -52,6 +60,7 @@ package "app (orchestrator)" {
     + importJsonClick() / handleImportFile(app, e)
     + fitToScreen(app)
     + ensureName(app)
+    + confirmUnsaved(app) : Promise<boolean>
   }
 }
 
@@ -66,21 +75,28 @@ package "ui" {
     + toggleLang(app)
     + syncCenterFontInput(app)
     + syncFontInputToSelection(app)
+    + syncColorInputToSelection(app)
+    + syncThicknessInputToSelection(app)
   }
   class Modals <<module>> {
-    + openHelpModal(app)
-    + openWorksModal(app)
-    + renderWorks(app)
-    + refreshWorks(app)
+    + openHelpModal(app) / closeHelpModal(app)
+    + openWorksModal(app) / closeWorksModal(app)
+    + renderWorks(app) / refreshWorks(app)
     + loadWork(app, id)
-    + renameWork(app, w)
-    + deleteWork(app, w)
+    + renameWork(app, w) / deleteWork(app, w)
   }
   class CustomPrompt <<module>> {
-    + customPrompt(msg, default) : Promise<string?>
+    + customPrompt(msg, default, placeholder) : Promise<string?>
     + customConfirm(msg) : Promise<boolean>
+    + customChoice(msg, buttons) : Promise<string?>
     + ensureModalStyles()
   }
+  class ChoiceButton <<interface>> {
+    label : string
+    value : string
+    variant? : "primary" | "default"
+  }
+  CustomPrompt ..> ChoiceButton : accepts
 }
 
 package "canvas" {
@@ -99,9 +115,9 @@ package "canvas" {
     - ctx : CanvasRenderingContext2D
     - view : CanvasView
     + render(scene, opts)
-    + renderToImage(scene) : HTMLCanvasElement
+    + renderToImage(scene, padding) : HTMLCanvasElement
     - drawCenter / drawArrow / drawText
-    - drawHighlighter / drawSelection
+    - drawHighlighter / drawHandle / drawGrid
   }
 }
 
@@ -151,11 +167,14 @@ package "input" {
     - dragging : DragState
     - selectedId : string?
     - pinch : PinchState?
+    - pendingHistorySnap : SceneData?
     + setSelected(id)
     - beginPointer(screen, logical, wantsClone)
     - movePointer(screen) / endPointer(screen)
     - cloneForDrag(obj) : SceneObject
     - handleDoubleTap(logical)
+    - snapshotScene() : SceneData
+    - flushPendingHistory()
   }
   enum EditorMode {
     select
@@ -174,6 +193,15 @@ package "storage" {
     + renameScene(id, name) / deleteScene(id)
     + setMeta(k, v) / getMeta(k)
     + exportAll() / importAll(payload, merge)
+  }
+  class ArrowFile <<module>> {
+    + parseArrowFile(text, sceneName) : SceneData?
+    .. layout ..
+    - tokenize(content) : Parsed?
+    - buildTree(parsed)
+    - layoutTree(topicNode)
+    - buildObjects(...)
+    - recenterToCanvas(objects)
   }
 }
 
@@ -210,14 +238,16 @@ KeyboardActions ..> App : mutates fields
 ' Inter-module collaboration.
 UiBindings ..> Modals : opens help / works
 UiBindings ..> FileActions : toolbar handlers
+UiBindings ..> KeyboardActions : chain popup
 KeyboardActions ..> FileActions : Ctrl+S / Alt+N / Delete
 KeyboardActions ..> Modals : F1 / Alt+L
-Modals ..> FileActions : delete current work triggers newScene
+Modals ..> FileActions : confirmUnsaved before load
+FileActions ..> ArrowFile : .arrow import
 
 ' Shared services.
-UiBindings ..> CustomPrompt : center / text prompts
+UiBindings ..> CustomPrompt : center / text / chain prompts
 Modals ..> CustomPrompt : rename / confirm
-FileActions ..> CustomPrompt : ensure name / unsaved confirms
+FileActions ..> CustomPrompt : ensure name / customChoice
 KeyboardActions ..> CustomPrompt : insert text
 
 UiBindings ..> lang : i18n
@@ -231,33 +261,47 @@ InputHandler --> CanvasView
 InputHandler --> SceneStore
 InputHandler ..> EditorMode
 InputHandler ..> CustomPrompt : prompts text on click
+InputHandler ..> App : commitHistorySnapshot
 
 SceneStore o-- SceneData
 IndexedDBStore ..> SceneData : persists
+ArrowFile ..> SceneData : produces
 
 note right of App
-  Slim orchestrator (~190 LOC).
-  Owns shared state and lifecycle;
-  toolbar / modal / file / keyboard
-  logic lives in the split modules
+  Slim orchestrator (~340 LOC).
+  Owns shared state, undo/redo
+  history (8-step cap), and
+  autosave timer.  Toolbar /
+  modal / file / keyboard logic
+  lives in the split modules
   (free functions taking App as
   first argument).
 end note
 
 note bottom of InputHandler
-  Ctrl/⌘ (or virtual Ctrl toggle
-  on mobile) + body-handle drag
-  clones the object via
-  cloneForDrag, then drags the
-  clone. Resize handles are
-  excluded from cloning.
+  Captures a scene snapshot on
+  pointer-down (pending), and
+  flushes it to App.commitHistorySnapshot
+  the first frame a drag actually
+  mutates the scene -- so a click
+  without movement does not push
+  a no-op undo step.
 end note
 
 note bottom of SceneStore
   Single source of truth.
   Mutations call emit() so
-  Renderer and DB layers
+  Renderer, autosave timer,
+  and UI sync helpers all
   observe scene changes.
+end note
+
+note right of CustomPrompt
+  customChoice powers the
+  "Save / Don't Save / Cancel"
+  dialog used before any action
+  that would replace the current
+  scene (loadWork, .arrow import).
 end note
 
 @enduml

@@ -1,5 +1,5 @@
 @startuml sequence-draw-arrow
-title Sequence — Drawing an arrow by click-and-drag
+title Sequence - Drawing an arrow (click-and-drag, with history snapshot)
 
 skinparam shadowing false
 skinparam sequence {
@@ -19,20 +19,21 @@ participant SceneStore as store
 participant App as app
 participant Renderer as renderer
 
-== Begin draft ==
+== Pointer down: capture history, start draft ==
 User -> canvas : mousedown (empty area, mode=arrow)
 canvas -> ih : onMouseDown(event)
 ih -> view : screenToLogical(screen)
 view --> ih : logical Vec
 ih -> store : hitTest(logical, tolerance)
 store --> ih : { object: null }
+ih -> ih : snapshotScene() -> pendingHistorySnap\n(deep clone of current SceneData)
 ih -> ih : create draft ArrowObject\n(from = to = logical)
 ih -> app : onDraftChange(draft)
 ih -> app : onChange()
 app -> renderer : render(scene, { draftArrow })
-renderer --> canvas : ctx.drawImage / strokes
+renderer --> canvas : ctx strokes
 
-== Drag to extend ==
+== Drag: extend draft, no commit yet ==
 loop while pointer moves
   User -> canvas : mousemove
   canvas -> ih : onMouseMove(event)
@@ -44,25 +45,33 @@ loop while pointer moves
   app -> renderer : render(scene, { draftArrow })
 end
 
-== Commit on release ==
+== Release: commit draft, flush snapshot ==
 User -> canvas : mouseup
 canvas -> ih : onMouseUp(event)
 ih -> ih : check length > 4 / scale
 alt long enough
+  ih -> app : commitHistorySnapshot(pendingHistorySnap)
+  note right of ih
+    Real mutation about to happen,
+    so the pre-edit snapshot is
+    pushed to the undo stack now
+    (not earlier - prevents a
+    no-op undo from click only).
+  end note
   ih -> store : addArrow(from, to, color, thickness)
   store -> store : push(arrow), touch(), emit()
-  store --> app : listeners fire (subscribe)
-  app -> app : dirty = true, requestRender()
+  store --> app : subscribe listener fires
+  app -> app : dirty = true\narmAutosave()\nrequestRender()
   store --> ih : created ArrowObject
   ih -> app : onSelect(created.id)
 else too short
-  ih -> ih : discard draft
+  ih -> ih : discard draft and pendingHistorySnap
 end
 ih -> app : onDraftChange(null)
 note right of ih
-  Stays in "arrow" mode so
-  the next drag immediately
-  starts another arrow.
+  Stays in "arrow" mode so the
+  next drag immediately starts
+  another arrow.
 end note
 app -> renderer : render(scene)
 renderer --> User : updated canvas

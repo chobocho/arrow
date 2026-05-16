@@ -4,6 +4,23 @@
 
 ## 2026-05-16
 
+### UML / 다이어그램 3종을 최신 소스에 맞게 갱신 (영문)
+
+- 동기: 클래스/시퀀스 다이어그램이 undo/redo, autosave, customChoice, .arrow import, insertChain, sync helpers 등 최근 변경을 반영하지 못한 상태였음. PNG는 영어만 사용해 plantuml 기본 폰트로 깨끗하게 렌더되도록.
+- `docs/class-diagram.puml` 갱신:
+  - `App`에 `undoStack` / `redoStack` / `pushHistory` / `commitHistorySnapshot` / `undo` / `redo` / `updateUndoRedoUi` / `armAutosave` / `cancelAutosave` / `autosaveNow` / `modifierClone` 추가, LOC 주석을 ~190 → ~340으로 갱신.
+  - `FileActions`에 `confirmUnsaved`, `KeyboardActions`에 `insertChain` + `CHAIN_MAX_SEGMENTS`.
+  - `UiBindings`에 `syncColorInputToSelection`, `syncThicknessInputToSelection`.
+  - `CustomPrompt`에 `customChoice` + `ChoiceButton` interface, 시그니처도 `(msg, default, placeholder)`로 갱신.
+  - `InputHandler`에 `pendingHistorySnap` + `snapshotScene` + `flushPendingHistory`, `App.commitHistorySnapshot` 의존성 추가.
+  - 새 `storage/ArrowFile` 모듈 (parseArrowFile + 내부 단계). `FileActions ..> ArrowFile : .arrow import` 의존성.
+  - `UiBindings ..> KeyboardActions : chain popup`, `Modals ..> FileActions : confirmUnsaved before load` 등 신규 협력 관계.
+  - 노트 4건 갱신 (App slim/undo, InputHandler pendingHistorySnap, SceneStore single source, customChoice 용도).
+- `docs/sequence-draw-arrow.puml` 갱신: pointer-down에서 `snapshotScene → pendingHistorySnap`, commit 시 `commitHistorySnapshot(pendingHistorySnap)` 흐름 + `armAutosave()` 호출 명시.
+- `docs/sequence-save-load.puml` 갱신: manual save 외에 (a) 백그라운드 autosave 흐름 (120s 타이머, 사일런트), (b) load-with-unsaved guard — `confirmUnsaved` → 3-옵션 `customChoice` → save/discard/abort 분기, (c) 첫 방문 자동 복원까지 4 섹션으로 확장.
+- PNG 3개 plantuml로 재생성. 모든 라벨/노트가 영어이므로 plantuml 기본 폰트(Dialog)로 한글 깨짐 없이 깨끗하게 렌더.
+- README가 참조하는 경로(`docs/class-diagram.png`, `docs/sequence-draw-arrow.png`, `docs/sequence-save-load.png`)는 그대로 — 내용만 갱신.
+
 ### README 예시 이미지를 intro.svg → docs/arrow.png로 교체
 
 - 사용자가 실제 앱에서 생성한 PNG(`docs/arrow.png`, 967x751)와 원본 텍스트(`docs/arrow.arrow`)를 직접 커밋 → README가 그걸 그대로 임베드하도록 전환.
