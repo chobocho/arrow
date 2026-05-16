@@ -1662,12 +1662,21 @@
     });
     var fontEl = byId('inputFontSize');
     fontEl.value = String(this.fontSize);
+    // One undo snapshot per editing session: the first `input` event after
+    // focus captures the pre-edit scene; subsequent edits in the same focused
+    // session don't pile up history entries. Reset on focus.
+    var fontHistoryPushed = false;
+    fontEl.addEventListener('focus', function () { fontHistoryPushed = false; });
     fontEl.addEventListener('input', function () {
       var raw = parseFloat(fontEl.value);
       if (!isFinite(raw)) return;
       var n = Math.floor(raw);
       var sel = self._getSelectedObject();
       if (sel && sel.type === 'text') {
+        if (!fontHistoryPushed) {
+          self.pushHistory();
+          fontHistoryPushed = true;
+        }
         self.store.update(sel.id, function (o) {
           if (o.type === 'text') o.fontSize = Math.max(8, Math.min(200, n));
         });

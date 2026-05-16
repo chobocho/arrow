@@ -192,12 +192,21 @@ export function bindUi(app: App): void {
 
   const fontEl = $('#inputFontSize') as HTMLInputElement;
   fontEl.value = String(app.fontSize);
+  // One undo snapshot per editing session: the first `input` event after
+  // focus captures the pre-edit scene; subsequent edits in the same focused
+  // session don't pile up history entries. Reset on focus.
+  let fontHistoryPushed = false;
+  fontEl.addEventListener('focus', () => { fontHistoryPushed = false; });
   fontEl.addEventListener('input', () => {
     const raw = parseFloat(fontEl.value);
     if (!Number.isFinite(raw)) return;
     const n = Math.floor(raw);
     const sel = app.getSelectedObject();
     if (sel && sel.type === 'text') {
+      if (!fontHistoryPushed) {
+        app.pushHistory();
+        fontHistoryPushed = true;
+      }
       // Resize the currently selected text instead of changing the default.
       app.store.update(sel.id, (o) => { if (o.type === 'text') o.fontSize = Math.max(8, Math.min(200, n)); });
     } else {
