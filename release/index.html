@@ -2058,7 +2058,14 @@
   };
   App.prototype._ensureName = function () {
     var name = this.store.get().name;
-    if (!name || name === '새 작업' || name === 'Untitled' || name === t('untitled')) {
+    // Placeholder names that should trigger a name prompt — both current
+    // language i18n values and legacy literals so older saved scenes
+    // and the SceneStore default both upgrade through this prompt.
+    var placeholders = [
+      t('newWork'), t('untitled'),
+      '새 작업', '제목 없음', 'New Work', 'Untitled'
+    ];
+    if (!name || placeholders.indexOf(name) >= 0) {
       var self = this;
       return customPrompt(t('promptName'), '').then(function (input) {
         if (input === null) return null;

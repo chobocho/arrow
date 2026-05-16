@@ -4,6 +4,12 @@
 
 ## 2026-05-16
 
+### ensureName placeholder 판정에 'New Work' 추가 — 불러오기 → 저장 흐름 보완
+
+- 동기: 직전 변경에서 `newScene`이 `t('newWork')`로 이름을 박아 넣으면서 한국어 모드는 '새 작업'(기존 bail 목록에 포함)이라 정상 동작하지만, 영어 모드에서는 'New Work'가 bail 목록에 없어 불러오기 → 저장 시 이름 입력 없이 'New Work'를 그대로 이름으로 저장.
+- 수정: `ensureName`의 bail 판정을 단일 if 체인에서 `placeholders` 배열 `indexOf` 검사로 교체. 배열에 현재 언어의 `t('newWork')`, `t('untitled')`와 legacy 리터럴(`'새 작업'`, `'제목 없음'`, `'New Work'`, `'Untitled'`)을 모두 포함 — 언어 전환·구버전 DB·SceneStore 기본값까지 한 번에 커버.
+- 번들 동기화(`dist/bundle.js`): `App.prototype._ensureName`에 동일 placeholders 배열 + `indexOf` 검사 적용.
+
 ### 작업 중 불러오기 시 저장/저장 안 함/취소 3-옵션 다이얼로그
 
 - 동기: 기존 `loadWork`는 dirty 상태에서 `customConfirm(t('unsavedLoad'))` 하나만 띄워 "버리기 / 취소" 이진 선택만 가능 → 작업 중인 내용을 잃을 위험. 표준 데스크탑 패턴인 "Save / Don't Save / Cancel" 3-옵션으로 교체.

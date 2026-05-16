@@ -8,7 +8,16 @@ import { updateSelectionUi, updateTitle } from '../ui/UiBindings.js';
 
 export async function ensureName(app: App): Promise<string | null> {
   let name = app.store.get().name;
-  if (!name || name === '새 작업' || name === 'Untitled') {
+  // Bail to a name prompt when the current name is a placeholder — both the
+  // current-language i18n values (t('newWork'), t('untitled')) and the legacy
+  // literals that older builds / hardcoded SceneStore defaults emit. Without
+  // the English 'New Work' entry, a fresh scene in English mode would silently
+  // save with the placeholder as its real name.
+  const placeholders = [
+    t('newWork'), t('untitled'),
+    '새 작업', '제목 없음', 'New Work', 'Untitled',
+  ];
+  if (!name || placeholders.indexOf(name) >= 0) {
     const input = await customPrompt(t('promptName'), '');
     if (input === null) return null;
     name = input.trim() || t('untitled');
