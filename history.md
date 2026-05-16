@@ -4,6 +4,21 @@
 
 ## 2026-05-16
 
+### .arrow 내보내기 기능 제거 (가져오기는 유지)
+
+- 동기: 사용 빈도가 낮아 기능 표면을 줄이는 게 좋다는 판단. import 한 방향만으로도 "키보드로 빠르게 씬 짜기" 사용 목적은 충분히 달성.
+- 제거 대상:
+  - `src/storage/ArrowFile.ts`의 `serializeArrowFile` 함수 + `SERIALIZE_MATCH_RADIUS` 상수.
+  - `src/app/FileActions.ts`의 `exportArrow` 함수 + 그 import.
+  - `index.html` 헤더의 📃 `btnExportArrow` 버튼.
+  - `src/ui/UiBindings.ts`의 wiring + `setTip` + `exportArrow` import.
+  - `src/i18n/lang.ts`의 `exportArrow` 한·영 키.
+  - 도움말 `helpFormat`에서 📃 내보내기 한 줄.
+  - README 두 곳(상단 기능 요약, .arrow 섹션).
+  - 테스트 2건(serialize round-trip, floating-text 보존). 52 → 50개로 감소.
+  - 번들(`dist/bundle.js`)의 `serializeArrowFile` 본문, ArrowApp 익스포트, `_exportArrow` prototype, UI 바인딩, STRINGS, applyLangToUi setTip 모두 미러 제거.
+- 유지: `parseArrowFile` 및 `.arrow` import 경로 전체. 도움말의 import 설명·규칙·샘플 경로도 그대로.
+
 ### .arrow 파서 버그 — 새 시작점에 토픽→루트 화살표가 자동 추가되던 문제
 
 - 증상: `📚독서 -> 📖정리 -> 🧠LLM`처럼 토픽이 아닌 단어로 시작하는 체인을 import하면, 토픽 → 📚독서로 가는 화살표가 자동으로 추가됨. 사용자는 📚독서를 토픽과 무관한 독립 루트로 의도했음.
