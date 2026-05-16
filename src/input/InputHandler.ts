@@ -367,6 +367,10 @@ export class InputHandler {
           this.selectedId = obj.id;
           this.cb.onSelect(obj.id);
           this.cb.onChange();
+          // After commit, drop back to Select so the just-typed text can be
+          // moved / resized immediately — matches the keyboard-driven Enter
+          // path in KeyboardActions.insertTextAtViewportCenter.
+          if (this.cb.setMode) this.cb.setMode('select');
         }
       });
       return;

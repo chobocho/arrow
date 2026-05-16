@@ -1450,6 +1450,9 @@
           self.selectedId = created.id;
           self.cb.onSelect(created.id);
           self.cb.onChange();
+          // After commit, drop back to Select so the new text is immediately
+          // moveable / resizable — matches the keyboard Enter insert path.
+          if (self.cb.setMode) self.cb.setMode('select');
         }
       });
       return;

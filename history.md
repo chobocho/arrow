@@ -4,6 +4,13 @@
 
 ## 2026-05-16
 
+### 텍스트 모드 클릭 commit 후 자동으로 선택 모드로 전환
+
+- 동기: 텍스트 모드에서 캔버스를 클릭해 글자를 입력하면, 다음 동작이 보통 "방금 입력한 글자 위치/크기 조정"이므로 commit 직후 Select 모드로 자동 전환되는 게 자연스러움. 키보드 경로(`Enter` → `insertTextAtViewportCenter`)는 이미 `setMode(app, 'select')`를 호출하고 있어 일관성도 맞춤.
+- 수정: `InputHandler.beginPointer`의 text 모드 분기에서 `customPrompt.then` 콜백 끝부분에 `if (this.cb.setMode) this.cb.setMode('select');` 추가. 이미 콜백 `setMode`는 InputHandlerCallbacks에 정의돼 있고 `app.ts`에서 wiring 완료.
+- 영향 범위: text 모드 → 캔버스 클릭 → 텍스트 입력 prompt → OK 흐름에만 적용. cancel(빈 입력 또는 Esc)이면 모드 유지.
+- 번들 동기화(`dist/bundle.js`): 동일 위치에 `self.cb.setMode('select')` 추가.
+
 ### UML / 다이어그램 3종을 최신 소스에 맞게 갱신 (영문)
 
 - 동기: 클래스/시퀀스 다이어그램이 undo/redo, autosave, customChoice, .arrow import, insertChain, sync helpers 등 최근 변경을 반영하지 못한 상태였음. PNG는 영어만 사용해 plantuml 기본 폰트로 깨끗하게 렌더되도록.
