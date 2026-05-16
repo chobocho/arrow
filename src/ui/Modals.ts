@@ -40,6 +40,7 @@ export function openHelpModal(app: App): void {
     ['helpSecKeys', 'helpKeys'],
     ['helpSecMouse', 'helpMouse'],
     ['helpSecMobile', 'helpMobile'],
+    ['helpSecTools', 'helpTools'],
   ];
   for (const [titleKey, bodyKey] of sections) {
     const sec = document.createElement('div');
