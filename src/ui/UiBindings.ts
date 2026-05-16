@@ -5,6 +5,7 @@ import { LangCode, getLang, setLang, t } from '../i18n/lang.js';
 import { customPrompt } from './CustomPrompt.js';
 import {
   deleteSelected,
+  exportArrow,
   exportJson,
   exportPng,
   fitToScreen,
@@ -36,6 +37,7 @@ export function bindUi(app: App): void {
   ($('#btnNew')).addEventListener('click', () => void newScene(app));
   ($('#btnExportPng')).addEventListener('click', () => exportPng(app));
   ($('#btnExportJson')).addEventListener('click', () => void exportJson(app));
+  ($('#btnExportArrow')).addEventListener('click', () => exportArrow(app));
   ($('#btnImportJson')).addEventListener('click', () => importJsonClick());
   ($('#fileImport')).addEventListener('change', (e) => void handleImportFile(app, e));
   ($('#btnLang')).addEventListener('click', () => toggleLang(app));
@@ -332,6 +334,7 @@ export function applyLangToUi(app: App): void {
   setTip('btnNew', 'newWork');
   setTip('btnExportPng', 'exportPng');
   setTip('btnExportJson', 'exportJson');
+  setTip('btnExportArrow', 'exportArrow');
   setTip('btnImportJson', 'importJson');
   setTip('btnEditCenter', 'editCenter');
   setTip('btnUndo', 'undo');

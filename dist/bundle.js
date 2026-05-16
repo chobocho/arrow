@@ -210,6 +210,97 @@
     return scene;
   }
 
+  // Serialize a SceneData back to .arrow text. Matches each arrow's endpoints
+  // to the nearest text node (or a virtual topic at canvas center) and walks
+  // the resulting graph from roots to leaves, emitting one chain per leaf so
+  // every edge appears in the output. Round-trip is structure-preserving.
+  var SERIALIZE_MATCH_RADIUS = 220;
+  function serializeArrowFile(scene) {
+    var topicLabel = (scene.centerText && scene.centerText.replace(/^\s+|\s+$/g, '')) || 'Topic';
+    var topic = {
+      label: topicLabel,
+      center: { x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 },
+      isTopic: true
+    };
+    var nodes = [topic];
+    for (var i = 0; i < scene.objects.length; i++) {
+      var o = scene.objects[i];
+      if (o.type !== 'text') continue;
+      var charW = o.fontSize * 0.65;
+      var w = Math.max(charW, charW * o.text.length);
+      var h = o.fontSize;
+      nodes.push({
+        label: o.text,
+        center: { x: o.pos.x + w / 2, y: o.pos.y + h / 2 },
+        isTopic: false
+      });
+    }
+    function closest(point) {
+      var best = null, bestD = SERIALIZE_MATCH_RADIUS;
+      for (var k = 0; k < nodes.length; k++) {
+        var n = nodes[k];
+        var dx = n.center.x - point.x;
+        var dy = n.center.y - point.y;
+        var d = Math.hypot(dx, dy);
+        if (d < bestD) { bestD = d; best = n; }
+      }
+      return best;
+    }
+    // Adjacency arrays keyed by node index so we don't lean on Map equality.
+    var outgoing = nodes.map(function () { return []; });
+    var incoming = nodes.map(function () { return []; });
+    function idx(node) { return nodes.indexOf(node); }
+    for (var j = 0; j < scene.objects.length; j++) {
+      var arr = scene.objects[j];
+      if (arr.type !== 'arrow') continue;
+      var src = closest(arr.from);
+      var dst = closest(arr.to);
+      if (!src || !dst || src === dst) continue;
+      var si = idx(src), di = idx(dst);
+      if (outgoing[si].indexOf(di) >= 0) continue;
+      outgoing[si].push(di);
+      incoming[di].push(si);
+    }
+    var roots = [];
+    if (outgoing[0].length > 0) roots.push(0); // topic
+    for (var n2 = 1; n2 < nodes.length; n2++) {
+      if (incoming[n2].length === 0 && outgoing[n2].length > 0) roots.push(n2);
+    }
+    var chains = [];
+    function dfs(nodeIdx, path, visited) {
+      if (visited[nodeIdx]) {
+        chains.push(path.slice());
+        return;
+      }
+      visited[nodeIdx] = true;
+      var kids = outgoing[nodeIdx];
+      if (kids.length === 0) {
+        chains.push(path.slice());
+      } else {
+        for (var c = 0; c < kids.length; c++) {
+          path.push(nodes[kids[c]].label);
+          dfs(kids[c], path, visited);
+          path.pop();
+        }
+      }
+      visited[nodeIdx] = false;
+    }
+    for (var r = 0; r < roots.length; r++) {
+      var ri = roots[r];
+      dfs(ri, [nodes[ri].label], {});
+    }
+    // Floating text nodes (no incoming, no outgoing) — preserve as single-
+    // label chains so round-trip doesn't drop them.
+    for (var f = 1; f < nodes.length; f++) {
+      if (incoming[f].length === 0 && outgoing[f].length === 0) {
+        chains.push([nodes[f].label]);
+      }
+    }
+    var lines = ['arrow', topicLabel];
+    for (var c2 = 0; c2 < chains.length; c2++) lines.push(chains[c2].join(' -> '));
+    return lines.join('\n') + '\n';
+  }
+
   // ---------- i18n ----------
   var STRINGS = {
     ko: {
@@ -217,7 +308,7 @@
       modeSelect: '선택', modeArrow: '화살표', modeText: '글자', modeHighlighter: '형광펜', modePan: '이동',
       save: '저장', saveAs: '새이름저장', newWork: '새 작업',
       delete: '삭제', rename: '이름변경',
-      exportPng: 'PNG 내보내기', exportJson: 'JSON 내보내기', importJson: 'JSON 가져오기',
+      exportPng: 'PNG 내보내기', exportJson: 'JSON 내보내기', exportArrow: '.arrow 내보내기', importJson: 'JSON 가져오기',
       language: 'EN', works: '작업 목록',
       editCenter: '주제 편집',
       promptCenter: '가운데 주제를 입력하세요',
@@ -248,7 +339,7 @@
       helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝\nCtrl + 드래그 (형광펜) — 직선 형광펜',
       helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동\nCtrl 토글 + 형광펜 드래그 — 직선 형광펜',
       helpTools: "🦀 체인 추가 — 'A -> B -> C' 형식으로 한 줄 입력하면 글자 노드들과 그 사이를 잇는 화살표가 가로로 한 번에 추가됩니다. 구분자는 -> 또는 →. 마지막 노드는 자동 선택되어 바로 위치·크기 조정 가능. 한 체인은 단일 Undo 단계로 묶임. 최대 10개 세그먼트.",
-      helpFormat: "📥 JSON 가져오기 버튼은 .arrow 텍스트 파일도 받습니다 — 키보드만으로 빠르게 씬 짜기.\n\n형식:\n  1줄: arrow (파일 마커)\n  2줄: 주제 (centerText)\n  3줄+: A -> B -> C 형태 체인 (-> 또는 → 둘 다 인정)\n  '#'은 줄 끝까지 주석, 빈 줄 무시\n\n규칙:\n  • 시작점이 기존 노드(주제 또는 이전 체인의 단어)면 거기서 가지를 이어 붙입니다.\n  • 새 단어가 시작점이면 주제의 또 다른 자식 가지로 추가됩니다.\n  • 각 부모 → 자식 N개는 360°/N 간격으로 시계 방향 회전 배치, 글자 크기는 24로 통일.\n\n샘플: docs/examples/spec.arrow",
+      helpFormat: "📥 JSON 가져오기 버튼은 .arrow 텍스트 파일도 받습니다 — 키보드만으로 빠르게 씬 짜기.\n📃 .arrow 내보내기 버튼은 현재 씬을 같은 형식의 텍스트로 저장합니다 — 다른 곳에서 편집 / 버전 관리에 유용.\n\n형식:\n  1줄: arrow (파일 마커)\n  2줄: 주제 (centerText)\n  3줄+: A -> B -> C 형태 체인 (-> 또는 → 둘 다 인정)\n  '#'은 줄 끝까지 주석, 빈 줄 무시\n\n규칙:\n  • 시작점이 기존 노드(주제 또는 이전 체인의 단어)면 거기서 가지를 이어 붙입니다.\n  • 새 단어가 시작점이면 주제의 또 다른 자식 가지로 추가됩니다.\n  • 각 부모 → 자식 N개는 360°/N 간격으로 시계 방향 회전 배치, 글자 크기는 24로 통일.\n\n샘플: docs/examples/spec.arrow",
       cloneToggle: 'Ctrl (복제 드래그 토글)',
       chainInsert: '체인 추가',
       chainPlaceholder: '독서 -> 전공서적 -> LLM'
@@ -258,7 +349,7 @@
       modeSelect: 'Select', modeArrow: 'Arrow', modeText: 'Text', modeHighlighter: 'Highlighter', modePan: 'Pan',
       save: 'Save', saveAs: 'Save As', newWork: 'New Work',
       delete: 'Delete', rename: 'Rename',
-      exportPng: 'Export PNG', exportJson: 'Export JSON', importJson: 'Import JSON',
+      exportPng: 'Export PNG', exportJson: 'Export JSON', exportArrow: 'Export .arrow', importJson: 'Import JSON',
       language: '한', works: 'Works',
       editCenter: 'Edit Topic',
       promptCenter: 'Enter the center topic',
@@ -289,7 +380,7 @@
       helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan\nCtrl + drag (highlighter) — Straight stroke',
       helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move\nCtrl toggle + highlighter drag — Straight stroke',
       helpTools: "🦀 Insert Chain — Type a single line like 'A -> B -> C' and the segments become text nodes joined by horizontal arrows. Separator is -> or →. The last node is auto-selected for immediate tweaking. The whole chain collapses into one Undo step. Up to 10 segments.",
-      helpFormat: "📥 The JSON-import button also accepts .arrow text files — author whole scenes from the keyboard.\n\nFormat:\n  Line 1: arrow (file marker)\n  Line 2: topic (centerText)\n  Line 3+: chain like A -> B -> C (-> or → both work)\n  '#' starts a comment to end of line; blank lines are ignored\n\nRules:\n  • A chain that starts with an existing node name (the topic, or a word from a previous chain) extends from there.\n  • A new starting word becomes another top-level branch off the topic.\n  • Each parent fans its N children at 360°/N apart, clockwise. Font size is unified at 24.\n\nSample: docs/examples/spec.arrow",
+      helpFormat: "📥 The JSON-import button also accepts .arrow text files — author whole scenes from the keyboard.\n📃 The Export .arrow button writes the current scene back to the same format — handy for external editing or version control.\n\nFormat:\n  Line 1: arrow (file marker)\n  Line 2: topic (centerText)\n  Line 3+: chain like A -> B -> C (-> or → both work)\n  '#' starts a comment to end of line; blank lines are ignored\n\nRules:\n  • A chain that starts with an existing node name (the topic, or a word from a previous chain) extends from there.\n  • A new starting word becomes another top-level branch off the topic.\n  • Each parent fans its N children at 360°/N apart, clockwise. Font size is unified at 24.\n\nSample: docs/examples/spec.arrow",
       cloneToggle: 'Ctrl (clone-drag toggle)',
       chainInsert: 'Insert Chain',
       chainPlaceholder: 'Read -> Textbook -> LLM'
@@ -1712,6 +1803,7 @@
     byId('btnNew').addEventListener('click', function () { self._newScene(); });
     byId('btnExportPng').addEventListener('click', function () { self._exportPng(); });
     byId('btnExportJson').addEventListener('click', function () { self._exportJson(); });
+    byId('btnExportArrow').addEventListener('click', function () { self._exportArrow(); });
     byId('btnImportJson').addEventListener('click', function () { self._importJsonClick(); });
     byId('fileImport').addEventListener('change', function (e) { self._handleImportFile(e); });
     byId('btnLang').addEventListener('click', function () { self._toggleLang(); });
@@ -2002,6 +2094,7 @@
     setTip('btnNew', 'newWork');
     setTip('btnExportPng', 'exportPng');
     setTip('btnExportJson', 'exportJson');
+    setTip('btnExportArrow', 'exportArrow');
     setTip('btnImportJson', 'importJson');
     setTip('btnEditCenter', 'editCenter');
     setTip('btnUndo', 'undo');
@@ -2124,6 +2217,17 @@
       a.click();
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     });
+  };
+  App.prototype._exportArrow = function () {
+    var scene = this.store.get();
+    var text = serializeArrowFile(scene);
+    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = (scene.name || 'arrow') + '.arrow';
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   };
   App.prototype._importJsonClick = function () {
     var inp = document.getElementById('fileImport');
@@ -2732,6 +2836,7 @@
     newId: newId,
     emptyScene: emptyScene,
     parseArrowFile: parseArrowFile,
+    serializeArrowFile: serializeArrowFile,
     floorFontSize: floorFontSize,
     normalizeSceneFontSizes: normalizeSceneFontSizes,
     DEFAULT_CENTER_FONT_SIZE: DEFAULT_CENTER_FONT_SIZE,

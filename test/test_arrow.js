@@ -480,6 +480,52 @@
     // Edges should dedupe: Hub→A, A→B, A→C  →  3 arrows
     assert(arrows.length === 3, 'expected 3 unique edges, got ' + arrows.length);
   });
+  test('serializeArrowFile round-trips the spec example structurally', function () {
+    var content = [
+      'arrow',
+      'Book',
+      'Book -> 무협지 -> 김용',
+      'Book -> 판타지 -> 뱀뱀이',
+      'Book -> 잡지 -> PC 사랑 -> 2026.05',
+      '할일 -> 이발 -> 13000'
+    ].join('\n');
+    var s1 = A.parseArrowFile(content, 'rt');
+    assert(s1 !== null, 'first parse returned null');
+    var text = A.serializeArrowFile(s1);
+    // Must include the marker, the topic, and reach every leaf at least once.
+    var lines = text.split(/\n/).filter(function (l) { return l.length > 0; });
+    assert(lines[0] === 'arrow', 'first line not arrow, got ' + lines[0]);
+    assert(lines[1] === 'Book', 'second line not topic, got ' + lines[1]);
+    var joined = text;
+    var leaves = ['김용', '뱀뱀이', '2026.05', '13000'];
+    for (var li = 0; li < leaves.length; li++) {
+      assert(joined.indexOf(leaves[li]) >= 0, 'serialized output missing leaf ' + leaves[li]);
+    }
+    // Re-parse: structural equivalence on counts of texts & arrows.
+    var s2 = A.parseArrowFile(text, 'rt2');
+    assert(s2 !== null, 'reparse returned null');
+    var t1 = s1.objects.filter(function (o) { return o.type === 'text'; }).length;
+    var a1 = s1.objects.filter(function (o) { return o.type === 'arrow'; }).length;
+    var t2 = s2.objects.filter(function (o) { return o.type === 'text'; }).length;
+    var a2 = s2.objects.filter(function (o) { return o.type === 'arrow'; }).length;
+    assert(t1 === t2, 'text count drifted: ' + t1 + ' -> ' + t2);
+    assert(a1 === a2, 'arrow count drifted: ' + a1 + ' -> ' + a2);
+  });
+  test('serializeArrowFile preserves floating text nodes', function () {
+    // Scene: just one isolated text node, no arrows.
+    var s = A.emptyScene('iso');
+    s.centerText = 'Topic';
+    s.objects = [{
+      id: 'tx_iso', type: 'text',
+      pos: { x: 2048 + 100, y: 2048 + 100 },
+      text: '메모', fontSize: 24, color: '#222222'
+    }];
+    var text = A.serializeArrowFile(s);
+    assert(text.indexOf('메모') >= 0, 'floating text not preserved in export');
+    var s2 = A.parseArrowFile(text, 'iso2');
+    var texts = s2.objects.filter(function (o) { return o.type === 'text'; });
+    assert(texts.length === 1 && texts[0].text === '메모', 'roundtrip lost floating text');
+  });
   test('parseArrowFile strips comments and ignores blanks', function () {
     var content = [
       '# top comment',

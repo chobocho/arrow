@@ -4,6 +4,21 @@
 
 ## 2026-05-16
 
+### .arrow 텍스트 포맷 내보내기 추가
+
+- 동기: import만 있고 export가 없어 한 번 GUI로 편집하면 텍스트로 되돌릴 수 없었음. 외부 편집기·git diff·LLM 협업 등 텍스트 표현이 필요한 워크플로우를 위해 export 추가.
+- 알고리즘 — `serializeArrowFile(scene)`:
+  - 가상 topic 노드를 캔버스 중심(MAX/2, MAX/2)에 두고, 각 텍스트 객체를 노드로 수집.
+  - 각 화살표에 대해 endpoint 둘 다에서 가장 가까운 노드(거리 ≤ 220)를 찾아 source→target 엣지 생성. 동일 페어 중복 엣지는 dedupe.
+  - 루트 선정: topic(out-degree > 0) + non-topic 중 in-degree 0인 노드.
+  - 각 루트에서 DFS — 매 leaf마다 path를 하나의 chain으로 emit. 모든 엣지가 적어도 한 번 출력에 등장.
+  - 부동(floating) 텍스트(in/out 모두 0)는 single-label chain으로 emit해 round-trip 손실 방지.
+- 동작: 헤더에 📃 버튼(`btnExportArrow`) 추가. 클릭 시 `scene.name + '.arrow'`로 다운로드.
+- Round-trip 의미론: 원본 `할일 -> ...`처럼 topic 없이 시작하는 chain은 import 시 topic의 자식으로 추가되므로, 다시 export하면 `Book -> 할일 -> ...`로 명시적으로 나옴 — 구조는 동일.
+- i18n: `exportArrow` 한·영 추가. 도움말 `helpFormat`에 📃 내보내기 한 줄 추가.
+- 번들 동기화(`dist/bundle.js`): `serializeArrowFile` 함수, ArrowApp 익스포트, `App.prototype._exportArrow`, UI 바인딩, STRINGS, helpFormat, applyLangToUi 모두 미러.
+- 테스트 추가(2건): 스펙 예시 round-trip(leaf 모두 등장 + 텍스트/화살표 카운트 보존), floating 텍스트 노드 보존. 총 49 → 51개 통과.
+
 ### 도움말 모달에 ".arrow 텍스트 포맷" 섹션 추가
 
 - 동기: .arrow 가져오기 기능이 비명시적이라 사용자가 발견하기 어려움. 도움말에 형식·규칙·샘플 경로까지 한 화면에 보이도록.

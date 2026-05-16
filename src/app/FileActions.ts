@@ -5,7 +5,7 @@ import { t } from '../i18n/lang.js';
 import { customChoice, customConfirm, customPrompt } from '../ui/CustomPrompt.js';
 import { refreshWorks } from '../ui/Modals.js';
 import { updateSelectionUi, updateTitle } from '../ui/UiBindings.js';
-import { parseArrowFile } from '../storage/ArrowFile.js';
+import { parseArrowFile, serializeArrowFile } from '../storage/ArrowFile.js';
 
 export async function ensureName(app: App): Promise<string | null> {
   let name = app.store.get().name;
@@ -107,6 +107,18 @@ export function exportPng(app: App): void {
   a.href = url;
   a.download = (app.store.get().name || 'arrow') + '.png';
   a.click();
+}
+
+export function exportArrow(app: App): void {
+  const scene = app.store.get();
+  const text = serializeArrowFile(scene);
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = (scene.name || 'arrow') + '.arrow';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function exportJson(app: App): Promise<void> {
