@@ -8,16 +8,16 @@ HTML5 Canvas + TypeScript 기반의 변형 마인드맵 웹앱입니다.
 
 ## 예시 — 우리 앱으로 우리 앱 소개하기
 
-아래 마인드맵은 본 저장소의 `scripts/arrow2png.js`로 `docs/intro-scene.json`에서 생성한 것입니다.
-실제 앱에서 만든 것과 동일한 객체 모델(`SceneData`)을 사용하므로, 같은 JSON을 앱에 가져와 편집할 수도 있습니다.
+아래 마인드맵은 본 저장소의 `docs/arrow.arrow` 한 파일을 📥 가져오기로 불러와 만든 결과입니다.
+실제 앱이 생성한 PNG를 그대로 임베드했으므로, 동일한 결과를 재현하려면 `docs/arrow.arrow`를 앱에서 가져오기만 하면 됩니다.
 
-![Arrow Mind Map intro](docs/intro.svg)
+![Arrow Mind Map intro](docs/arrow.png)
 
-PNG 버전이 필요하면 (`npm install canvas` 후):
+PNG는 앱의 🖼️ "PNG 내보내기" 버튼으로 직접 저장하거나, `scripts/arrow2png.ts`로 JSON 씬에서 생성할 수 있습니다 (`npm install canvas` 필요):
 
 ```sh
 tsc -p scripts/tsconfig.json
-node scripts/arrow2png.js docs/intro-scene.json docs/intro.png
+node scripts/arrow2png.js <scene>.json <out>.png
 ```
 
 `scripts/arrow2png.ts`는 출력 확장자(`.png` / `.svg`)에 따라 렌더 경로를 분기합니다.

@@ -4,6 +4,13 @@
 
 ## 2026-05-16
 
+### README 예시 이미지를 intro.svg → docs/arrow.png로 교체
+
+- 사용자가 실제 앱에서 생성한 PNG(`docs/arrow.png`, 967x751)와 원본 텍스트(`docs/arrow.arrow`)를 직접 커밋 → README가 그걸 그대로 임베드하도록 전환.
+- README 본문 갱신: "intro-scene.json에서 SVG 생성" 설명을 "arrow.arrow 한 파일을 📥 가져오기로 불러와 만든 PNG"로 바꾸고, arrow2png 명령 예시는 일반 형식으로 단순화.
+- 사용처 없는 자산 정리(CLAUDE.md "사용하지 않는 코드나 에셋은 즉시 삭제하라"): `docs/intro.svg`, `docs/intro-scene.json`, `docs/examples/spec.svg`. 활성 자산으로 `docs/arrow.png`, `docs/arrow.arrow`, `docs/examples/spec.arrow` 유지.
+- `scripts/arrow2png.ts` 자체는 유지 — 일반 SceneData JSON → PNG/SVG 변환기로 여전히 유효.
+
 ### .arrow 내보내기 기능 제거 (가져오기는 유지)
 
 - 동기: 사용 빈도가 낮아 기능 표면을 줄이는 게 좋다는 판단. import 한 방향만으로도 "키보드로 빠르게 씬 짜기" 사용 목적은 충분히 달성.
