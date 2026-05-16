@@ -4,6 +4,18 @@
 
 ## 2026-05-16
 
+### 체인 입력 — "A -> B -> C" 한 줄로 글자+화살표 추가
+
+- 동기: 매번 글자→배치→화살표→연결을 반복하는 대신, "독서 -> 전공서적 -> LLM" 같은 직관적 한 줄을 입력하면 자동으로 글자 노드들과 그 사이를 잇는 화살표가 한 번에 추가되도록.
+- UI: 헤더 우상단 "삭제 / Undo / Redo" 다음에 신규 그룹으로 텍스트 입력 + ⛓️ 버튼 추가. 입력 placeholder/툴팁은 i18n으로 한·영 분기. CSS는 헤더 인라인 스타일에 `.chain-input` 추가(폭 220px, 모바일 140px).
+- 파서: `->` 또는 유니코드 `→` 어느 쪽이든 구분자로 인정, 좌우 공백 trim, 빈 세그먼트 폐기. 한·영 모두에서 자연스럽게 동작.
+- 제한: `CHAIN_MAX_SEGMENTS = 10`. 11개 이상이면 앞 10개만 사용 — 폭주 붙여넣기로 캔버스 폭격 방지.
+- 레이아웃: 폰트 크기 기반으로 글자 폭(≈ `fontSize * 0.65 * length`)과 화살표 길이(`max(60, fontSize * 2.5)`)를 계산해 전체 폭을 뷰포트 가운데 정렬. 화살표는 글자 우변에서 짧은 gap 후 시작, 다음 글자 좌변 직전까지. 마지막 생성된 글자는 자동 선택 → 사용자가 바로 위치/크기를 조정 가능.
+- 히스토리: 체인 전체를 단일 `pushHistory()`로 묶어 한 번의 Undo로 전체 취소.
+- 입력 처리: Enter 또는 ⛓️ 버튼이 commit. IME 조합 중 Enter(`isComposing`, `keyCode 229`)는 무시 — 한국어 마지막 음절 조합 중 사고로 추가되는 일 방지. commit 후 입력 비우고 포커스를 Select 버튼으로 이동해 단축키 부활.
+- i18n: 신규 키 `chainInsert`, `chainPlaceholder`, `chainTooltip`(한·영).
+- 번들 동기화(`dist/bundle.js`): UI 바인딩 + i18n + `App.prototype._insertChain` + `applyLangToUi`에 placeholder/title 적용 모두 미러.
+
 ### ensureName placeholder 판정에 'New Work' 추가 — 불러오기 → 저장 흐름 보완
 
 - 동기: 직전 변경에서 `newScene`이 `t('newWork')`로 이름을 박아 넣으면서 한국어 모드는 '새 작업'(기존 bail 목록에 포함)이라 정상 동작하지만, 영어 모드에서는 'New Work'가 bail 목록에 없어 불러오기 → 저장 시 이름 입력 없이 'New Work'를 그대로 이름으로 저장.

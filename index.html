@@ -71,6 +71,14 @@
   .color-palette .swatch:hover { transform: scale(1.2); border-color: #888; }
   .color-palette .swatch.active { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
   @media (max-width: 720px) { .color-palette { display: none; } }
+  .chain-input {
+    width: 220px; min-width: 140px;
+    padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 13px; font-family: inherit; color: var(--text); background: #fff;
+  }
+  .chain-input::placeholder { color: #aaa; }
+  .chain-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(58,122,254,0.15); }
+  @media (max-width: 720px) { .chain-input { width: 140px; } }
   #canvasWrap {
     position: relative;
     background: #fafafa;
@@ -169,6 +177,10 @@
       <button class="tool icon" id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↩️</button>
       <button class="tool icon" id="btnRedo" title="다시 실행 (Ctrl+Y)" disabled>↪️</button>
       <button class="tool icon" id="btnDelete" title="삭제" disabled>🗑️</button>
+    </div>
+    <div class="group chain-group">
+      <input type="text" id="inputChain" class="chain-input" placeholder="독서 -> 전공서적 -> LLM" title="화살표로 연결된 글자 체인 추가 (Enter)">
+      <button class="tool icon" id="btnChainInsert" title="체인 추가">⛓️</button>
     </div>
     <div class="spacer"></div>
     <div class="group">

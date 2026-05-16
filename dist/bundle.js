@@ -101,7 +101,10 @@
       helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + Z — 실행 취소 (최근 8단계)\nCtrl/⌘ + Y / Ctrl+Shift+Z — 다시 실행\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
       helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝\nCtrl + 드래그 (형광펜) — 직선 형광펜',
       helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동\nCtrl 토글 + 형광펜 드래그 — 직선 형광펜',
-      cloneToggle: 'Ctrl (복제 드래그 토글)'
+      cloneToggle: 'Ctrl (복제 드래그 토글)',
+      chainInsert: '체인 추가',
+      chainPlaceholder: '독서 -> 전공서적 -> LLM',
+      chainTooltip: '화살표로 연결된 글자 체인 추가 (Enter)'
     },
     en: {
       appTitle: 'Arrow Mind Map',
@@ -136,7 +139,10 @@
       helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + Z — Undo (up to 8 steps)\nCtrl/⌘ + Y / Ctrl+Shift+Z — Redo\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
       helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan\nCtrl + drag (highlighter) — Straight stroke',
       helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move\nCtrl toggle + highlighter drag — Straight stroke',
-      cloneToggle: 'Ctrl (clone-drag toggle)'
+      cloneToggle: 'Ctrl (clone-drag toggle)',
+      chainInsert: 'Insert Chain',
+      chainPlaceholder: 'Read -> Textbook -> LLM',
+      chainTooltip: 'Insert a text-and-arrow chain (Enter)'
     }
   };
   var currentLang = 'ko';
@@ -1582,6 +1588,32 @@
     byId('btnDelete').addEventListener('click', function () { self._deleteSelected(); });
     byId('btnWorks').addEventListener('click', function () { self._openWorksModal(); });
     byId('btnHelp').addEventListener('click', function () { self._openHelpModal(); });
+    // Chain input — type "A -> B -> C" and the segments become text objects
+    // joined by horizontal arrows at the viewport center. Enter or the ⛓️
+    // button commits. Capped to CHAIN_MAX_SEGMENTS to bound the canvas damage
+    // from a runaway paste. After commit, clear and hand focus to Select.
+    var chainEl = document.getElementById('inputChain');
+    var chainBtn = document.getElementById('btnChainInsert');
+    function commitChain() {
+      if (!chainEl) return;
+      var n = self._insertChain(chainEl.value);
+      if (n > 0) {
+        chainEl.value = '';
+        self._flashStatus('+ chain (' + n + ')');
+        var btnSelect = document.getElementById('btnSelect');
+        if (btnSelect) btnSelect.focus();
+      }
+    }
+    if (chainEl) {
+      chainEl.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        // Ignore IME-commit Enter (Korean/Japanese composition).
+        if (e.isComposing || e.keyCode === 229) return;
+        e.preventDefault();
+        commitChain();
+      });
+    }
+    if (chainBtn) chainBtn.addEventListener('click', commitChain);
     // Virtual Ctrl: sticky toggle that mirrors physical Ctrl/⌘ for drag-clone
     // on mobile (TODO #15). Tapping toggles; stays active until tapped again.
     var ctrlBtn = byId('btnVirtualCtrl');
@@ -1843,6 +1875,12 @@
     setTip('btnWorks', 'works');
     setTip('btnHelp', 'help');
     setTip('btnVirtualCtrl', 'cloneToggle');
+    setTip('btnChainInsert', 'chainInsert');
+    var chainInputEl = document.getElementById('inputChain');
+    if (chainInputEl) {
+      chainInputEl.placeholder = t('chainPlaceholder');
+      chainInputEl.title = t('chainTooltip');
+    }
     var langEl = document.getElementById('btnLang');
     if (langEl) langEl.title = currentLang === 'ko' ? 'Switch to English' : '한국어로 전환';
     setText('labelColor', 'selectColor');
@@ -2381,6 +2419,64 @@
       self.input.setSelected(obj.id);
       self.setMode('select');
     });
+  };
+  // Hard cap on chain length so a runaway paste doesn't fill the canvas.
+  var CHAIN_MAX_SEGMENTS = 10;
+  // Insert a text + arrow chain from a single line like "A -> B -> C".
+  // Each segment becomes a text object; consecutive segments are joined by
+  // a horizontal arrow at the viewport center. Empty segments are skipped.
+  // Excess past CHAIN_MAX_SEGMENTS is silently dropped.
+  App.prototype._insertChain = function (raw) {
+    var all = String(raw || '').split(/->|→/);
+    var parts = [];
+    for (var i = 0; i < all.length; i++) {
+      var s = String(all[i]).replace(/^\s+|\s+$/g, '');
+      if (s.length > 0) parts.push(s);
+      if (parts.length >= CHAIN_MAX_SEGMENTS) break;
+    }
+    if (parts.length === 0) return 0;
+    var fontSize = this.fontSize;
+    // Approximate per-char width; over-estimate so arrows don't graze glyphs.
+    var charWidth = fontSize * 0.65;
+    var textHeight = fontSize * 1.2;
+    var widths = [];
+    for (var j = 0; j < parts.length; j++) {
+      widths.push(Math.max(charWidth, charWidth * parts[j].length));
+    }
+    var arrowLength = Math.max(60, fontSize * 2.5);
+    var gap = Math.max(4, fontSize * 0.15);
+    var totalWidth = (parts.length - 1) * arrowLength;
+    for (var m = 0; m < widths.length; m++) totalWidth += widths[m];
+    var viewCenter = this.view.screenToLogical({
+      x: this.view.width / 2,
+      y: this.view.height / 2
+    });
+    var x = viewCenter.x - totalWidth / 2;
+    var y = viewCenter.y - textHeight / 2;
+    var arrowY = y + textHeight / 2;
+    this.pushHistory();
+    var lastId = null;
+    for (var p = 0; p < parts.length; p++) {
+      var tx = this.store.addText({ x: x, y: y }, parts[p], fontSize, this.color);
+      lastId = tx.id;
+      var textRight = x + widths[p];
+      if (p < parts.length - 1) {
+        var arrowFromX = textRight + gap;
+        var arrowToX = textRight + arrowLength - gap;
+        this.store.addArrow(
+          { x: arrowFromX, y: arrowY },
+          { x: arrowToX, y: arrowY },
+          this.color,
+          this.thickness
+        );
+        x = textRight + arrowLength;
+      }
+    }
+    if (lastId) {
+      this.selectedId = lastId;
+      this.input.setSelected(lastId);
+    }
+    return parts.length;
   };
   // Adds a horizontal arrow positioned to the upper-right of any existing
   // arrows so consecutive Insert presses stagger outward. When no arrows

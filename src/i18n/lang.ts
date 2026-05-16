@@ -63,6 +63,9 @@ const strings: Record<LangCode, Dict> = {
     helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝\nCtrl + 드래그 (형광펜) — 직선 형광펜',
     helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동\nCtrl 토글 + 형광펜 드래그 — 직선 형광펜',
     cloneToggle: 'Ctrl (복제 드래그 토글)',
+    chainInsert: '체인 추가',
+    chainPlaceholder: '독서 -> 전공서적 -> LLM',
+    chainTooltip: '화살표로 연결된 글자 체인 추가 (Enter)',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -124,6 +127,9 @@ const strings: Record<LangCode, Dict> = {
     helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan\nCtrl + drag (highlighter) — Straight stroke',
     helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move\nCtrl toggle + highlighter drag — Straight stroke',
     cloneToggle: 'Ctrl (clone-drag toggle)',
+    chainInsert: 'Insert Chain',
+    chainPlaceholder: 'Read -> Textbook -> LLM',
+    chainTooltip: 'Insert a text-and-arrow chain (Enter)',
   },
 };
 

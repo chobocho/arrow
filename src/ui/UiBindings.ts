@@ -14,6 +14,7 @@ import {
   save,
   saveAs,
 } from '../app/FileActions.js';
+import { insertChain } from '../app/KeyboardActions.js';
 import { openHelpModal, openWorksModal, renderWorks } from './Modals.js';
 
 const PALETTE_16: readonly string[] = [
@@ -62,6 +63,35 @@ export function bindUi(app: App): void {
   ($('#btnDelete')).addEventListener('click', () => void deleteSelected(app));
   ($('#btnWorks')).addEventListener('click', () => openWorksModal(app));
   ($('#btnHelp')).addEventListener('click', () => openHelpModal(app));
+
+  // Chain input — type "A -> B -> C" and the segments become text objects
+  // joined by horizontal arrows at the viewport center. Enter or the ⛓️
+  // button commits. After commit, clear the field and hand focus back to
+  // the Select-mode button so keyboard shortcuts resume working.
+  const chainEl = document.getElementById('inputChain') as HTMLInputElement | null;
+  const chainBtn = document.getElementById('btnChainInsert');
+  const commitChain = (): void => {
+    if (!chainEl) return;
+    const raw = chainEl.value;
+    const n = insertChain(app, raw);
+    if (n > 0) {
+      chainEl.value = '';
+      app.flashStatus('+ chain (' + n + ')');
+      const btnSelect = document.getElementById('btnSelect');
+      btnSelect?.focus();
+    }
+  };
+  if (chainEl) {
+    chainEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      // Ignore the IME-commit Enter (Korean/Japanese composition) so users
+      // don't accidentally insert while still composing the last segment.
+      if (e.isComposing || (e as KeyboardEvent).keyCode === 229) return;
+      e.preventDefault();
+      commitChain();
+    });
+  }
+  if (chainBtn) chainBtn.addEventListener('click', commitChain);
 
   // Virtual Ctrl: sticky toggle that mirrors physical Ctrl/⌘ for drag-clone.
   // Tapping toggles; remains active until tapped again, so users can clone
@@ -327,6 +357,13 @@ export function applyLangToUi(app: App): void {
   setTip('btnWorks', 'works');
   setTip('btnHelp', 'help');
   setTip('btnVirtualCtrl', 'cloneToggle');
+  setTip('btnChainInsert', 'chainInsert');
+  // Chain text input: placeholder + tooltip switch with language.
+  const chainInputEl = document.getElementById('inputChain') as HTMLInputElement | null;
+  if (chainInputEl) {
+    chainInputEl.placeholder = t('chainPlaceholder');
+    chainInputEl.title = t('chainTooltip');
+  }
   // Language toggle: tooltip describes the target language.
   const langEl = document.getElementById('btnLang');
   if (langEl) langEl.title = getLang() === 'ko' ? 'Switch to English' : '한국어로 전환';

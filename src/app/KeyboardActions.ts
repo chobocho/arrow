@@ -97,6 +97,75 @@ export function pasteClone(app: App): boolean {
   return true;
 }
 
+// Hard cap on chain length so a runaway paste doesn't fill the canvas.
+// 10 is generous for the diagram style this UI targets (A -> B -> C ...).
+export const CHAIN_MAX_SEGMENTS = 10;
+
+// Insert a text + arrow chain from a single line like
+//   "A -> B -> C"
+// Each segment becomes a text object; consecutive segments are joined by
+// a horizontal arrow. The whole chain is laid out at the viewport center.
+// Empty segments (e.g. trailing arrow) are skipped. Excess segments past
+// CHAIN_MAX_SEGMENTS are silently dropped. Returns the number of text
+// segments actually created so callers can flash status / decide.
+export function insertChain(app: App, raw: string): number {
+  // Accept both ASCII "->" and the unicode arrow "→" as separators so the
+  // user can paste either form. Tolerate whitespace around the arrow.
+  const all = raw
+    .split(/->|→/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (all.length === 0) return 0;
+  const parts = all.slice(0, CHAIN_MAX_SEGMENTS);
+
+  const fontSize = app.fontSize;
+  // Approximate text bounding box. The real renderer measures glyphs, but at
+  // insert time we have no ctx; over-estimate slightly so arrows don't graze
+  // the glyphs. 0.65 per char works reasonably for both Latin and Hangul.
+  const charWidth = fontSize * 0.65;
+  const textHeight = fontSize * 1.2;
+  const widths = parts.map((p) => Math.max(charWidth, charWidth * p.length));
+  // Arrow segment length scales with font so the chain still reads at any
+  // text size, but keeps a sensible minimum on tiny fonts.
+  const arrowLength = Math.max(60, fontSize * 2.5);
+  const gap = Math.max(4, fontSize * 0.15);
+
+  const totalWidth =
+    widths.reduce((a, b) => a + b, 0) + (parts.length - 1) * arrowLength;
+  const viewCenter = app.view.screenToLogical({
+    x: app.view.width / 2,
+    y: app.view.height / 2,
+  });
+  let x = viewCenter.x - totalWidth / 2;
+  const y = viewCenter.y - textHeight / 2;
+  const arrowY = y + textHeight / 2;
+
+  app.pushHistory();
+  let lastCreatedId: string | null = null;
+  for (let i = 0; i < parts.length; i++) {
+    const created = app.store.addText({ x, y }, parts[i], fontSize, app.color);
+    lastCreatedId = created.id;
+    const textRight = x + widths[i];
+    if (i < parts.length - 1) {
+      const arrowFromX = textRight + gap;
+      const arrowToX = textRight + arrowLength - gap;
+      app.store.addArrow(
+        { x: arrowFromX, y: arrowY },
+        { x: arrowToX, y: arrowY },
+        app.color,
+        app.thickness,
+      );
+      x = textRight + arrowLength;
+    }
+  }
+  // Select the final text so the user can fine-tune it immediately.
+  if (lastCreatedId) {
+    app.selectedId = lastCreatedId;
+    app.input.setSelected(lastCreatedId);
+  }
+  return parts.length;
+}
+
 // Opens the text-input modal and places the typed text at the current
 // viewport center. Bound to Enter for keyboard-driven text entry.
 export function insertTextAtViewportCenter(app: App): void {
