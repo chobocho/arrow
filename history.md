@@ -4,6 +4,16 @@
 
 ## 2026-05-16
 
+### 선택된 화살표 / 하이라이터의 굵기 변경 지원
+
+- 동기: 색상은 직전 작업으로 선택 객체에 적용되도록 했고, 굵기도 같은 selection-aware 패턴이 필요. 폰트 크기와 동일하게 굵기 입력이 선택 객체를 즉석에서 바꾸도록 함.
+- 동작: 화살표·하이라이터가 선택돼 있으면 `#inputThickness`의 `input` 이벤트가 `store.update`로 그 객체의 `thickness`를 1..40 범위로 클램프해 변경. 텍스트가 선택돼 있거나 선택이 없으면 종전대로 `app.thickness`(기본값) 갱신. 텍스트는 `thickness` 필드가 없으므로 명시적으로 제외.
+- 동기화: `syncThicknessInputToSelection(app)` 추가. `onSelect`·`store.subscribe`에서 호출해 입력 값을 선택 객체 굵기에 맞춤. 입력이 포커스 상태면 사용자 타이핑을 끊지 않도록 스킵(폰트 크기 입력과 동일 규칙).
+- 커밋 처리: `change`/`Enter`에서 클램프된 실제 값으로 입력을 스냅. "100" 입력 → "40"으로 시각 보정.
+- 히스토리: 색상 피커와 같은 focus + 첫 input 플래그 패턴(`thickHistoryPushed`). 한 번 포커스해 여러 자리 타이핑해도 undo 단계는 1개. 선택 없는 기본값 변경은 push하지 않음(SceneData에 속하지 않음).
+- 번들 동기화(`dist/bundle.js`): thickness 블록 전체 교체, `App.prototype._syncThicknessInputToSelection` 추가, `onSelect`/`store.subscribe`에 호출 추가.
+- 테스트 추가(1건): `SceneStore.update`로 화살표·하이라이터 두 타입의 `thickness`를 변경 가능함을 보장. 총 44 → 45개 통과.
+
 ### 선택된 객체의 색상 변경 지원
 
 - 동기: 글자 크기 입력은 이미 선택된 텍스트의 `fontSize`를 즉석에서 바꾸지만 색상 입력은 기본값만 바꾸고 있어 사용자가 만든 객체의 색을 바꾸려면 지우고 다시 그려야 했음. 폰트 크기와 동일한 selection-aware 패턴을 색상에도 적용.

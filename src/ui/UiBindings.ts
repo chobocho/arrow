@@ -143,13 +143,49 @@ export function bindUi(app: App): void {
 
   const thickEl = $('#inputThickness') as HTMLInputElement;
   thickEl.value = String(app.thickness);
-  thickEl.addEventListener('input', () => { app.thickness = parseFloat(thickEl.value) || 4; });
+  // One undo snapshot per editing session: the first `input` event after focus
+  // captures the pre-edit scene; subsequent edits in the same focused session
+  // don't pile up history entries. Reset on focus so the next session captures.
+  let thickHistoryPushed = false;
+  thickEl.addEventListener('focus', () => { thickHistoryPushed = false; });
+  thickEl.addEventListener('input', () => {
+    const raw = parseFloat(thickEl.value);
+    if (!Number.isFinite(raw)) return;
+    const sel = app.getSelectedObject();
+    if (sel && (sel.type === 'arrow' || sel.type === 'highlighter')) {
+      if (!thickHistoryPushed) {
+        app.pushHistory();
+        thickHistoryPushed = true;
+      }
+      const clamped = Math.max(1, Math.min(40, raw));
+      app.store.update(sel.id, (o) => {
+        if (o.type === 'arrow' || o.type === 'highlighter') o.thickness = clamped;
+      });
+    } else {
+      app.thickness = raw || 4;
+    }
+  });
+  // On commit (blur / Enter), snap the field to the actual clamped value so
+  // an out-of-range entry like "100" visually corrects to "40".
+  thickEl.addEventListener('change', () => {
+    const sel = app.getSelectedObject();
+    if (sel && (sel.type === 'arrow' || sel.type === 'highlighter')) {
+      thickEl.value = String(sel.thickness);
+    } else {
+      thickEl.value = String(app.thickness);
+    }
+  });
   // Mirror of #inputFontSize: Enter commits and hands focus back to the
   // Select-mode button so keyboard shortcuts resume working.
   thickEl.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    thickEl.value = String(app.thickness);
+    const sel = app.getSelectedObject();
+    if (sel && (sel.type === 'arrow' || sel.type === 'highlighter')) {
+      thickEl.value = String(sel.thickness);
+    } else {
+      thickEl.value = String(app.thickness);
+    }
     const btnSelect = document.getElementById('btnSelect');
     btnSelect?.focus();
   });
@@ -311,6 +347,23 @@ export function syncFontInputToSelection(app: App): void {
   const sel = app.getSelectedObject();
   if (sel && sel.type === 'text') el.value = String(sel.fontSize);
   else el.value = String(app.fontSize);
+}
+
+// Mirror the thickness input to the selected arrow/highlighter's thickness
+// so the user sees the current value and edits it in place. For text or no
+// selection, fall back to the default used for new arrows/highlighters.
+export function syncThicknessInputToSelection(app: App): void {
+  const el = document.getElementById('inputThickness') as HTMLInputElement | null;
+  if (!el) return;
+  // Don't clobber in-progress typing: the clamp on commit would jump the
+  // value while the user is still editing.
+  if (document.activeElement === el) return;
+  const sel = app.getSelectedObject();
+  if (sel && (sel.type === 'arrow' || sel.type === 'highlighter')) {
+    el.value = String(sel.thickness);
+  } else {
+    el.value = String(app.thickness);
+  }
 }
 
 // Mirror the color input + palette swatch to the selected object's color so

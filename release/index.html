@@ -1428,7 +1428,7 @@
       getThickness: function () { return self.thickness; },
       getFontSize: function () { return self.fontSize; },
       onChange: function () { self._requestRender(); },
-      onSelect: function (id) { self.selectedId = id; self._updateSelectionUi(); self._syncFontInputToSelection(); self._syncColorInputToSelection(); },
+      onSelect: function (id) { self.selectedId = id; self._updateSelectionUi(); self._syncFontInputToSelection(); self._syncColorInputToSelection(); self._syncThicknessInputToSelection(); },
       onDoubleClickEmpty: function () {
         customPrompt(t('promptCenter'), self.store.get().centerText).then(function (txt) {
           if (txt !== null) {
@@ -1456,6 +1456,7 @@
       self._armAutosave();
       self._syncFontInputToSelection();
       self._syncColorInputToSelection();
+      self._syncThicknessInputToSelection();
       self._requestRender();
     });
     window.addEventListener('resize', function () { self._resize(); self._requestRender(); });
@@ -1614,6 +1615,20 @@
     var sel = this._getSelectedObject();
     if (sel && sel.type === 'text') el.value = String(sel.fontSize);
     else el.value = String(this.fontSize);
+  };
+  // Mirror the thickness input to the selected arrow/highlighter's thickness
+  // so the toolbar reflects the resize target. Falls back to the default used
+  // for new arrows/highlighters when text or nothing is selected.
+  App.prototype._syncThicknessInputToSelection = function () {
+    var el = document.getElementById('inputThickness');
+    if (!el) return;
+    if (document.activeElement === el) return;
+    var sel = this._getSelectedObject();
+    if (sel && (sel.type === 'arrow' || sel.type === 'highlighter')) {
+      el.value = String(sel.thickness);
+    } else {
+      el.value = String(this.thickness);
+    }
   };
   // Mirror the color input + palette swatch to the selected object's color so
   // the toolbar reflects the recolor target. Falls back to the default color
@@ -1797,13 +1812,49 @@
     });
     var thickEl = byId('inputThickness');
     thickEl.value = String(this.thickness);
-    thickEl.addEventListener('input', function () { self.thickness = parseFloat(thickEl.value) || 4; });
+    // One undo snapshot per editing session: the first `input` event after
+    // focus captures the pre-edit scene; subsequent edits in the same focused
+    // session don't pile up history entries. Reset on focus.
+    var thickHistoryPushed = false;
+    thickEl.addEventListener('focus', function () { thickHistoryPushed = false; });
+    thickEl.addEventListener('input', function () {
+      var raw = parseFloat(thickEl.value);
+      if (!isFinite(raw)) return;
+      var sel = self._getSelectedObject();
+      if (sel && (sel.type === 'arrow' || sel.type === 'highlighter')) {
+        if (!thickHistoryPushed) {
+          self.pushHistory();
+          thickHistoryPushed = true;
+        }
+        var clamped = Math.max(1, Math.min(40, raw));
+        self.store.update(sel.id, function (o) {
+          if (o.type === 'arrow' || o.type === 'highlighter') o.thickness = clamped;
+        });
+      } else {
+        self.thickness = raw || 4;
+      }
+    });
+    // On commit (blur / Enter), snap the field to the actual clamped value so
+    // an out-of-range entry like "100" visually corrects to "40".
+    thickEl.addEventListener('change', function () {
+      var sel = self._getSelectedObject();
+      if (sel && (sel.type === 'arrow' || sel.type === 'highlighter')) {
+        thickEl.value = String(sel.thickness);
+      } else {
+        thickEl.value = String(self.thickness);
+      }
+    });
     // Mirror of inputFontSize: Enter commits and hands focus back to the
     // Select-mode button so keyboard shortcuts resume working.
     thickEl.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter') return;
       e.preventDefault();
-      thickEl.value = String(self.thickness);
+      var sel = self._getSelectedObject();
+      if (sel && (sel.type === 'arrow' || sel.type === 'highlighter')) {
+        thickEl.value = String(sel.thickness);
+      } else {
+        thickEl.value = String(self.thickness);
+      }
       var btnSelect = document.getElementById('btnSelect');
       if (btnSelect) btnSelect.focus();
     });

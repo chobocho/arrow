@@ -19,6 +19,7 @@ import {
   syncCenterFontInput,
   syncColorInputToSelection,
   syncFontInputToSelection,
+  syncThicknessInputToSelection,
   updateSelectionUi,
   updateTitle,
 } from './ui/UiBindings.js';
@@ -102,6 +103,7 @@ export class App {
         updateSelectionUi(this);
         syncFontInputToSelection(this);
         syncColorInputToSelection(this);
+        syncThicknessInputToSelection(this);
       },
       onDoubleClickEmpty: () => {
         void customPrompt(t('promptCenter'), this.store.get().centerText).then((txt) => {
@@ -130,6 +132,7 @@ export class App {
       this.armAutosave();
       syncFontInputToSelection(this);
       syncColorInputToSelection(this);
+      syncThicknessInputToSelection(this);
       this.requestRender();
     });
     window.addEventListener('resize', () => { this.resize(); this.requestRender(); });

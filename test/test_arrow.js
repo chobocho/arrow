@@ -431,6 +431,25 @@
     assert(stub.undoStack.length === 1, 'undo has 1');
   });
 
+  // Thickness resize via the toolbar input mutates the selected
+  // arrow/highlighter's thickness — guard the underlying store.update path.
+  test('SceneStore.update can resize arrow and highlighter thickness', function () {
+    var s = new A.SceneStore();
+    var arr = s.addArrow({ x: 0, y: 0 }, { x: 100, y: 0 }, '#000000', 4);
+    var hl  = s.addHighlighter([{ x: 0, y: 0 }, { x: 50, y: 50 }], '#000000', 4);
+    s.update(arr.id, function (o) {
+      if (o.type === 'arrow' || o.type === 'highlighter') o.thickness = 12;
+    });
+    s.update(hl.id, function (o) {
+      if (o.type === 'arrow' || o.type === 'highlighter') o.thickness = 20;
+    });
+    var objs = s.get().objects;
+    var byId = {};
+    for (var i = 0; i < objs.length; i++) byId[objs[i].id] = objs[i];
+    assert(byId[arr.id].thickness === 12, 'arrow thickness updated, got ' + byId[arr.id].thickness);
+    assert(byId[hl.id].thickness === 20, 'highlighter thickness updated, got ' + byId[hl.id].thickness);
+  });
+
   // Color recolor relies on store.update(id, o => o.color = hex) working for
   // every object type. Guard against regressions by exercising each type.
   test('SceneStore.update can recolor arrow, text, and highlighter', function () {
