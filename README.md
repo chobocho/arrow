@@ -23,6 +23,29 @@ node scripts/arrow2png.js docs/intro-scene.json docs/intro.png
 `scripts/arrow2png.ts`는 출력 확장자(`.png` / `.svg`)에 따라 렌더 경로를 분기합니다.
 SVG 경로는 `node-canvas` 없이도 동작하므로 어떤 환경에서든 즉시 결과를 볼 수 있습니다.
 
+## `.arrow` 텍스트 포맷
+
+📥 가져오기 버튼은 `.json` (DB 전체 백업) 외에 `.arrow` (단일 씬 텍스트) 도 받습니다.
+한 줄에 하나의 체인을 적으면 자동으로 트리 레이아웃이 됩니다 — 키보드만으로 빠르게 씬을 짤 때 편합니다.
+
+```
+arrow                                   # 첫 줄: 파일 마커
+Book                                    # 둘째 줄: 주제 (centerText)
+Book -> 무협지 -> 김용                    # 체인. -> 또는 → 둘 다 가능
+Book -> 판타지 -> 뱀뱀이
+Book -> 잡지 -> PC 사랑 -> 2026.05
+할일 -> 이발 -> 13000                    # 'Book'에 속하지 않는 새 시작점 — 자동으로 또 하나의 가지로 추가
+# '#'은 주석 (줄 끝까지)
+```
+
+규칙:
+- 시작점이 기존 노드(주제 또는 이전 체인에서 등장한 단어)면 거기서 가지를 이어 붙입니다.
+- 시작점이 새 단어면 주제의 또 다른 자식 가지로 추가됩니다.
+- 각 부모는 자식 N개를 360°/N 간격으로 시계 방향 회전하며 배치 — 한 자식만 있으면 부모의 바깥 방향으로 일직선.
+- 글자 크기는 24로 통일.
+
+샘플 파일: `docs/examples/spec.arrow` — 그대로 가져오면 위 사양 그림이 그려집니다.
+
 ## 주요 기능
 
 - 🎯 **가운데 주제**: 캔버스 중앙에 주제 텍스트, 글자 크기까지 자유롭게 편집
@@ -46,6 +69,7 @@ SVG 경로는 `node-canvas` 없이도 동작하므로 어떤 환경에서든 즉
   - 전체 작업물을 JSON으로 내보내기 / 가져오기
 - 🔢 **글자 크기는 항상 정수**: 입력·리사이즈·DB/JSON 로딩 모두에서 `Math.floor`로 정규화 (레거시 소수값도 자동 복구)
 - 🖼️ **PNG 내보내기**: 현재 작업을 고해상도 PNG로 저장
+- 📥 **`.arrow` 텍스트 포맷 가져오기**: 한 줄 = 한 체인의 직관적 텍스트로 마인드맵 생성 (`docs/examples/spec.arrow` 참고)
 - 🌐 **한국어 / 영어 인터페이스 토글**
 - 📱 **PC + 모바일 터치 UI 지원**
 - 🚫 **외부 라이브러리 없음** — `python -m http.server`로 바로 실행 가능
@@ -130,7 +154,9 @@ arrow/
 │  ├─ canvas/CanvasView.ts, Renderer.ts
 │  ├─ models/types.ts, SceneStore.ts
 │  ├─ input/InputHandler.ts
-│  ├─ storage/IndexedDBStore.ts
+│  ├─ storage/
+│  │  ├─ IndexedDBStore.ts
+│  │  └─ ArrowFile.ts        # .arrow 텍스트 포맷 파서 + 트리 레이아웃
 │  ├─ i18n/lang.ts
 │  └─ utils/geometry.ts
 ├─ test/                     # 단위 테스트 (브라우저 + Node, 43개 케이스)
@@ -143,6 +169,7 @@ arrow/
 │  └─ tsconfig.json          # 스크립트 전용 Node 타깃
 ├─ build.sh / build.bat
 ├─ docs/                     # 아키텍처 다이어그램 + intro 마인드맵 (SVG/JSON)
+│  └─ examples/spec.arrow    # .arrow 포맷 샘플
 ├─ history.md                # 작업 이력
 ├─ TODO.md                   # 작업 항목 체크리스트
 └─ release/index.html        # 빌드 산출물 (단일 파일)

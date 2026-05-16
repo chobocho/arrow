@@ -4,6 +4,29 @@
 
 ## 2026-05-16
 
+### .arrow 텍스트 포맷 가져오기 — 한 줄 = 한 체인
+
+- 동기: 키보드만으로 빠르게 마인드맵 씬을 만들고 싶을 때 JSON 직접 편집은 부담스러움. 사용자 정의 텍스트 형식으로 한 줄에 한 체인을 적으면 자동 트리 레이아웃되도록.
+- 형식:
+  - 1줄: `arrow` (파일 마커, 대소문자 무시)
+  - 2줄: 주제(centerText)
+  - 3줄+: `A -> B -> C` 형태의 체인 (`->` 또는 `→` 인식)
+  - `#` 이후 줄 끝까지 주석, 빈 줄 무시
+- 의미론: 체인의 첫 단어가 기존 노드(주제 포함)면 거기서 가지를 이어 붙임. 기존에 없는 단어면 주제의 또 다른 자식 가지로 추가됨 → 다중 루트 지원.
+- 레이아웃: 주제는 중심, 각 부모는 자식을 360°/N 간격으로 시계 방향 회전 배치. 깊은 레벨은 부모의 outward angle을 시작각으로 사용 → 단일 자식 체인은 직선으로 뻗음. 글자 크기는 24로 통일 (사양 명시).
+- 좌표 변환: 트리는 원점(0,0)에서 시작해 layout되고, 마지막에 캔버스 중심(MAX/2, MAX/2)으로 일괄 평행이동 — 에디터 월드 경계 안에 들어가도록.
+- 화살표 트리밍: 양 끝을 텍스트 bbox 절반 + 14px 여유로 줄여 글자와 화살표가 겹치지 않게.
+- 신규 파일:
+  - `src/storage/ArrowFile.ts` — 토큰화 / 트리 빌드 / 폴라 레이아웃 / SceneData 변환.
+  - `docs/examples/spec.arrow` — 사양에 등장한 예시 그대로의 샘플.
+- 통합:
+  - `FileActions.handleImportFile`이 확장자로 분기(`.arrow` → 파서 + 씬 교체, 그 외 → 기존 JSON DB import). `.arrow`는 현재 씬을 교체하므로 dirty 상태일 때 `confirmUnsaved` 게이트를 통과해야 함.
+  - 같은 게이트가 필요한 `loadWork`(Modals)도 새로 추출한 `confirmUnsaved`로 통일 — Save/Don't Save/Cancel 로직 중복 제거.
+- UI: `index.html`의 `<input type="file">` accept를 `application/json,.json,.arrow`로 확장. 기존 📥 버튼 그대로 사용.
+- i18n: `invalidArrow` 한·영 추가 (파서 거부 시 alert 메시지).
+- 번들 동기화(`dist/bundle.js`): `parseArrowFile` 함수 + ArrowApp 익스포트, `_confirmUnsaved` 헬퍼, `_handleImportFile` 확장자 분기, `_loadWork` 헬퍼 사용, STRINGS 추가 모두 미러.
+- 테스트 추가(4건): 사양 예시 파싱(10 texts + 10 arrows), 마커 부재 거부, 라벨 중복 dedupe, 주석/빈 줄 무시. 총 45 → 49개 통과.
+
 ### arrow2png 스크립트 + 소개용 마인드맵 (PNG/SVG)
 
 - 동기: README에 "우리 앱으로 우리 앱을 설명하는" 마인드맵 예시가 필요. 동일한 `SceneData` JSON에서 이미지로 변환하는 단일 파일 스크립트로 처리.

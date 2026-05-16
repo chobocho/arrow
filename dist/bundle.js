@@ -66,6 +66,150 @@
     };
   }
 
+  // ---------- .arrow file parser ----------
+  // Text format:
+  //   line 1 : the literal "arrow" (case-insensitive)
+  //   line 2 : topic (centerText)
+  //   line 3+: chain "A -> B -> C" — arrows become edges between named text nodes
+  //   "#" begins a comment to EOL; blank lines ignored.
+  // Chain semantics: if a chain's first word already names a node it extends
+  // from there; otherwise that word becomes a new root hung off the topic.
+  // Layout: topic at center; each parent fans children at 360°/N starting at
+  // the parent's outward angle (12 o'clock for the topic), going clockwise.
+  var ARROW_FILE_FONT_SIZE = 24;
+  var ARROW_FILE_COLOR = '#222222';
+  var ARROW_FILE_THICKNESS = 4;
+  var ARROW_FILE_RING_RADIUS = 240;
+  var ARROW_FILE_RADIUS_FACTOR = 0.85;
+  var ARROW_FILE_NODE_PAD = 14;
+  function parseArrowFile(content, sceneName) {
+    // Tokenize: drop comments and blank lines.
+    var lines = String(content == null ? '' : content).split(/\r?\n/);
+    var cleaned = [];
+    for (var li = 0; li < lines.length; li++) {
+      var raw = lines[li];
+      var hashIdx = raw.indexOf('#');
+      if (hashIdx >= 0) raw = raw.substring(0, hashIdx);
+      var trimmed = raw.replace(/^\s+|\s+$/g, '');
+      if (trimmed) cleaned.push(trimmed);
+    }
+    if (cleaned.length < 2) return null;
+    if (cleaned[0].toLowerCase() !== 'arrow') return null;
+    var topic = cleaned[1];
+    var chains = [];
+    for (var ci = 2; ci < cleaned.length; ci++) {
+      var parts = cleaned[ci].split(/->|→/);
+      var keep = [];
+      for (var pi = 0; pi < parts.length; pi++) {
+        var s = parts[pi].replace(/^\s+|\s+$/g, '');
+        if (s.length > 0) keep.push(s);
+      }
+      if (keep.length > 0) chains.push(keep);
+    }
+    // Build tree.
+    var topicNode = { label: topic, children: [], pos: { x: 0, y: 0 } };
+    var nodes = {};
+    nodes[topic] = topicNode;
+    var edges = [];
+    var seenEdges = {};
+    function linkParentChild(parent, child) {
+      var key = parent.label + '\u0000' + child.label;
+      if (seenEdges[key]) return;
+      seenEdges[key] = true;
+      if (parent.children.indexOf(child) < 0) parent.children.push(child);
+      edges.push([parent, child]);
+    }
+    for (var k = 0; k < chains.length; k++) {
+      var chain = chains[k];
+      if (chain.length === 0) continue;
+      var first = chain[0];
+      var parent = nodes[first];
+      if (!parent) {
+        parent = { label: first, children: [], pos: null };
+        nodes[first] = parent;
+        linkParentChild(topicNode, parent);
+      }
+      for (var j = 1; j < chain.length; j++) {
+        var word = chain[j];
+        var child = nodes[word];
+        if (!child) {
+          child = { label: word, children: [], pos: null };
+          nodes[word] = child;
+        }
+        linkParentChild(parent, child);
+        parent = child;
+      }
+    }
+    // Layout (recursive).
+    function recurseLayout(p, radius, startAngle) {
+      var kids = p.children;
+      if (kids.length === 0) return;
+      var step = (2 * Math.PI) / kids.length;
+      for (var i = 0; i < kids.length; i++) {
+        var angle = startAngle + i * step;
+        var px = p.pos.x + radius * Math.cos(angle);
+        var py = p.pos.y + radius * Math.sin(angle);
+        kids[i].pos = { x: px, y: py };
+        recurseLayout(kids[i], radius * ARROW_FILE_RADIUS_FACTOR, angle);
+      }
+    }
+    recurseLayout(topicNode, ARROW_FILE_RING_RADIUS, -Math.PI / 2);
+    // Build objects.
+    var objects = [];
+    var charW = ARROW_FILE_FONT_SIZE * 0.65;
+    var textHeight = ARROW_FILE_FONT_SIZE;
+    function halfWidth(n) { return Math.max(charW, charW * n.label.length) / 2; }
+    var allLabels = Object.keys(nodes);
+    for (var n = 0; n < allLabels.length; n++) {
+      var node = nodes[allLabels[n]];
+      if (node === topicNode || !node.pos) continue;
+      var hw = halfWidth(node);
+      objects.push({
+        id: newId('text'),
+        type: 'text',
+        pos: { x: node.pos.x - hw, y: node.pos.y - textHeight / 2 },
+        text: node.label,
+        fontSize: ARROW_FILE_FONT_SIZE,
+        color: ARROW_FILE_COLOR
+      });
+    }
+    for (var e = 0; e < edges.length; e++) {
+      var from = edges[e][0], to = edges[e][1];
+      if (!from.pos || !to.pos) continue;
+      var dx = to.pos.x - from.pos.x;
+      var dy = to.pos.y - from.pos.y;
+      var len = Math.hypot(dx, dy);
+      if (len < 1) continue;
+      var ux = dx / len, uy = dy / len;
+      var fromGap = from === topicNode
+        ? ARROW_FILE_FONT_SIZE * 2.5 + ARROW_FILE_NODE_PAD
+        : halfWidth(from) + ARROW_FILE_NODE_PAD;
+      var toGap = halfWidth(to) + ARROW_FILE_NODE_PAD;
+      if (fromGap + toGap >= len) continue;
+      objects.push({
+        id: newId('arrow'),
+        type: 'arrow',
+        from: { x: from.pos.x + ux * fromGap, y: from.pos.y + uy * fromGap },
+        to:   { x: to.pos.x   - ux * toGap,   y: to.pos.y   - uy * toGap   },
+        color: ARROW_FILE_COLOR,
+        thickness: ARROW_FILE_THICKNESS
+      });
+    }
+    // Translate to canvas center.
+    var SHIFT = MAX_CANVAS_SIZE / 2;
+    for (var oi = 0; oi < objects.length; oi++) {
+      var o = objects[oi];
+      if (o.type === 'text') { o.pos.x += SHIFT; o.pos.y += SHIFT; }
+      else if (o.type === 'arrow') {
+        o.from.x += SHIFT; o.from.y += SHIFT; o.to.x += SHIFT; o.to.y += SHIFT;
+      }
+    }
+    var scene = emptyScene(sceneName || topic || 'arrow');
+    scene.centerText = topic;
+    scene.objects = objects;
+    return scene;
+  }
+
   // ---------- i18n ----------
   var STRINGS = {
     ko: {
@@ -84,6 +228,7 @@
       selectColor: '색상', thickness: '굵기', fontSize: '글자크기',
       saved: '저장됨', importedCount: '개 가져왔습니다',
       invalidJson: '잘못된 JSON 형식입니다',
+      invalidArrow: '잘못된 .arrow 파일 형식입니다 (첫 줄은 arrow, 둘째 줄은 주제)',
       untitled: '제목 없음',
       unsavedNew: '변경사항이 있습니다. 새로 만들까요?',
       unsavedLoad: '변경사항이 있습니다. 저장할까요?',
@@ -122,6 +267,7 @@
       selectColor: 'Color', thickness: 'Thickness', fontSize: 'Font Size',
       saved: 'Saved', importedCount: ' imported',
       invalidJson: 'Invalid JSON',
+      invalidArrow: 'Invalid .arrow file (line 1 must be "arrow", line 2 the topic)',
       untitled: 'Untitled',
       unsavedNew: 'Unsaved changes. New work?',
       unsavedLoad: 'Unsaved changes. Save them?',
@@ -1980,14 +2126,59 @@
     inp.value = '';
     inp.click();
   };
+  // Shared Save / Don't Save / Cancel gate used by loadWork and .arrow import
+  // before replacing the live scene. Resolves true when the caller may proceed.
+  App.prototype._confirmUnsaved = function () {
+    var self = this;
+    if (!self.dirty) return Promise.resolve(true);
+    return customChoice(t('unsavedLoad'), [
+      { value: 'cancel', label: t('cancel') },
+      { value: 'discard', label: t('dontSave') },
+      { value: 'save', label: t('save'), variant: 'primary' }
+    ]).then(function (choice) {
+      if (choice === null || choice === 'cancel') return false;
+      if (choice === 'discard') return true;
+      // 'save' — save first; if the name prompt is cancelled, dirty stays
+      // true and we abort the caller too.
+      return self._save().then(function () { return !self.dirty; });
+    });
+  };
   App.prototype._handleImportFile = function (e) {
     var self = this;
     var file = e.target.files && e.target.files[0];
     if (!file) return;
+    var name = file.name || '';
+    var isArrow = name.toLowerCase().slice(-6) === '.arrow';
     var reader = new FileReader();
     reader.onload = function () {
+      var text = String(reader.result);
+      if (isArrow) {
+        var base = name.replace(/\.[^./\\]+$/, '') || 'arrow';
+        var scene;
+        try {
+          scene = parseArrowFile(text, base);
+        } catch (err) {
+          console.warn(err);
+          window.alert(t('invalidArrow'));
+          return;
+        }
+        if (!scene) { window.alert(t('invalidArrow')); return; }
+        self._confirmUnsaved().then(function (ok) {
+          if (!ok) return;
+          var now = Date.now();
+          scene.createdAt = now;
+          scene.updatedAt = now;
+          self._adoptScene(scene);
+          return self.db.saveScene(scene)
+            .then(function () { return self.db.setMeta('lastSceneId', scene.id); })
+            .then(function () { return self._refreshWorks(); })
+            .then(function () { self._flashStatus(t('saved')); })
+            .catch(function (err) { console.warn(err); window.alert(t('invalidArrow')); });
+        });
+        return;
+      }
       try {
-        var payload = JSON.parse(String(reader.result));
+        var payload = JSON.parse(text);
         self.db.importAll(payload, true).then(function (count) {
           self._refreshWorks().then(function () { self._flashStatus(count + t('importedCount')); });
         }).catch(function () { window.alert(t('invalidJson')); });
@@ -1996,7 +2187,7 @@
         window.alert(t('invalidJson'));
       }
     };
-    reader.onerror = function () { window.alert(t('invalidJson')); };
+    reader.onerror = function () { window.alert(isArrow ? t('invalidArrow') : t('invalidJson')); };
     reader.readAsText(file);
   };
   App.prototype._refreshWorks = function () {
@@ -2213,34 +2404,15 @@
   };
   App.prototype._loadWork = function (id) {
     var self = this;
-    var run = function () {
+    self._confirmUnsaved().then(function (ok) {
+      if (!ok) return;
       self.db.loadScene(id).then(function (scene) {
         if (!scene) return;
         self._adoptScene(scene);
         self.db.setMeta('lastSceneId', id);
         self._closeWorksModal();
       });
-    };
-    if (this.dirty) {
-      // Save / Don't Save / Cancel triad so the user does not lose work
-      // when picking another from the list while edits are pending.
-      customChoice(t('unsavedLoad'), [
-        { value: 'cancel', label: t('cancel') },
-        { value: 'discard', label: t('dontSave') },
-        { value: 'save', label: t('save'), variant: 'primary' }
-      ]).then(function (choice) {
-        if (choice === null || choice === 'cancel') return;
-        if (choice === 'discard') { run(); return; }
-        // 'save' — save current first; if the name prompt is cancelled,
-        // `dirty` stays true and we abort the load.
-        self._save().then(function () {
-          if (self.dirty) return;
-          run();
-        });
-      });
-    } else {
-      run();
-    }
+    });
   };
   App.prototype._renameWork = function (w) {
     var self = this;
@@ -2554,6 +2726,7 @@
     clampToCanvas: clampToCanvas,
     newId: newId,
     emptyScene: emptyScene,
+    parseArrowFile: parseArrowFile,
     floorFontSize: floorFontSize,
     normalizeSceneFontSizes: normalizeSceneFontSizes,
     DEFAULT_CENTER_FONT_SIZE: DEFAULT_CENTER_FONT_SIZE,

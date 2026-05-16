@@ -2,9 +2,10 @@ import type { App } from '../app.js';
 import { SceneData, emptyScene } from '../models/types.js';
 import { MAX_CANVAS_SIZE, Vec } from '../utils/geometry.js';
 import { t } from '../i18n/lang.js';
-import { customConfirm, customPrompt } from '../ui/CustomPrompt.js';
+import { customChoice, customConfirm, customPrompt } from '../ui/CustomPrompt.js';
 import { refreshWorks } from '../ui/Modals.js';
 import { updateSelectionUi, updateTitle } from '../ui/UiBindings.js';
+import { parseArrowFile } from '../storage/ArrowFile.js';
 
 export async function ensureName(app: App): Promise<string | null> {
   let name = app.store.get().name;
@@ -24,6 +25,27 @@ export async function ensureName(app: App): Promise<string | null> {
     app.store.setName(name);
   }
   return name;
+}
+
+// Standard "Save / Don't Save / Cancel" gate before an action that would
+// replace the current scene. Returns true when the caller should proceed.
+// Reused by loadWork and .arrow import so the behavior stays identical
+// regardless of where the new scene comes from.
+export async function confirmUnsaved(app: App): Promise<boolean> {
+  if (!app.dirty) return true;
+  const choice = await customChoice(t('unsavedLoad'), [
+    { value: 'cancel', label: t('cancel') },
+    { value: 'discard', label: t('dontSave') },
+    { value: 'save', label: t('save'), variant: 'primary' },
+  ]);
+  if (choice === null || choice === 'cancel') return false;
+  if (choice === 'save') {
+    await save(app);
+    // save() may bail out if the user cancels the name prompt — detected
+    // by the dirty flag still being set. In that case abort the action.
+    if (app.dirty) return false;
+  }
+  return true;
 }
 
 export async function save(app: App): Promise<void> {
@@ -108,15 +130,45 @@ export async function handleImportFile(app: App, e: Event): Promise<void> {
   const inp = e.target as HTMLInputElement;
   const file = inp.files && inp.files[0];
   if (!file) return;
+  // Dispatch by filename extension: .arrow → text-format scene parser
+  // (replaces the current scene); anything else → JSON bulk DB import
+  // (does not touch the live view).
+  const name = file.name || '';
+  const lower = name.toLowerCase();
+  const isArrow = lower.endsWith('.arrow');
   try {
     const text = await file.text();
+    if (isArrow) {
+      // Strip extension for the scene name so a file called
+      // "ideas.arrow" becomes scene "ideas" in the works list.
+      const base = name.replace(/\.[^./\\]+$/, '') || 'arrow';
+      const scene = parseArrowFile(text, base);
+      if (!scene) {
+        window.alert(t('invalidArrow'));
+        return;
+      }
+      // Importing replaces the current view — go through the same Save /
+      // Don't Save / Cancel gate as loadWork so unsaved edits aren't lost.
+      if (!(await confirmUnsaved(app))) return;
+      // Stamp fresh timestamps so the new entry sorts as "most recent" in
+      // the works list; emptyScene already gave it a fresh id.
+      const now = Date.now();
+      scene.createdAt = now;
+      scene.updatedAt = now;
+      app.adoptScene(scene);
+      await app.db.saveScene(scene);
+      await app.db.setMeta('lastSceneId', scene.id);
+      await refreshWorks(app);
+      app.flashStatus(t('saved'));
+      return;
+    }
     const payload = JSON.parse(text);
     const count = await app.db.importAll(payload, true);
     await refreshWorks(app);
     app.flashStatus(count + t('importedCount'));
   } catch (err) {
     console.warn(err);
-    window.alert(t('invalidJson'));
+    window.alert(isArrow ? t('invalidArrow') : t('invalidJson'));
   }
 }
 

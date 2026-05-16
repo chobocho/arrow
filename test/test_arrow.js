@@ -431,6 +431,73 @@
     assert(stub.undoStack.length === 1, 'undo has 1');
   });
 
+  // ---- .arrow file parser ----
+  test('parseArrowFile parses the spec example into 10 texts + 10 arrows', function () {
+    var content = [
+      '# 주석 라인',
+      'arrow',
+      'Book',
+      'Book -> 무협지 -> 김용',
+      'Book -> 판타지 -> 뱀뱀이',
+      'Book -> 잡지 -> PC 사랑 -> 2026.05',
+      '할일 -> 이발 -> 13000'
+    ].join('\n');
+    var scene = A.parseArrowFile(content, 'spec');
+    assert(scene !== null, 'parser returned null on valid file');
+    assert(scene.centerText === 'Book', 'centerText is Book, got ' + scene.centerText);
+    var texts = scene.objects.filter(function (o) { return o.type === 'text'; });
+    var arrows = scene.objects.filter(function (o) { return o.type === 'arrow'; });
+    // 10 unique non-topic labels: 무협지, 김용, 판타지, 뱀뱀이, 잡지, PC 사랑, 2026.05, 할일, 이발, 13000
+    assert(texts.length === 10, 'expected 10 text objects, got ' + texts.length);
+    // 10 edges: 3 from topic (Book→무협지/판타지/잡지) + 1 topic→할일 + 6 within chains
+    assert(arrows.length === 10, 'expected 10 arrows, got ' + arrows.length);
+    // All texts use the unified fontSize 24.
+    for (var i = 0; i < texts.length; i++) {
+      assert(texts[i].fontSize === 24, 'fontSize unified at 24, got ' + texts[i].fontSize);
+    }
+  });
+  test('parseArrowFile rejects files without arrow marker', function () {
+    var bad = 'json\nBook\nA -> B';
+    assert(A.parseArrowFile(bad, 'x') === null, 'should return null for missing marker');
+    var empty = '';
+    assert(A.parseArrowFile(empty, 'x') === null, 'should return null for empty input');
+    var oneLine = 'arrow';
+    assert(A.parseArrowFile(oneLine, 'x') === null, 'should return null when only marker present');
+  });
+  test('parseArrowFile dedupes repeated labels into a single node', function () {
+    var content = [
+      'arrow',
+      'Hub',
+      'Hub -> A -> B',
+      'Hub -> A -> C',   // A reused — should not create a second "A"
+      'Hub -> A -> B'    // duplicate edge A->B — should not create a second arrow
+    ].join('\n');
+    var scene = A.parseArrowFile(content, 'x');
+    var texts = scene.objects.filter(function (o) { return o.type === 'text'; });
+    // Unique non-topic labels: A, B, C
+    assert(texts.length === 3, 'expected 3 unique labels, got ' + texts.length);
+    var arrows = scene.objects.filter(function (o) { return o.type === 'arrow'; });
+    // Edges should dedupe: Hub→A, A→B, A→C  →  3 arrows
+    assert(arrows.length === 3, 'expected 3 unique edges, got ' + arrows.length);
+  });
+  test('parseArrowFile strips comments and ignores blanks', function () {
+    var content = [
+      '# top comment',
+      '',
+      'arrow # inline comment',
+      'Topic',
+      '',
+      '# another',
+      'Topic -> One',
+      'Topic -> Two # trailing comment'
+    ].join('\n');
+    var scene = A.parseArrowFile(content, 'x');
+    assert(scene !== null, 'parser returned null on commented file');
+    assert(scene.centerText === 'Topic', 'centerText preserved, got ' + scene.centerText);
+    var texts = scene.objects.filter(function (o) { return o.type === 'text'; });
+    assert(texts.length === 2, 'comments stripped, got ' + texts.length + ' texts');
+  });
+
   // Thickness resize via the toolbar input mutates the selected
   // arrow/highlighter's thickness — guard the underlying store.update path.
   test('SceneStore.update can resize arrow and highlighter thickness', function () {
