@@ -4,6 +4,12 @@
 
 ## 2026-05-16
 
+### saveAs 팝업 타이틀을 분리 — '새 이름으로 작업 저장'
+
+- 동기: save / saveAs 두 흐름이 같은 `t('promptName')` 타이틀("작업 이름")을 쓰고 있어 혼동. saveAs는 의미상 사본 생성(새 id, 새 timestamps)이므로 의도를 명확히 드러내는 별도 문구가 좋음.
+- 변경: i18n 신규 키 `promptSaveAs` 한·영 추가 ("새 이름으로 작업 저장" / "Save work as new name"). `saveAs`만 새 키로 전환, `ensureName`은 종전대로 `promptName` 유지(첫 저장 이름 지정 의미 그대로).
+- 번들 동기화(`dist/bundle.js`): STRINGS 한·영에 `promptSaveAs` 추가, `App.prototype._saveAs`가 새 키 사용.
+
 ### 저장 시 이름 입력 prompt를 주제(centerText)로 자동 채움
 
 - 동기: 새 작업을 처음 저장할 때 마다 사용자가 이름을 직접 타이핑해야 함. 대부분 작업의 자연스러운 이름은 캔버스 중심 주제와 일치하므로, 그 값을 prompt 기본값으로 미리 채워 Enter 한 번이면 끝나도록.

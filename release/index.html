@@ -431,7 +431,7 @@
       language: 'EN', works: '작업 목록',
       editCenter: '주제 편집',
       promptCenter: '가운데 주제를 입력하세요',
-      promptName: '작업 이름', promptRename: '새 이름',
+      promptName: '작업 이름', promptSaveAs: '새 이름으로 작업 저장', promptRename: '새 이름',
       promptText: '글자를 입력하세요',
       confirmDelete: '정말 삭제할까요?', confirmDeleteSelected: '선택한 객체를 삭제할까요?',
       zoomIn: '확대', zoomOut: '축소', fit: '맞춤',
@@ -472,7 +472,7 @@
       language: '한', works: 'Works',
       editCenter: 'Edit Topic',
       promptCenter: 'Enter the center topic',
-      promptName: 'Work name', promptRename: 'New name',
+      promptName: 'Work name', promptSaveAs: 'Save work as new name', promptRename: 'New name',
       promptText: 'Enter text',
       confirmDelete: 'Delete this work?', confirmDeleteSelected: 'Delete the selected object?',
       zoomIn: 'Zoom In', zoomOut: 'Zoom Out', fit: 'Fit',
@@ -2282,7 +2282,9 @@
   };
   App.prototype._saveAs = function () {
     var self = this;
-    customPrompt(t('promptName'), this.store.get().name).then(function (input) {
+    // saveAs makes a COPY (new id, new timestamps) — distinct title so the
+    // intent is unambiguous vs. ensureName's first-time naming prompt.
+    customPrompt(t('promptSaveAs'), this.store.get().name).then(function (input) {
       if (input === null) return;
       var next = JSON.parse(JSON.stringify(self.store.get()));
       next.id = newId('scene');

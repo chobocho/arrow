@@ -68,7 +68,10 @@ export async function save(app: App): Promise<void> {
 }
 
 export async function saveAs(app: App): Promise<void> {
-  const input = await customPrompt(t('promptName'), app.store.get().name);
+  // saveAs makes a COPY (new id, new timestamps) — distinct from ensureName
+  // which assigns a first-time name. Use a dedicated prompt title so the
+  // intent ("save as a new copy") is unambiguous.
+  const input = await customPrompt(t('promptSaveAs'), app.store.get().name);
   if (input === null) return;
   const next: SceneData = JSON.parse(JSON.stringify(app.store.get()));
   next.id = 'scene_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
