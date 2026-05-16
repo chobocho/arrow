@@ -2,6 +2,20 @@
 
 본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위에 추가합니다.
 
+## 2026-05-16
+
+### 선택된 객체의 색상 변경 지원
+
+- 동기: 글자 크기 입력은 이미 선택된 텍스트의 `fontSize`를 즉석에서 바꾸지만 색상 입력은 기본값만 바꾸고 있어 사용자가 만든 객체의 색을 바꾸려면 지우고 다시 그려야 했음. 폰트 크기와 동일한 selection-aware 패턴을 색상에도 적용.
+- 동작: 선택된 객체가 있으면 색상 피커(`#inputColor`)와 16색 팔레트 스와치 클릭이 그 객체의 `color`를 `store.update`로 변경, 없으면 종전대로 `app.color`(다음 신규 객체용 기본값)를 갱신. 화살표·텍스트·하이라이터 세 타입 모두 동일 적용 — 모든 `SceneObject`가 `color`를 가짐.
+- 동기화: `syncColorInputToSelection(app)` 추가. 선택 변경(`onSelect`)과 store 변경(`store.subscribe`) 시 색상 입력 값과 활성 스와치를 선택 객체 색에 맞춤. 단, 색상 입력이 현재 포커스 상태면 네이티브 피커 드래그를 끊지 않도록 스킵.
+- 히스토리:
+  - 스와치 클릭은 1회 클릭당 `pushHistory()` 1번 — 명확한 단일 액션이므로.
+  - 색상 피커는 `input` 이벤트가 드래그 중 연속 발화하므로 `focus` 시 플래그를 reset하고 첫 `input`에서만 `pushHistory()`. 같은 피커 세션의 후속 input은 히스토리를 누적하지 않음.
+  - 선택이 없을 때(기본값만 바뀜)는 push 안 함 — 기본값은 SceneData에 속하지 않아 undo 대상이 아님.
+- 번들 동기화(`dist/bundle.js`): UiBindings 색상 블록(스와치 핸들러·`applyColor` 도우미·picker focus/input 핸들러), `App.prototype._syncColorInputToSelection`, `onSelect` 콜백, `store.subscribe` 콜백 모두 미러.
+- 테스트 추가(1건): `SceneStore.update`가 세 객체 타입의 `color` 필드를 모두 변경할 수 있음을 보장. 총 43 → 44개 통과.
+
 ## 2026-05-15
 
 ### 실행 취소 / 다시 실행 (Undo/Redo, 최대 8단계)

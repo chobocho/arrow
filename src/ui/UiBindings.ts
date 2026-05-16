@@ -83,6 +83,19 @@ export function bindUi(app: App): void {
       b.classList.toggle('active', (b.dataset.color || '').toLowerCase() === target);
     });
   };
+  // Apply a chosen color. When an object is selected, recolor it in place;
+  // otherwise update the default color used for newly created objects. Mirrors
+  // the selection-aware behavior of the font-size input.
+  const applyColor = (hex: string): void => {
+    const sel = app.getSelectedObject();
+    if (sel) {
+      app.store.update(sel.id, (o) => { o.color = hex; });
+    } else {
+      app.color = hex;
+    }
+    colorEl.value = hex;
+    updatePaletteActive(hex);
+  };
   for (const hex of PALETTE_16) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -91,9 +104,8 @@ export function bindUi(app: App): void {
     btn.dataset.color = hex;
     btn.title = hex.toUpperCase();
     btn.addEventListener('click', () => {
-      app.color = hex;
-      colorEl.value = hex;
-      updatePaletteActive(hex);
+      if (app.selectedId) app.pushHistory();
+      applyColor(hex);
       // Return focus to body so keyboard shortcuts (+, Enter, Delete, ...) keep working.
       colorEl.blur();
       btn.blur();
@@ -101,9 +113,17 @@ export function bindUi(app: App): void {
     paletteEl.appendChild(btn);
   }
   updatePaletteActive(app.color);
+  // One undo snapshot per picker session: the first `input` event after focus
+  // captures the pre-edit scene; subsequent inputs in the same drag don't pile
+  // up history entries. Reset on focus so the next session captures fresh.
+  let pickerHistoryPushed = false;
+  colorEl.addEventListener('focus', () => { pickerHistoryPushed = false; });
   colorEl.addEventListener('input', () => {
-    app.color = colorEl.value;
-    updatePaletteActive(colorEl.value);
+    if (!pickerHistoryPushed && app.selectedId) {
+      app.pushHistory();
+      pickerHistoryPushed = true;
+    }
+    applyColor(colorEl.value);
   });
   // After the native color picker commits, hand focus to the Select-mode
   // button so keyboard shortcuts (+ / Enter / Delete / V·A·T·G·H) resume —
@@ -291,4 +311,25 @@ export function syncFontInputToSelection(app: App): void {
   const sel = app.getSelectedObject();
   if (sel && sel.type === 'text') el.value = String(sel.fontSize);
   else el.value = String(app.fontSize);
+}
+
+// Mirror the color input + palette swatch to the selected object's color so
+// the toolbar reflects the recolor target. Falls back to the default color
+// used for new objects when nothing is selected.
+export function syncColorInputToSelection(app: App): void {
+  const el = document.getElementById('inputColor') as HTMLInputElement | null;
+  if (!el) return;
+  // Skip while the native picker is open — overwriting its value mid-drag
+  // would yank the picker's cursor back.
+  if (document.activeElement === el) return;
+  const sel = app.getSelectedObject();
+  const hex = sel ? sel.color : app.color;
+  el.value = hex;
+  const palette = document.getElementById('colorPalette');
+  if (palette) {
+    const target = hex.toLowerCase();
+    palette.querySelectorAll<HTMLButtonElement>('.swatch').forEach((b) => {
+      b.classList.toggle('active', (b.dataset.color || '').toLowerCase() === target);
+    });
+  }
 }

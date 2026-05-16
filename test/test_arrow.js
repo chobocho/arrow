@@ -431,6 +431,24 @@
     assert(stub.undoStack.length === 1, 'undo has 1');
   });
 
+  // Color recolor relies on store.update(id, o => o.color = hex) working for
+  // every object type. Guard against regressions by exercising each type.
+  test('SceneStore.update can recolor arrow, text, and highlighter', function () {
+    var s = new A.SceneStore();
+    var arr = s.addArrow({ x: 0, y: 0 }, { x: 100, y: 0 }, '#000000', 4);
+    var txt = s.addText({ x: 10, y: 10 }, 'hi', 16, '#000000');
+    var hl  = s.addHighlighter([{ x: 0, y: 0 }, { x: 50, y: 50 }], '#000000', 4);
+    s.update(arr.id, function (o) { o.color = '#ff0000'; });
+    s.update(txt.id, function (o) { o.color = '#00ff00'; });
+    s.update(hl.id,  function (o) { o.color = '#0000ff'; });
+    var objs = s.get().objects;
+    var byId = {};
+    for (var i = 0; i < objs.length; i++) byId[objs[i].id] = objs[i];
+    assert(byId[arr.id].color === '#ff0000', 'arrow recolored');
+    assert(byId[txt.id].color === '#00ff00', 'text recolored');
+    assert(byId[hl.id].color  === '#0000ff', 'highlighter recolored');
+  });
+
   // ---- summary ----
   var ok = results.length - failed;
   var msg = 'TOTAL ' + results.length + ' / PASS ' + ok + ' / FAIL ' + failed;

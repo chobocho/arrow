@@ -17,6 +17,7 @@ import {
   bindUi,
   setMode,
   syncCenterFontInput,
+  syncColorInputToSelection,
   syncFontInputToSelection,
   updateSelectionUi,
   updateTitle,
@@ -100,6 +101,7 @@ export class App {
         this.selectedId = id;
         updateSelectionUi(this);
         syncFontInputToSelection(this);
+        syncColorInputToSelection(this);
       },
       onDoubleClickEmpty: () => {
         void customPrompt(t('promptCenter'), this.store.get().centerText).then((txt) => {
@@ -127,6 +129,7 @@ export class App {
       this.dirty = true;
       this.armAutosave();
       syncFontInputToSelection(this);
+      syncColorInputToSelection(this);
       this.requestRender();
     });
     window.addEventListener('resize', () => { this.resize(); this.requestRender(); });

@@ -1428,7 +1428,7 @@
       getThickness: function () { return self.thickness; },
       getFontSize: function () { return self.fontSize; },
       onChange: function () { self._requestRender(); },
-      onSelect: function (id) { self.selectedId = id; self._updateSelectionUi(); self._syncFontInputToSelection(); },
+      onSelect: function (id) { self.selectedId = id; self._updateSelectionUi(); self._syncFontInputToSelection(); self._syncColorInputToSelection(); },
       onDoubleClickEmpty: function () {
         customPrompt(t('promptCenter'), self.store.get().centerText).then(function (txt) {
           if (txt !== null) {
@@ -1455,6 +1455,7 @@
       self.dirty = true;
       self._armAutosave();
       self._syncFontInputToSelection();
+      self._syncColorInputToSelection();
       self._requestRender();
     });
     window.addEventListener('resize', function () { self._resize(); self._requestRender(); });
@@ -1614,6 +1615,29 @@
     if (sel && sel.type === 'text') el.value = String(sel.fontSize);
     else el.value = String(this.fontSize);
   };
+  // Mirror the color input + palette swatch to the selected object's color so
+  // the toolbar reflects the recolor target. Falls back to the default color
+  // used for new objects when nothing is selected.
+  App.prototype._syncColorInputToSelection = function () {
+    var el = document.getElementById('inputColor');
+    if (!el) return;
+    // Skip while the native picker is open — overwriting its value mid-drag
+    // would yank the picker's cursor back.
+    if (document.activeElement === el) return;
+    var sel = this._getSelectedObject();
+    var hex = sel ? sel.color : this.color;
+    el.value = hex;
+    var palette = document.getElementById('colorPalette');
+    if (palette) {
+      var target = String(hex || '').toLowerCase();
+      var nodes = palette.querySelectorAll('.swatch');
+      for (var i = 0; i < nodes.length; i++) {
+        var b = nodes[i];
+        var bc = (b.dataset && b.dataset.color ? b.dataset.color : '').toLowerCase();
+        if (bc === target) b.classList.add('active'); else b.classList.remove('active');
+      }
+    }
+  };
   App.prototype._requestRender = function () {
     if (this.renderScheduled) return;
     this.renderScheduled = true;
@@ -1710,6 +1734,19 @@
         if (bc === target) b.classList.add('active'); else b.classList.remove('active');
       }
     }
+    // Apply a chosen color. When an object is selected, recolor it in place;
+    // otherwise update the default color used for newly created objects.
+    // Mirrors the selection-aware behavior of the font-size input.
+    function applyColor(hex) {
+      var sel = self._getSelectedObject();
+      if (sel) {
+        self.store.update(sel.id, function (o) { o.color = hex; });
+      } else {
+        self.color = hex;
+      }
+      colorEl.value = hex;
+      updatePaletteActive(hex);
+    }
     if (paletteEl) {
       for (var pi = 0; pi < PALETTE_16.length; pi++) {
         (function (hex) {
@@ -1720,9 +1757,8 @@
           btn.dataset.color = hex;
           btn.title = hex.toUpperCase();
           btn.addEventListener('click', function () {
-            self.color = hex;
-            colorEl.value = hex;
-            updatePaletteActive(hex);
+            if (self.selectedId) self.pushHistory();
+            applyColor(hex);
             // Return focus to body so keyboard shortcuts (+, Enter, Delete, ...) keep working.
             colorEl.blur();
             btn.blur();
@@ -1732,9 +1768,17 @@
       }
       updatePaletteActive(this.color);
     }
+    // One undo snapshot per picker session: the first `input` event after focus
+    // captures the pre-edit scene; subsequent inputs in the same drag don't pile
+    // up history entries. Reset on focus so the next session captures fresh.
+    var pickerHistoryPushed = false;
+    colorEl.addEventListener('focus', function () { pickerHistoryPushed = false; });
     colorEl.addEventListener('input', function () {
-      self.color = colorEl.value;
-      updatePaletteActive(colorEl.value);
+      if (!pickerHistoryPushed && self.selectedId) {
+        self.pushHistory();
+        pickerHistoryPushed = true;
+      }
+      applyColor(colorEl.value);
     });
     // After the native color picker commits, hand focus to the Select-mode
     // button so keyboard shortcuts (+ / Enter / Delete / V·A·T·G·H) resume —
