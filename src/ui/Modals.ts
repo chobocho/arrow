@@ -40,6 +40,7 @@ export function openHelpModal(app: App): void {
     ['helpSecKeys', 'helpKeys'],
     ['helpSecMouse', 'helpMouse'],
     ['helpSecMobile', 'helpMobile'],
+    ['helpSecToolbar', 'helpToolbar'],
     ['helpSecTools', 'helpTools'],
     ['helpSecFormat', 'helpFormat'],
   ];
