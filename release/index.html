@@ -1457,6 +1457,7 @@
       self._syncFontInputToSelection();
       self._syncColorInputToSelection();
       self._syncThicknessInputToSelection();
+      self._updateTitle();
       self._requestRender();
     });
     window.addEventListener('resize', function () { self._resize(); self._requestRender(); });
@@ -1942,9 +1943,15 @@
       else btn.setAttribute('disabled', '');
     }
   };
+  // Header title follows the center topic when it has content; otherwise it
+  // falls back to the saved scene name, and finally to the i18n "untitled"
+  // placeholder. Trim so whitespace-only topics don't shadow the real name.
   App.prototype._updateTitle = function () {
     var el = document.getElementById('titleName');
-    if (el) el.textContent = this.store.get().name || t('untitled');
+    if (!el) return;
+    var scene = this.store.get();
+    var topic = String(scene.centerText || '').replace(/^\s+|\s+$/g, '');
+    el.textContent = topic || scene.name || t('untitled');
   };
   App.prototype._applyLangToUi = function () {
     var setText = function (id, key) {

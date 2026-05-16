@@ -4,6 +4,13 @@
 
 ## 2026-05-16
 
+### 좌측 상단 제목이 중심 토픽을 따라가도록 변경
+
+- 동기: 화면 좌측 상단 `#titleName`이 저장된 작업명(`scene.name`)만 보여줘서 사용자가 토픽을 정해도 헤더는 그대로였음. 화면의 정체성을 즉시 반영하도록 토픽 우선 표시로 전환.
+- 동작: `updateTitle()`이 `scene.centerText` 트림 결과가 비어있지 않으면 그것을 표시하고, 비어있으면 종전대로 `scene.name`, 그래도 없으면 i18n `untitled` 폴백. 토픽 우선 → 이름 폴백 → "제목 없음" 순.
+- 트리거: `app.ts`의 `store.subscribe`에 `updateTitle(this)` 추가 — 중심 텍스트가 어떤 경로(헤더 ✏️ 버튼, 빈 영역 더블클릭)로 바뀌어도 즉시 헤더에 반영.
+- 번들 동기화(`dist/bundle.js`): `App.prototype._updateTitle` 본문 교체 + `store.subscribe` 콜백에 `_updateTitle()` 추가. TS `String.trim()` 대신 정규식 `replace`로 더 보수적인 ES5 호환 작성.
+
 ### 글자 크기 입력에 undo 지원 추가
 
 - 동기: 글자 크기 입력은 이전부터 선택된 텍스트의 `fontSize`를 즉석에서 바꾸도록 동작했지만 `pushHistory()` 호출이 없어 되돌릴 수 없었음. 색상·굵기는 이번 작업에서 focus + 첫 input 플래그로 undo를 지원하도록 했으므로 글자 크기도 일관되게 맞춤.

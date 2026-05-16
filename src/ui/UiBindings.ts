@@ -285,9 +285,15 @@ export function updateSelectionUi(app: App): void {
   if (btn) btn.toggleAttribute('disabled', !app.selectedId);
 }
 
+// Header title follows the center topic when it has content; otherwise it
+// falls back to the saved scene name, and finally to the i18n "untitled"
+// placeholder. Trim so whitespace-only topics don't shadow the real name.
 export function updateTitle(app: App): void {
   const el = document.getElementById('titleName');
-  if (el) el.textContent = app.store.get().name || t('untitled');
+  if (!el) return;
+  const scene = app.store.get();
+  const topic = (scene.centerText || '').trim();
+  el.textContent = topic || scene.name || t('untitled');
 }
 
 export function applyLangToUi(app: App): void {

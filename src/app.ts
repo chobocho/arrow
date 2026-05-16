@@ -133,6 +133,7 @@ export class App {
       syncFontInputToSelection(this);
       syncColorInputToSelection(this);
       syncThicknessInputToSelection(this);
+      updateTitle(this);
       this.requestRender();
     });
     window.addEventListener('resize', () => { this.resize(); this.requestRender(); });
