@@ -284,7 +284,8 @@
       invalidJson: '잘못된 JSON 형식입니다',
       untitled: '제목 없음',
       unsavedNew: '변경사항이 있습니다. 새로 만들까요?',
-      unsavedLoad: '변경사항이 있습니다. 불러올까요?',
+      unsavedLoad: '변경사항이 있습니다. 저장할까요?',
+      dontSave: '저장 안 함',
       placeholderTopic: '주제 / Topic',
       ok: '확인', cancel: '취소',
       load: '불러오기', close: '닫기', noWorks: '저장된 작업이 없습니다',
@@ -318,7 +319,8 @@
       invalidJson: 'Invalid JSON',
       untitled: 'Untitled',
       unsavedNew: 'Unsaved changes. New work?',
-      unsavedLoad: 'Unsaved changes. Discard?',
+      unsavedLoad: 'Unsaved changes. Save them?',
+      dontSave: "Don't Save",
       placeholderTopic: 'Topic / 주제',
       ok: 'OK', cancel: 'Cancel',
       load: 'Load', close: 'Close', noWorks: 'No saved works',
@@ -436,6 +438,62 @@
     });
   }
   // Replacement for window.confirm — resolves true on OK, false on cancel/Esc/backdrop.
+  // Three-or-more-button choice dialog. Each button carries a `value` returned
+  // by the promise when clicked. Esc / backdrop resolve null. Enter activates
+  // the primary button if one is provided.
+  function customChoice(message, buttons) {
+    injectCustomPromptStyles();
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'ap-overlay';
+      var card = document.createElement('div');
+      card.className = 'ap-card';
+      var title = document.createElement('div');
+      title.className = 'ap-title';
+      title.textContent = message;
+      var actions = document.createElement('div');
+      actions.className = 'ap-actions';
+      card.appendChild(title);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      var finished = false;
+      function finish(value) {
+        if (finished) return;
+        finished = true;
+        document.removeEventListener('keydown', onKey, true);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        resolve(value);
+      }
+      var primaryBtn = null;
+      for (var i = 0; i < buttons.length; i++) {
+        (function (b) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'ap-btn' + (b.variant === 'primary' ? ' primary' : '');
+          btn.textContent = b.label;
+          btn.addEventListener('click', function () { finish(b.value); });
+          actions.appendChild(btn);
+          if (b.variant === 'primary') primaryBtn = btn;
+        })(buttons[i]);
+      }
+      function onKey(ev) {
+        if (ev.key === 'Enter') {
+          if (ev.isComposing || ev.keyCode === 229) return;
+          if (!primaryBtn) return;
+          ev.preventDefault(); ev.stopPropagation();
+          primaryBtn.click();
+        } else if (ev.key === 'Escape') {
+          ev.preventDefault(); ev.stopPropagation();
+          finish(null);
+        }
+      }
+      document.addEventListener('keydown', onKey, true);
+      overlay.addEventListener('mousedown', function (ev) { if (ev.target === overlay) finish(null); });
+      requestAnimationFrame(function () { (primaryBtn || actions.firstChild).focus(); });
+    });
+  }
+
   function customConfirm(message) {
     injectCustomPromptStyles();
     return new Promise(function (resolve) {
@@ -2013,7 +2071,7 @@
   };
   App.prototype._save = function () {
     var self = this;
-    this._ensureName().then(function (name) {
+    return this._ensureName().then(function (name) {
       if (name === null) return;
       var scene = self.store.get();
       scene.viewOffsetX = self.view.offset.x;
@@ -2333,7 +2391,22 @@
       });
     };
     if (this.dirty) {
-      customConfirm(t('unsavedLoad')).then(function (ok) { if (ok) run(); });
+      // Save / Don't Save / Cancel triad so the user does not lose work
+      // when picking another from the list while edits are pending.
+      customChoice(t('unsavedLoad'), [
+        { value: 'cancel', label: t('cancel') },
+        { value: 'discard', label: t('dontSave') },
+        { value: 'save', label: t('save'), variant: 'primary' }
+      ]).then(function (choice) {
+        if (choice === null || choice === 'cancel') return;
+        if (choice === 'discard') { run(); return; }
+        // 'save' — save current first; if the name prompt is cancelled,
+        // `dirty` stays true and we abort the load.
+        self._save().then(function () {
+          if (self.dirty) return;
+          run();
+        });
+      });
     } else {
       run();
     }

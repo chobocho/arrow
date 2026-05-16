@@ -147,6 +147,75 @@ export function customPrompt(message: string, defaultValue: string = ''): Promis
   });
 }
 
+// Three-or-more-button choice dialog. Each button carries a `value` returned
+// by the promise when clicked. Esc / backdrop / "Cancel" semantics: resolve
+// with null. Enter focuses & activates the button marked `variant: 'primary'`
+// (typically the last/safest non-destructive action — e.g. Save in a
+// Save/Don't Save/Cancel triad).
+export interface ChoiceButton {
+  label: string;
+  value: string;
+  variant?: 'primary' | 'default';
+}
+
+export function customChoice(message: string, buttons: ChoiceButton[]): Promise<string | null> {
+  injectStyles();
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'ap-overlay';
+    const card = document.createElement('div');
+    card.className = 'ap-card';
+    const title = document.createElement('div');
+    title.className = 'ap-title';
+    title.textContent = message;
+    const actions = document.createElement('div');
+    actions.className = 'ap-actions';
+    card.appendChild(title);
+    card.appendChild(actions);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    let finished = false;
+    const finish = (value: string | null): void => {
+      if (finished) return;
+      finished = true;
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      resolve(value);
+    };
+
+    let primaryBtn: HTMLButtonElement | null = null;
+    for (const b of buttons) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ap-btn' + (b.variant === 'primary' ? ' primary' : '');
+      btn.textContent = b.label;
+      btn.addEventListener('click', () => finish(b.value));
+      actions.appendChild(btn);
+      if (b.variant === 'primary') primaryBtn = btn;
+    }
+
+    const onKey = (ev: KeyboardEvent): void => {
+      if (ev.key === 'Enter') {
+        if (ev.isComposing || ev.keyCode === 229) return;
+        if (!primaryBtn) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        primaryBtn.click();
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        finish(null);
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    overlay.addEventListener('mousedown', (ev) => {
+      if (ev.target === overlay) finish(null);
+    });
+    requestAnimationFrame(() => { (primaryBtn || actions.firstElementChild as HTMLButtonElement | null)?.focus(); });
+  });
+}
+
 // Replacement for window.confirm — resolves true on OK, false on cancel/Esc/backdrop.
 export function customConfirm(message: string): Promise<boolean> {
   injectStyles();

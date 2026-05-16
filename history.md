@@ -4,6 +4,19 @@
 
 ## 2026-05-16
 
+### 작업 중 불러오기 시 저장/저장 안 함/취소 3-옵션 다이얼로그
+
+- 동기: 기존 `loadWork`는 dirty 상태에서 `customConfirm(t('unsavedLoad'))` 하나만 띄워 "버리기 / 취소" 이진 선택만 가능 → 작업 중인 내용을 잃을 위험. 표준 데스크탑 패턴인 "Save / Don't Save / Cancel" 3-옵션으로 교체.
+- 신규 도우미: `ui/CustomPrompt.ts`에 `customChoice(message, buttons)` 추가. 각 버튼은 `{ label, value, variant?: 'primary' }`. 클릭 시 `value` resolve, Esc/배경 클릭 시 `null`. Enter는 `variant: 'primary'` 버튼을 활성화. 기존 `customConfirm`은 그대로 두고 새 도우미만 추가 — 다른 호출자 영향 없음.
+- `loadWork` 변경:
+  - dirty가 true이면 `customChoice`로 [취소, 저장 안 함, 저장(primary)] 표시.
+  - `null`/`cancel` → return.
+  - `discard` → 그대로 load 진행.
+  - `save` → `await save(app)` 후 `app.dirty`가 여전히 true이면 abort(이름 입력 취소된 경우 등) — 안전한 fail-stop.
+- i18n: ko `unsavedLoad`를 "변경사항이 있습니다. 저장할까요?"로 자연스러운 질문형으로 변경, en도 "Unsaved changes. Save them?"로. 신규 키 `dontSave`("저장 안 함" / "Don't Save") 추가.
+- 모듈 의존성: `Modals.ts`가 `FileActions.save`를 import — 기존 `FileActions → Modals.refreshWorks` 경로와 함께 cycle이 되지만 둘 다 함수 본문 내에서만 참조하므로 ES 모듈의 cyclic dependency 규칙상 런타임 안전.
+- 번들 동기화(`dist/bundle.js`): `customChoice` 함수 추가, `STRINGS.ko/en`에 변경 반영, `App.prototype._save`가 promise를 반환하도록 (caller가 await 가능) — 내부 chain은 동일. `App.prototype._loadWork`를 동일한 3-옵션 로직으로 교체.
+
 ### 새 작업 생성 시 헤더가 "Untitled / 제목 없음"으로 뜨던 문제 수정
 
 - 증상: 직전 변경으로 헤더 제목이 토픽 → 이름 → "untitled" 순으로 폴백하는데, 새 작업 버튼이 `emptyScene(t('untitled'))`로 이름을 "제목 없음"으로 박아 넣어 토픽이 빈 상태에서 헤더가 "제목 없음" / "Untitled"로 표시.

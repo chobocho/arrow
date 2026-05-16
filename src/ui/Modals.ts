@@ -1,8 +1,8 @@
 import type { App } from '../app.js';
 import { SceneSummary } from '../storage/IndexedDBStore.js';
 import { t } from '../i18n/lang.js';
-import { customConfirm, customPrompt, ensureModalStyles } from './CustomPrompt.js';
-import { newScene } from '../app/FileActions.js';
+import { customChoice, customConfirm, customPrompt, ensureModalStyles } from './CustomPrompt.js';
+import { newScene, save } from '../app/FileActions.js';
 
 export async function refreshWorks(app: App): Promise<void> {
   try {
@@ -204,7 +204,22 @@ export function renderWorks(app: App): void {
 }
 
 export async function loadWork(app: App, id: string): Promise<void> {
-  if (app.dirty && !(await customConfirm(t('unsavedLoad')))) return;
+  // With unsaved work, give the user three options instead of a single
+  // discard-or-cancel — saving first is the most common safe choice.
+  if (app.dirty) {
+    const choice = await customChoice(t('unsavedLoad'), [
+      { value: 'cancel', label: t('cancel') },
+      { value: 'discard', label: t('dontSave') },
+      { value: 'save', label: t('save'), variant: 'primary' },
+    ]);
+    if (choice === null || choice === 'cancel') return;
+    if (choice === 'save') {
+      await save(app);
+      // save() may bail out if the user cancels the name prompt — detected
+      // by the dirty flag still being set. In that case abort the load too.
+      if (app.dirty) return;
+    }
+  }
   const scene = await app.db.loadScene(id);
   if (!scene) return;
   app.adoptScene(scene);
