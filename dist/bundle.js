@@ -103,8 +103,7 @@
       helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동\nCtrl 토글 + 형광펜 드래그 — 직선 형광펜',
       cloneToggle: 'Ctrl (복제 드래그 토글)',
       chainInsert: '체인 추가',
-      chainPlaceholder: '독서 -> 전공서적 -> LLM',
-      chainTooltip: '화살표로 연결된 글자 체인 추가 (Enter)'
+      chainPlaceholder: '독서 -> 전공서적 -> LLM'
     },
     en: {
       appTitle: 'Arrow Mind Map',
@@ -141,8 +140,7 @@
       helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move\nCtrl toggle + highlighter drag — Straight stroke',
       cloneToggle: 'Ctrl (clone-drag toggle)',
       chainInsert: 'Insert Chain',
-      chainPlaceholder: 'Read -> Textbook -> LLM',
-      chainTooltip: 'Insert a text-and-arrow chain (Enter)'
+      chainPlaceholder: 'Read -> Textbook -> LLM'
     }
   };
   var currentLang = 'ko';
@@ -189,7 +187,7 @@
       '.ap-sort-btn.active{background:#3a7afe;border-color:#3a7afe;color:#fff;}';
     document.head.appendChild(style);
   }
-  function customPrompt(message, defaultValue) {
+  function customPrompt(message, defaultValue, placeholder) {
     injectCustomPromptStyles();
     return new Promise(function (resolve) {
       var overlay = document.createElement('div');
@@ -203,6 +201,7 @@
       input.type = 'text';
       input.className = 'ap-input';
       input.value = defaultValue == null ? '' : defaultValue;
+      if (placeholder) input.placeholder = placeholder;
       var actions = document.createElement('div');
       actions.className = 'ap-actions';
       var cancelBtn = document.createElement('button');
@@ -1588,32 +1587,19 @@
     byId('btnDelete').addEventListener('click', function () { self._deleteSelected(); });
     byId('btnWorks').addEventListener('click', function () { self._openWorksModal(); });
     byId('btnHelp').addEventListener('click', function () { self._openHelpModal(); });
-    // Chain input — type "A -> B -> C" and the segments become text objects
-    // joined by horizontal arrows at the viewport center. Enter or the ⛓️
-    // button commits. Capped to CHAIN_MAX_SEGMENTS to bound the canvas damage
-    // from a runaway paste. After commit, clear and hand focus to Select.
-    var chainEl = document.getElementById('inputChain');
-    var chainBtn = document.getElementById('btnChainInsert');
-    function commitChain() {
-      if (!chainEl) return;
-      var n = self._insertChain(chainEl.value);
-      if (n > 0) {
-        chainEl.value = '';
-        self._flashStatus('+ chain (' + n + ')');
-        var btnSelect = document.getElementById('btnSelect');
-        if (btnSelect) btnSelect.focus();
-      }
-    }
-    if (chainEl) {
-      chainEl.addEventListener('keydown', function (e) {
-        if (e.key !== 'Enter') return;
-        // Ignore IME-commit Enter (Korean/Japanese composition).
-        if (e.isComposing || e.keyCode === 229) return;
-        e.preventDefault();
-        commitChain();
+    // Chain icon — opens a popup with a single-line input. Typing
+    // "A -> B -> C" and pressing Enter (or OK) inserts the text+arrow
+    // chain at the viewport center, capped to CHAIN_MAX_SEGMENTS.
+    var chainBtn = document.getElementById('btnChain');
+    if (chainBtn) {
+      chainBtn.addEventListener('click', function () {
+        customPrompt(t('chainInsert'), '', t('chainPlaceholder')).then(function (raw) {
+          if (raw === null) return;
+          var n = self._insertChain(raw);
+          if (n > 0) self._flashStatus('+ chain (' + n + ')');
+        });
       });
     }
-    if (chainBtn) chainBtn.addEventListener('click', commitChain);
     // Virtual Ctrl: sticky toggle that mirrors physical Ctrl/⌘ for drag-clone
     // on mobile (TODO #15). Tapping toggles; stays active until tapped again.
     var ctrlBtn = byId('btnVirtualCtrl');
@@ -1875,12 +1861,7 @@
     setTip('btnWorks', 'works');
     setTip('btnHelp', 'help');
     setTip('btnVirtualCtrl', 'cloneToggle');
-    setTip('btnChainInsert', 'chainInsert');
-    var chainInputEl = document.getElementById('inputChain');
-    if (chainInputEl) {
-      chainInputEl.placeholder = t('chainPlaceholder');
-      chainInputEl.title = t('chainTooltip');
-    }
+    setTip('btnChain', 'chainInsert');
     var langEl = document.getElementById('btnLang');
     if (langEl) langEl.title = currentLang === 'ko' ? 'Switch to English' : '한국어로 전환';
     setText('labelColor', 'selectColor');

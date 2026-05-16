@@ -4,6 +4,17 @@
 
 ## 2026-05-16
 
+### 체인 입력을 아이콘 + 팝업으로 전환 (🦀)
+
+- 동기: 헤더 인라인 입력창이 폭(220px)을 차지해 다른 컨트롤과 좁아 보임. 자주 쓰는 입력이 아니므로 아이콘만 노출하고 클릭 시 팝업으로 받도록 UX 단순화.
+- 변경:
+  - `index.html`에서 `<input id="inputChain">`+`<button id="btnChainInsert">` 묶음 삭제 → 단일 아이콘 버튼 `<button id="btnChain">🦀</button>`로 교체. `.chain-input` CSS도 함께 제거(사용처 없음).
+  - `UiBindings.ts` 인라인 wiring 제거. 아이콘 클릭 시 `customPrompt(t('chainInsert'), '', t('chainPlaceholder'))` 호출 → 입력값을 `insertChain`에 전달. 취소(null)는 noop.
+  - `applyLangToUi`의 `setTip` 대상이 `btnChainInsert` → `btnChain`. 인라인 input placeholder/title 동기화 로직 제거(불필요).
+- `customPrompt` 확장: 세 번째 인자 `placeholder` 추가 — 비어있지 않으면 input의 `placeholder` 속성으로 적용. 기본값이 있으면 그것을, 없으면 placeholder만 보이는 형태로 작동. 다른 호출자에는 영향 없음(기본값 `''`).
+- i18n 정리: 더 이상 참조되지 않는 `chainTooltip` 키 삭제. `chainInsert`(아이콘 툴팁 + 다이얼로그 제목)·`chainPlaceholder`(다이얼로그 input placeholder)만 유지.
+- 번들 동기화(`dist/bundle.js`): `customPrompt`에 `placeholder` 파라미터, 인라인 wiring을 팝업 wiring으로 교체, `applyLangToUi`·STRINGS 키 정리 모두 미러.
+
 ### 체인 입력 — "A -> B -> C" 한 줄로 글자+화살표 추가
 
 - 동기: 매번 글자→배치→화살표→연결을 반복하는 대신, "독서 -> 전공서적 -> LLM" 같은 직관적 한 줄을 입력하면 자동으로 글자 노드들과 그 사이를 잇는 화살표가 한 번에 추가되도록.

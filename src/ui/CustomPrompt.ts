@@ -81,7 +81,7 @@ function injectStyles(): void {
   document.head.appendChild(style);
 }
 
-export function customPrompt(message: string, defaultValue: string = ''): Promise<string | null> {
+export function customPrompt(message: string, defaultValue: string = '', placeholder: string = ''): Promise<string | null> {
   injectStyles();
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -95,6 +95,7 @@ export function customPrompt(message: string, defaultValue: string = ''): Promis
     input.type = 'text';
     input.className = 'ap-input';
     input.value = defaultValue ?? '';
+    if (placeholder) input.placeholder = placeholder;
     const actions = document.createElement('div');
     actions.className = 'ap-actions';
     const cancelBtn = document.createElement('button');

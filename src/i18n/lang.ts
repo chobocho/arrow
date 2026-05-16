@@ -65,7 +65,6 @@ const strings: Record<LangCode, Dict> = {
     cloneToggle: 'Ctrl (복제 드래그 토글)',
     chainInsert: '체인 추가',
     chainPlaceholder: '독서 -> 전공서적 -> LLM',
-    chainTooltip: '화살표로 연결된 글자 체인 추가 (Enter)',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -129,7 +128,6 @@ const strings: Record<LangCode, Dict> = {
     cloneToggle: 'Ctrl (clone-drag toggle)',
     chainInsert: 'Insert Chain',
     chainPlaceholder: 'Read -> Textbook -> LLM',
-    chainTooltip: 'Insert a text-and-arrow chain (Enter)',
   },
 };
 
