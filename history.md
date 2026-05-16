@@ -4,6 +4,12 @@
 
 ## 2026-05-16
 
+### 새 작업 생성 시 헤더가 "Untitled / 제목 없음"으로 뜨던 문제 수정
+
+- 증상: 직전 변경으로 헤더 제목이 토픽 → 이름 → "untitled" 순으로 폴백하는데, 새 작업 버튼이 `emptyScene(t('untitled'))`로 이름을 "제목 없음"으로 박아 넣어 토픽이 빈 상태에서 헤더가 "제목 없음" / "Untitled"로 표시.
+- 수정: `FileActions.newScene`이 `t('newWork')`를 사용하도록 변경. 한국어 '새 작업', 영어 'New Work'(기존 'New'에서 헤더용으로 더 자연스럽게 확장)로 표시. 사용자가 명시적으로 빈 이름으로 저장(save/saveAs)할 때는 종전대로 `t('untitled')` 폴백 유지 — 사용자 의도가 다름.
+- 번들 동기화(`dist/bundle.js`): `_newScene`의 `t('untitled')` → `t('newWork')`, 영어 사전 `newWork: 'New'` → `'New Work'`.
+
 ### 좌측 상단 제목이 중심 토픽을 따라가도록 변경
 
 - 동기: 화면 좌측 상단 `#titleName`이 저장된 작업명(`scene.name`)만 보여줘서 사용자가 토픽을 정해도 헤더는 그대로였음. 화면의 정체성을 즉시 반영하도록 토픽 우선 표시로 전환.

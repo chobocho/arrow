@@ -72,7 +72,7 @@ const strings: Record<LangCode, Dict> = {
     modePan: 'Pan',
     save: 'Save',
     saveAs: 'Save As',
-    newWork: 'New',
+    newWork: 'New Work',
     delete: 'Delete',
     rename: 'Rename',
     exportPng: 'Export PNG',

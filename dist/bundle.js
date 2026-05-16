@@ -105,7 +105,7 @@
     en: {
       appTitle: 'Arrow Mind Map',
       modeSelect: 'Select', modeArrow: 'Arrow', modeText: 'Text', modeHighlighter: 'Highlighter', modePan: 'Pan',
-      save: 'Save', saveAs: 'Save As', newWork: 'New',
+      save: 'Save', saveAs: 'Save As', newWork: 'New Work',
       delete: 'Delete', rename: 'Rename',
       exportPng: 'Export PNG', exportJson: 'Export JSON', importJson: 'Import JSON',
       language: '한', works: 'Works',
@@ -1847,7 +1847,7 @@
   App.prototype._newScene = function () {
     var self = this;
     var run = function () {
-      self._adoptScene(emptyScene(t('untitled')));
+      self._adoptScene(emptyScene(t('newWork')));
       self.view.scale = 1;
       self.view.centerOn({ x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 });
       self._requestRender();

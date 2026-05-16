@@ -54,7 +54,7 @@ export async function newScene(app: App): Promise<void> {
   if (app.dirty && !(await customConfirm(t('unsavedNew')))) {
     return;
   }
-  app.adoptScene(emptyScene(t('untitled')));
+  app.adoptScene(emptyScene(t('newWork')));
   app.view.scale = 1;
   app.view.offset = { x: MAX_CANVAS_SIZE / 2 - app.view.width / 2, y: MAX_CANVAS_SIZE / 2 - app.view.height / 2 };
   app.requestRender();
