@@ -83,11 +83,18 @@ function buildTree(parsed: ParsedArrowFile): { topicNode: TreeNode; nodes: Map<s
   // Set-based dedupe for edges so a label repeated across chains doesn't
   // emit duplicate arrows.
   const seenEdges = new Set<string>();
+  // Attach `child` to `parent.children` so the layout pass places it as
+  // part of `parent`'s fan, without emitting a parent→child arrow. Used
+  // for new-root nodes so they sit alongside the topic's branches but
+  // remain logically independent.
+  const attachForLayoutOnly = (parent: TreeNode, child: TreeNode): void => {
+    if (!parent.children.includes(child)) parent.children.push(child);
+  };
   const linkParentChild = (parent: TreeNode, child: TreeNode): void => {
     const key = parent.label + '\u0000' + child.label;
     if (seenEdges.has(key)) return;
     seenEdges.add(key);
-    if (!parent.children.includes(child)) parent.children.push(child);
+    attachForLayoutOnly(parent, child);
     edges.push([parent, child]);
   };
   for (const chain of parsed.chains) {
@@ -97,10 +104,13 @@ function buildTree(parsed: ParsedArrowFile): { topicNode: TreeNode; nodes: Map<s
     if (nodes.has(first)) {
       parent = nodes.get(first) as TreeNode;
     } else {
-      // New root: hang off the topic as a top-level branch.
+      // New root: place it in the topic's layout fan so it stays near the
+      // center, but do NOT add a topic→newRoot edge — the spec says new
+      // start words are independent roots, not implicit children of the
+      // topic.
       const newRoot: TreeNode = { label: first, children: [], pos: null };
       nodes.set(first, newRoot);
-      linkParentChild(topicNode, newRoot);
+      attachForLayoutOnly(topicNode, newRoot);
       parent = newRoot;
     }
     for (let i = 1; i < chain.length; i++) {

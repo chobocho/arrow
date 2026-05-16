@@ -432,7 +432,7 @@
   });
 
   // ---- .arrow file parser ----
-  test('parseArrowFile parses the spec example into 10 texts + 10 arrows', function () {
+  test('parseArrowFile parses the spec example into 10 texts + 9 arrows', function () {
     var content = [
       '# 주석 라인',
       'arrow',
@@ -449,12 +449,31 @@
     var arrows = scene.objects.filter(function (o) { return o.type === 'arrow'; });
     // 10 unique non-topic labels: 무협지, 김용, 판타지, 뱀뱀이, 잡지, PC 사랑, 2026.05, 할일, 이발, 13000
     assert(texts.length === 10, 'expected 10 text objects, got ' + texts.length);
-    // 10 edges: 3 from topic (Book→무협지/판타지/잡지) + 1 topic→할일 + 6 within chains
-    assert(arrows.length === 10, 'expected 10 arrows, got ' + arrows.length);
+    // 9 edges: 3 from topic (Book→무협지/판타지/잡지) + 6 within chains
+    // (할일 is a free root — NO topic→할일 arrow)
+    assert(arrows.length === 9, 'expected 9 arrows, got ' + arrows.length);
     // All texts use the unified fontSize 24.
     for (var i = 0; i < texts.length; i++) {
       assert(texts[i].fontSize === 24, 'fontSize unified at 24, got ' + texts[i].fontSize);
     }
+  });
+  // Regression: new-root chains must NOT receive an implicit topic→root arrow.
+  // Reproduces the user's bug report where 📚독서 was getting an arrow from
+  // the topic 🎯 Arrow Map even though no chain mentioned it as a child.
+  test('parseArrowFile does not add an arrow from topic to a free root', function () {
+    var content = [
+      'arrow',
+      'Topic',
+      'Standalone -> Leaf'
+    ].join('\n');
+    var scene = A.parseArrowFile(content, 'x');
+    var arrows = scene.objects.filter(function (o) { return o.type === 'arrow'; });
+    // Only one arrow: Standalone → Leaf. NO Topic → Standalone.
+    assert(arrows.length === 1, 'expected exactly 1 arrow, got ' + arrows.length);
+    // The Standalone text must exist (positioned somewhere) but no arrow
+    // should originate near the canvas center pointing at it.
+    var texts = scene.objects.filter(function (o) { return o.type === 'text'; });
+    assert(texts.length === 2, 'expected 2 text nodes, got ' + texts.length);
   });
   test('parseArrowFile rejects files without arrow marker', function () {
     var bad = 'json\nBook\nA -> B';
@@ -501,6 +520,12 @@
     for (var li = 0; li < leaves.length; li++) {
       assert(joined.indexOf(leaves[li]) >= 0, 'serialized output missing leaf ' + leaves[li]);
     }
+    // 할일 must be exported as a free root (chain starts with 할일, not Book).
+    var hasFreeRoot = false;
+    for (var ll = 0; ll < lines.length; ll++) {
+      if (lines[ll].replace(/^\s+/, '').indexOf('할일') === 0) { hasFreeRoot = true; break; }
+    }
+    assert(hasFreeRoot, 'free root 할일 not exported as own chain start');
     // Re-parse: structural equivalence on counts of texts & arrows.
     var s2 = A.parseArrowFile(text, 'rt2');
     assert(s2 !== null, 'reparse returned null');
