@@ -6,6 +6,23 @@ HTML5 Canvas + TypeScript 기반의 변형 마인드맵 웹앱입니다.
 > "Arrow" only mind map — a Canvas-based mind mapping tool that supports
 > arrows, text, and highlighter strokes radiating from a single center topic.
 
+## 예시 — 우리 앱으로 우리 앱 소개하기
+
+아래 마인드맵은 본 저장소의 `scripts/arrow2png.js`로 `docs/intro-scene.json`에서 생성한 것입니다.
+실제 앱에서 만든 것과 동일한 객체 모델(`SceneData`)을 사용하므로, 같은 JSON을 앱에 가져와 편집할 수도 있습니다.
+
+![Arrow Mind Map intro](docs/intro.svg)
+
+PNG 버전이 필요하면 (`npm install canvas` 후):
+
+```sh
+tsc -p scripts/tsconfig.json
+node scripts/arrow2png.js docs/intro-scene.json docs/intro.png
+```
+
+`scripts/arrow2png.ts`는 출력 확장자(`.png` / `.svg`)에 따라 렌더 경로를 분기합니다.
+SVG 경로는 `node-canvas` 없이도 동작하므로 어떤 환경에서든 즉시 결과를 볼 수 있습니다.
+
 ## 주요 기능
 
 - 🎯 **가운데 주제**: 캔버스 중앙에 주제 텍스트, 글자 크기까지 자유롭게 편집
@@ -120,9 +137,12 @@ arrow/
 │  ├─ test_runner.html
 │  ├─ test_arrow.js
 │  └─ run_node.js
-├─ scripts/inline_build.py   # release 빌드 헬퍼
+├─ scripts/
+│  ├─ inline_build.py        # release 빌드 헬퍼
+│  ├─ arrow2png.ts           # JSON 씬 → PNG/SVG 이미지 변환 (단일 파일)
+│  └─ tsconfig.json          # 스크립트 전용 Node 타깃
 ├─ build.sh / build.bat
-├─ docs/                     # 아키텍처 다이어그램 (PlantUML + PNG)
+├─ docs/                     # 아키텍처 다이어그램 + intro 마인드맵 (SVG/JSON)
 ├─ history.md                # 작업 이력
 ├─ TODO.md                   # 작업 항목 체크리스트
 └─ release/index.html        # 빌드 산출물 (단일 파일)

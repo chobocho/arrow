@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="956" height="618" viewBox="-420 -230 956 617.4" font-family="sans-serif">
+<rect x="-420" y="-230" width="956" height="617.4" fill="#fafafa"/>
+<line x1="-50" y1="-40" x2="-136.23690373528012" y2="-100.36583261469609" stroke="#555555" stroke-width="4" stroke-linecap="round"/>
+<polygon points="-150,-110 -123.45688577518308,-106.06768678150861 -137.21998203990296,-86.40612068905163" fill="#555555"/>
+<line x1="50" y1="-40" x2="136.23690373528012" y2="-100.36583261469609" stroke="#555555" stroke-width="4" stroke-linecap="round"/>
+<polygon points="150,-110 137.21998203990296,-86.40612068905163 123.45688577518308,-106.06768678150861" fill="#555555"/>
+<line x1="-65" y1="0" x2="-173.2" y2="0" stroke="#555555" stroke-width="4" stroke-linecap="round"/>
+<polygon points="-190,0 -166,-12 -166,12" fill="#555555"/>
+<line x1="65" y1="0" x2="173.2" y2="0" stroke="#555555" stroke-width="4" stroke-linecap="round"/>
+<polygon points="190,0 166,12 166,-12" fill="#555555"/>
+<line x1="-50" y1="40" x2="-136.23690373528012" y2="100.36583261469609" stroke="#555555" stroke-width="4" stroke-linecap="round"/>
+<polygon points="-150,110 -137.21998203990296,86.40612068905163 -123.45688577518308,106.06768678150861" fill="#555555"/>
+<line x1="50" y1="40" x2="136.23690373528012" y2="100.36583261469609" stroke="#555555" stroke-width="4" stroke-linecap="round"/>
+<polygon points="150,110 123.45688577518308,106.06768678150861 137.21998203990296,86.40612068905163" fill="#555555"/>
+<line x1="-150" y1="240" x2="-86.8" y2="240" stroke="#009688" stroke-width="4" stroke-linecap="round"/>
+<polygon points="-70,240 -94,252 -94,228" fill="#009688"/>
+<line x1="30" y1="240" x2="93.2" y2="240" stroke="#009688" stroke-width="4" stroke-linecap="round"/>
+<polygon points="110,240 86,252 86,228" fill="#009688"/>
+<text x="-290" y="-150" font-size="22" fill="#f44336" dominant-baseline="text-before-edge">🎨 색상 팔레트</text>
+<text x="170" y="-150" font-size="22" fill="#009688" dominant-baseline="text-before-edge">🦀 체인 입력</text>
+<text x="-340" y="-12" font-size="22" fill="#2196f3" dominant-baseline="text-before-edge">🖱️ 선택 / 이동</text>
+<text x="210" y="-12" font-size="22" fill="#ff9800" dominant-baseline="text-before-edge">🖍️ 형광펜</text>
+<text x="-290" y="125" font-size="22" fill="#607d8b" dominant-baseline="text-before-edge">↩️ Undo / Redo</text>
+<text x="170" y="125" font-size="22" fill="#4caf50" dominant-baseline="text-before-edge">💾 저장 / 📋 목록</text>
+<text x="-230" y="222" font-size="24" fill="#222222" dominant-baseline="text-before-edge">📚 독서</text>
+<text x="-50" y="222" font-size="24" fill="#222222" dominant-baseline="text-before-edge">📖 정리</text>
+<text x="130" y="222" font-size="24" fill="#222222" dominant-baseline="text-before-edge">🧠 LLM</text>
+<text x="-90" y="285" font-size="16" fill="#888888" dominant-baseline="text-before-edge">↑ 🦀 체인 입력 예시</text>
+<text x="58" y="78.69999999999999" font-size="36" fill="#333" text-anchor="middle" dominant-baseline="central">🎯 Mind Map</text>
+</svg>

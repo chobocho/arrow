@@ -4,6 +4,18 @@
 
 ## 2026-05-16
 
+### arrow2png 스크립트 + 소개용 마인드맵 (PNG/SVG)
+
+- 동기: README에 "우리 앱으로 우리 앱을 설명하는" 마인드맵 예시가 필요. 동일한 `SceneData` JSON에서 이미지로 변환하는 단일 파일 스크립트로 처리.
+- 신규 파일:
+  - `scripts/arrow2png.ts` — 단일 파일 CLI. 입력 JSON과 출력 경로를 받아 PNG(node-canvas 필요) 또는 SVG(순수 JS, 무의존성)로 변환. 출력 확장자로 자동 분기. `src/canvas/Renderer.ts`의 수식(highlighter 우선·shaft+삼각형 head·text top-left·중심 라벨 wrap)을 그대로 가져옴.
+  - `scripts/tsconfig.json` — Node 타깃 별도 tsconfig (DOM lib 제외, `types: []`). 메인 프로젝트 빌드와 분리.
+  - `docs/intro-scene.json` — 6개 스포크 + 체인 예시 + 중심 라벨로 구성된 소개 씬. 한·영 라벨, 카테고리별 색상 코드.
+  - `docs/intro.svg` — arrow2png로 생성한 SVG. README가 참조하는 예시 이미지.
+- 의존성 처리: `@types/node`는 환경마다 다를 수 있어 의존하지 않음. 필요한 Node API(`process`, `require`, fs/path 모듈, Buffer)는 스크립트 상단에 ambient 선언으로 직접 선언. `require('canvas')`는 lazy하게 호출 — canvas 미설치 환경에서도 SVG 경로는 정상 동작.
+- 환경 한계: 본 작업 환경(PRoot/Termux)은 node-canvas native build가 실패하므로 PNG 직접 생성은 불가. SVG는 GitHub markdown에서 정상 렌더되고, 이모지는 뷰어의 폰트로 처리되어 색상 이모지가 보존됨. PNG가 필요한 사용자는 `npm install canvas` 후 동일 스크립트로 변환 가능.
+- README: 상단 "예시" 섹션 신설 — intro.svg 임베드 + arrow2png 사용법 + 디렉토리 구조에 신규 파일 반영.
+
 ### 체인 삽입 앵커를 마지막 편집 객체 + (10, 10)으로
 
 - 동기: 매번 뷰포트 가운데에 체인이 나오면 연달아 삽입할 때 정확히 같은 위치에 겹쳐 표시돼 결과가 잘 안 보임. 사용자가 마지막 편집한 객체 기준으로 약간 어긋난 위치에 새 체인이 놓이도록.
