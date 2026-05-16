@@ -2253,7 +2253,10 @@
     ];
     if (!name || placeholders.indexOf(name) >= 0) {
       var self = this;
-      return customPrompt(t('promptName'), '').then(function (input) {
+      // Pre-fill the prompt with the center topic so the most natural
+      // name for the work is one Enter-press away.
+      var topic = String(this.store.get().centerText || '').replace(/^\s+|\s+$/g, '');
+      return customPrompt(t('promptName'), topic).then(function (input) {
         if (input === null) return null;
         var trimmed = input.trim() || t('untitled');
         self.store.setName(trimmed);

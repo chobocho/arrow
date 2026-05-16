@@ -4,6 +4,13 @@
 
 ## 2026-05-16
 
+### 저장 시 이름 입력 prompt를 주제(centerText)로 자동 채움
+
+- 동기: 새 작업을 처음 저장할 때 마다 사용자가 이름을 직접 타이핑해야 함. 대부분 작업의 자연스러운 이름은 캔버스 중심 주제와 일치하므로, 그 값을 prompt 기본값으로 미리 채워 Enter 한 번이면 끝나도록.
+- 수정: `ensureName`에서 `customPrompt(t('promptName'), '')` → `customPrompt(t('promptName'), topic)`. `topic = (centerText || '').trim()` — 비어있으면 종전대로 빈 입력창.
+- 영향 범위: name이 placeholder(`새 작업` / `New Work` / `Untitled` / `제목 없음`)인 경우에만 prompt가 뜨므로, 한 번 이름 정한 작업의 이후 저장에는 영향 없음. saveAs는 종전대로 "현재 이름"을 기본값으로 — 의미가 다르므로 그대로 둠.
+- 번들 동기화(`dist/bundle.js`): `App.prototype._ensureName`도 동일한 방식으로 topic prefill.
+
 ### 텍스트 모드 클릭 commit 후 자동으로 선택 모드로 전환
 
 - 동기: 텍스트 모드에서 캔버스를 클릭해 글자를 입력하면, 다음 동작이 보통 "방금 입력한 글자 위치/크기 조정"이므로 commit 직후 Select 모드로 자동 전환되는 게 자연스러움. 키보드 경로(`Enter` → `insertTextAtViewportCenter`)는 이미 `setMode(app, 'select')`를 호출하고 있어 일관성도 맞춤.

@@ -19,7 +19,11 @@ export async function ensureName(app: App): Promise<string | null> {
     '새 작업', '제목 없음', 'New Work', 'Untitled',
   ];
   if (!name || placeholders.indexOf(name) >= 0) {
-    const input = await customPrompt(t('promptName'), '');
+    // Pre-fill the prompt with the center topic so the most natural name
+    // for the work is one Enter-press away. Empty topic falls back to a
+    // blank field — user types from scratch.
+    const topic = (app.store.get().centerText || '').trim();
+    const input = await customPrompt(t('promptName'), topic);
     if (input === null) return null;
     name = input.trim() || t('untitled');
     app.store.setName(name);
