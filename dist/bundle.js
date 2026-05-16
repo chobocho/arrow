@@ -242,11 +242,13 @@
       help: '도움말', helpTitle: '도움말',
       helpSecModes: '모드 전환', helpSecKeys: '키보드 단축키',
       helpSecMouse: '마우스', helpSecMobile: '모바일', helpSecTools: '도구',
+      helpSecFormat: '.arrow 텍스트 포맷',
       helpModes: 'V — 선택\nA — 화살표\nT — 글자\nG — 형광펜\nH — 이동',
       helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + Z — 실행 취소 (최근 8단계)\nCtrl/⌘ + Y / Ctrl+Shift+Z — 다시 실행\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
       helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝\nCtrl + 드래그 (형광펜) — 직선 형광펜',
       helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동\nCtrl 토글 + 형광펜 드래그 — 직선 형광펜',
       helpTools: "🦀 체인 추가 — 'A -> B -> C' 형식으로 한 줄 입력하면 글자 노드들과 그 사이를 잇는 화살표가 가로로 한 번에 추가됩니다. 구분자는 -> 또는 →. 마지막 노드는 자동 선택되어 바로 위치·크기 조정 가능. 한 체인은 단일 Undo 단계로 묶임. 최대 10개 세그먼트.",
+      helpFormat: "📥 JSON 가져오기 버튼은 .arrow 텍스트 파일도 받습니다 — 키보드만으로 빠르게 씬 짜기.\n\n형식:\n  1줄: arrow (파일 마커)\n  2줄: 주제 (centerText)\n  3줄+: A -> B -> C 형태 체인 (-> 또는 → 둘 다 인정)\n  '#'은 줄 끝까지 주석, 빈 줄 무시\n\n규칙:\n  • 시작점이 기존 노드(주제 또는 이전 체인의 단어)면 거기서 가지를 이어 붙입니다.\n  • 새 단어가 시작점이면 주제의 또 다른 자식 가지로 추가됩니다.\n  • 각 부모 → 자식 N개는 360°/N 간격으로 시계 방향 회전 배치, 글자 크기는 24로 통일.\n\n샘플: docs/examples/spec.arrow",
       cloneToggle: 'Ctrl (복제 드래그 토글)',
       chainInsert: '체인 추가',
       chainPlaceholder: '독서 -> 전공서적 -> LLM'
@@ -281,11 +283,13 @@
       help: 'Help', helpTitle: 'Help',
       helpSecModes: 'Modes', helpSecKeys: 'Keyboard',
       helpSecMouse: 'Mouse', helpSecMobile: 'Mobile', helpSecTools: 'Tools',
+      helpSecFormat: '.arrow text format',
       helpModes: 'V — Select\nA — Arrow\nT — Text\nG — Highlighter\nH — Pan',
       helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + Z — Undo (up to 8 steps)\nCtrl/⌘ + Y / Ctrl+Shift+Z — Redo\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
       helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan\nCtrl + drag (highlighter) — Straight stroke',
       helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move\nCtrl toggle + highlighter drag — Straight stroke',
       helpTools: "🦀 Insert Chain — Type a single line like 'A -> B -> C' and the segments become text nodes joined by horizontal arrows. Separator is -> or →. The last node is auto-selected for immediate tweaking. The whole chain collapses into one Undo step. Up to 10 segments.",
+      helpFormat: "📥 The JSON-import button also accepts .arrow text files — author whole scenes from the keyboard.\n\nFormat:\n  Line 1: arrow (file marker)\n  Line 2: topic (centerText)\n  Line 3+: chain like A -> B -> C (-> or → both work)\n  '#' starts a comment to end of line; blank lines are ignored\n\nRules:\n  • A chain that starts with an existing node name (the topic, or a word from a previous chain) extends from there.\n  • A new starting word becomes another top-level branch off the topic.\n  • Each parent fans its N children at 360°/N apart, clockwise. Font size is unified at 24.\n\nSample: docs/examples/spec.arrow",
       cloneToggle: 'Ctrl (clone-drag toggle)',
       chainInsert: 'Insert Chain',
       chainPlaceholder: 'Read -> Textbook -> LLM'
@@ -2292,7 +2296,8 @@
       ['helpSecKeys', 'helpKeys'],
       ['helpSecMouse', 'helpMouse'],
       ['helpSecMobile', 'helpMobile'],
-      ['helpSecTools', 'helpTools']
+      ['helpSecTools', 'helpTools'],
+      ['helpSecFormat', 'helpFormat']
     ];
     for (var i = 0; i < sections.length; i++) {
       var sec = document.createElement('div');

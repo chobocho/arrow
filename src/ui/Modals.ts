@@ -41,6 +41,7 @@ export function openHelpModal(app: App): void {
     ['helpSecMouse', 'helpMouse'],
     ['helpSecMobile', 'helpMobile'],
     ['helpSecTools', 'helpTools'],
+    ['helpSecFormat', 'helpFormat'],
   ];
   for (const [titleKey, bodyKey] of sections) {
     const sec = document.createElement('div');
