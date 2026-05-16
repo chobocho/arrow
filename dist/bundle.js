@@ -2406,10 +2406,30 @@
   };
   // Hard cap on chain length so a runaway paste doesn't fill the canvas.
   var CHAIN_MAX_SEGMENTS = 10;
+  // Top-left of an object's bounding box in logical coords — uniform anchor
+  // across types so chain stacking works the same whether the previous edit
+  // was on text, an arrow, or a highlighter.
+  function objectTopLeft(obj) {
+    if (obj.type === 'text') return { x: obj.pos.x, y: obj.pos.y };
+    if (obj.type === 'arrow') {
+      return {
+        x: Math.min(obj.from.x, obj.to.x),
+        y: Math.min(obj.from.y, obj.to.y)
+      };
+    }
+    var minX = Infinity, minY = Infinity;
+    var pts = obj.points;
+    for (var k = 0; k < pts.length; k++) {
+      if (pts[k].x < minX) minX = pts[k].x;
+      if (pts[k].y < minY) minY = pts[k].y;
+    }
+    return { x: minX, y: minY };
+  }
   // Insert a text + arrow chain from a single line like "A -> B -> C".
   // Each segment becomes a text object; consecutive segments are joined by
-  // a horizontal arrow at the viewport center. Empty segments are skipped.
-  // Excess past CHAIN_MAX_SEGMENTS is silently dropped.
+  // a horizontal arrow. Anchored to the last-edited (selected) object + 10
+  // when there is one, so consecutive 🦀 inserts cascade. Empty segments
+  // are skipped. Excess past CHAIN_MAX_SEGMENTS is silently dropped.
   App.prototype._insertChain = function (raw) {
     var all = String(raw || '').split(/->|→/);
     var parts = [];
@@ -2431,12 +2451,20 @@
     var gap = Math.max(4, fontSize * 0.15);
     var totalWidth = (parts.length - 1) * arrowLength;
     for (var m = 0; m < widths.length; m++) totalWidth += widths[m];
-    var viewCenter = this.view.screenToLogical({
-      x: this.view.width / 2,
-      y: this.view.height / 2
-    });
-    var x = viewCenter.x - totalWidth / 2;
-    var y = viewCenter.y - textHeight / 2;
+    var sel = this._getSelectedObject();
+    var x, y;
+    if (sel) {
+      var anchor = objectTopLeft(sel);
+      x = anchor.x + 10;
+      y = anchor.y + 10;
+    } else {
+      var viewCenter = this.view.screenToLogical({
+        x: this.view.width / 2,
+        y: this.view.height / 2
+      });
+      x = viewCenter.x - totalWidth / 2;
+      y = viewCenter.y - textHeight / 2;
+    }
     var arrowY = y + textHeight / 2;
     this.pushHistory();
     var lastId = null;

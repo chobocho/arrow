@@ -101,6 +101,23 @@ export function pasteClone(app: App): boolean {
 // 10 is generous for the diagram style this UI targets (A -> B -> C ...).
 export const CHAIN_MAX_SEGMENTS = 10;
 
+// Top-left of an object's bounding box in logical coordinates. Used as a
+// uniform "x, y of this object" so cascading insertions (e.g. chain anchored
+// to the last-edited object) work the same regardless of object type.
+function objectTopLeft(obj: SceneObject): Vec {
+  if (obj.type === 'text') return { x: obj.pos.x, y: obj.pos.y };
+  if (obj.type === 'arrow') {
+    return { x: Math.min(obj.from.x, obj.to.x), y: Math.min(obj.from.y, obj.to.y) };
+  }
+  // highlighter
+  let minX = Infinity, minY = Infinity;
+  for (const p of obj.points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+  }
+  return { x: minX, y: minY };
+}
+
 // Insert a text + arrow chain from a single line like
 //   "A -> B -> C"
 // Each segment becomes a text object; consecutive segments are joined by
@@ -132,12 +149,26 @@ export function insertChain(app: App, raw: string): number {
 
   const totalWidth =
     widths.reduce((a, b) => a + b, 0) + (parts.length - 1) * arrowLength;
-  const viewCenter = app.view.screenToLogical({
-    x: app.view.width / 2,
-    y: app.view.height / 2,
-  });
-  let x = viewCenter.x - totalWidth / 2;
-  const y = viewCenter.y - textHeight / 2;
+  // Anchor the chain on the last-edited (currently selected) object so
+  // consecutive 🦀 inserts stack with a small offset instead of overlapping
+  // at viewport center. Since each insert auto-selects the final text below,
+  // the next insert naturally cascades. Fall back to viewport center when
+  // nothing is selected (first-time or after deselect).
+  const sel = app.getSelectedObject();
+  let x: number;
+  let y: number;
+  if (sel) {
+    const anchor = objectTopLeft(sel);
+    x = anchor.x + 10;
+    y = anchor.y + 10;
+  } else {
+    const viewCenter = app.view.screenToLogical({
+      x: app.view.width / 2,
+      y: app.view.height / 2,
+    });
+    x = viewCenter.x - totalWidth / 2;
+    y = viewCenter.y - textHeight / 2;
+  }
   const arrowY = y + textHeight / 2;
 
   app.pushHistory();
