@@ -1,0 +1,3702 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>화살표 마인드맵</title>
+<style>
+  :root {
+    --bg: #f6f6f9;
+    --panel: #ffffff;
+    --border: #e2e2ea;
+    --accent: #3a7afe;
+    --accent-2: #ffd166;
+    --text: #222;
+    --muted: #777;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+  }
+  #app {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 48px 1fr;
+    height: 100%;
+    width: 100%;
+  }
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  header .title { font-weight: 700; margin-right: 8px; white-space: nowrap; }
+  header .title #titleName { color: var(--muted); font-weight: 500; margin-left: 6px; }
+  header .group { display: flex; gap: 4px; align-items: center; }
+  header .spacer { flex: 1; }
+  button.tool {
+    appearance: none; border: 1px solid var(--border); background: #fff;
+    color: var(--text); padding: 6px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; white-space: nowrap;
+  }
+  button.tool:hover { background: #f0f3ff; }
+  button.tool.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.tool[disabled] { opacity: 0.4; cursor: not-allowed; }
+  button.tool.icon { font-size: 16px; line-height: 1; padding: 5px 9px; min-width: 36px; }
+  label.field { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 4px; }
+  label.field input[type=number], label.field input[type=color] {
+    width: 56px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px;
+  }
+  label.field input[type=color] { width: 30px; height: 26px; padding: 0; }
+  .color-palette { display: inline-flex; gap: 2px; align-items: center; margin-left: 2px; }
+  .color-palette .swatch {
+    width: 16px; height: 16px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+    padding: 0;
+    appearance: none;
+    background: transparent;
+    transition: transform 0.1s ease;
+  }
+  .color-palette .swatch:hover { transform: scale(1.2); border-color: #888; }
+  .color-palette .swatch.active { box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+  @media (max-width: 720px) { .color-palette { display: none; } }
+  #canvasWrap {
+    position: relative;
+    background: #fafafa;
+    overflow: hidden;
+    touch-action: none;
+  }
+  canvas#mainCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    cursor: crosshair;
+    display: block;
+  }
+  body[data-mode="select"] canvas#mainCanvas { cursor: default; }
+  body[data-mode="pan"] canvas#mainCanvas { cursor: grab; }
+  body[data-mode="text"] canvas#mainCanvas { cursor: text; }
+  body[data-mode="highlighter"] canvas#mainCanvas { cursor: cell; }
+  body[data-mode="note"] canvas#mainCanvas { cursor: copy; }
+  #statusBar {
+    position: absolute;
+    bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.75); color: #fff;
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 13px;
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+  }
+  #statusBar.visible { opacity: 1; }
+  /* Virtual Ctrl key (TODO #15) — mobile-only floating toggle that mirrors
+     physical Ctrl/⌘ so touch users can also trigger clone-by-drag. */
+  #btnVirtualCtrl {
+    display: none;
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    width: 56px; height: 56px;
+    border-radius: 28px;
+    border: 1px solid var(--border);
+    background: #fff;
+    color: var(--text);
+    font-size: 14px; font-weight: 700;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    user-select: none;
+  }
+  #btnVirtualCtrl.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 2px 12px rgba(58, 122, 254, 0.45);
+  }
+  @media (max-width: 720px) {
+    #btnVirtualCtrl { display: block; }
+  }
+  .ap-help-card {
+    min-width: 360px;
+    max-width: 540px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .ap-help-body {
+    white-space: pre-line;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #333;
+    overflow-y: auto;
+    margin: 4px 0 12px;
+    flex: 1;
+  }
+  .ap-help-body .sec { color: #3a7afe; font-weight: 600; }
+  /* Keyboard shortcut chips inside the help body. The Help text wraps each
+     shortcut key in <kbd> via innerHTML — these styles give them a tactile
+     key-cap look so they pop out of the surrounding prose. */
+  .ap-help-body kbd {
+    display: inline-block;
+    min-width: 18px;
+    padding: 1px 6px;
+    margin: 0 1px;
+    border: 1px solid #c4c8d4;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: #f7f8fb;
+    color: #1c3a8e;
+    font-family: "JetBrains Mono", Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+  @media (max-width: 720px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    header { flex-wrap: wrap; height: auto; padding: 6px; }
+    button.tool { font-size: 12px; padding: 5px 8px; }
+  }
+</style>
+</head>
+<body data-mode="select">
+<div id="app">
+  <header>
+    <div class="title">🎯 <span id="titleName">새 작업</span></div>
+    <div class="group">
+      <button class="tool active icon" id="btnSelect" title="선택">🖱️</button>
+      <button class="tool icon" id="btnArrow" title="화살표">➡️</button>
+      <button class="tool icon" id="btnText" title="글자">🔤</button>
+      <button class="tool icon" id="btnHighlighter" title="형광펜">🖍️</button>
+      <button class="tool icon" id="btnNote" title="메모">🗒️</button>
+      <button class="tool icon" id="btnPan" title="이동">✋</button>
+    </div>
+    <div class="group">
+      <label class="field"><span id="labelColor">색상</span><input type="color" id="inputColor" value="#222222"></label>
+      <div class="color-palette" id="colorPalette"></div>
+      <label class="field"><span id="labelThickness">굵기</span><input type="number" id="inputThickness" min="1" max="40" value="4"></label>
+      <label class="field"><span id="labelFontSize">글자크기</span><input type="number" id="inputFontSize" min="1" max="200" value="28"></label>
+      <label class="field"><span id="labelCenterFontSize">주제크기</span><input type="number" id="inputCenterFontSize" min="1" max="200" value="28"></label>
+    </div>
+    <div class="group">
+      <button class="tool icon" id="btnEditCenter" title="주제 편집">🎯</button>
+      <button class="tool icon" id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↩️</button>
+      <button class="tool icon" id="btnRedo" title="다시 실행 (Ctrl+Y)" disabled>↪️</button>
+      <button class="tool icon" id="btnPinNote" title="메모 핀 고정 (화면 위에 고정)" disabled>📌</button>
+      <button class="tool icon" id="btnDelete" title="삭제" disabled>🗑️</button>
+    </div>
+    <div class="group">
+      <button class="tool icon" id="btnChain" title="체인 추가">🦀</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="group">
+      <button class="tool icon" id="btnZoomIn" title="확대">➕</button>
+      <button class="tool icon" id="btnZoomOut" title="축소">➖</button>
+      <button class="tool icon" id="btnFit" title="맞춤">🔳</button>
+    </div>
+    <div class="group">
+      <button class="tool icon" id="btnNew" title="새 작업">🆕</button>
+      <button class="tool icon" id="btnSave" title="저장">💾</button>
+      <button class="tool icon" id="btnSaveAs" title="새이름저장">📝</button>
+      <button class="tool icon" id="btnWorks" title="작업 목록">📋</button>
+      <button class="tool icon" id="btnExportPng" title="PNG 내보내기">🖼️</button>
+      <button class="tool icon" id="btnExportJson" title="JSON 내보내기">📤</button>
+      <button class="tool icon" id="btnImportJson" title="JSON 가져오기">📥</button>
+      <input type="file" id="fileImport" accept="application/json,.json,.arrow" style="display:none">
+      <button class="tool icon" id="btnLang" title="Switch to English">🌐</button>
+      <button class="tool icon" id="btnHelp" title="도움말 (F1)">❓</button>
+    </div>
+  </header>
+  <div id="canvasWrap">
+    <canvas id="mainCanvas"></canvas>
+    <button type="button" id="btnVirtualCtrl" title="Ctrl (복제 드래그 토글)">Ctrl</button>
+    <div id="statusBar"></div>
+  </div>
+</div>
+<script>
+"use strict";
+(() => {
+  // src/utils/geometry.ts
+  var MAX_CANVAS_SIZE = 8192;
+  function vecSub(a, b) {
+    return { x: a.x - b.x, y: a.y - b.y };
+  }
+  function vecDist(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function pointToSegmentDistance(p, a, b) {
+    const ab = vecSub(b, a);
+    const len2 = ab.x * ab.x + ab.y * ab.y;
+    if (len2 === 0) return vecDist(p, a);
+    const t2 = Math.max(0, Math.min(1, ((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / len2));
+    const closest = { x: a.x + ab.x * t2, y: a.y + ab.y * t2 };
+    return vecDist(p, closest);
+  }
+  function clampToCanvas(p) {
+    return {
+      x: Math.max(0, Math.min(MAX_CANVAS_SIZE, p.x)),
+      y: Math.max(0, Math.min(MAX_CANVAS_SIZE, p.y))
+    };
+  }
+
+  // src/canvas/CanvasView.ts
+  var CanvasView = class {
+    constructor() {
+      this.offset = { x: 0, y: 0 };
+      // logical-space top-left visible at screen (0,0)
+      this.scale = 1;
+      // logical -> screen factor
+      this.minScale = 0.1;
+      this.maxScale = 4;
+      this.width = 0;
+      // CSS pixel size of the canvas element
+      this.height = 0;
+      this.dpr = 1;
+    }
+    resize(cssWidth, cssHeight, dpr) {
+      this.width = cssWidth;
+      this.height = cssHeight;
+      this.dpr = dpr;
+    }
+    screenToLogical(p) {
+      return {
+        x: this.offset.x + p.x / this.scale,
+        y: this.offset.y + p.y / this.scale
+      };
+    }
+    logicalToScreen(p) {
+      return {
+        x: (p.x - this.offset.x) * this.scale,
+        y: (p.y - this.offset.y) * this.scale
+      };
+    }
+    // Zoom while keeping the anchor (screen-space) point fixed.
+    zoomAt(anchor, factor) {
+      const beforeLogical = this.screenToLogical(anchor);
+      const next = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));
+      this.scale = next;
+      const afterLogical = this.screenToLogical(anchor);
+      this.offset.x += beforeLogical.x - afterLogical.x;
+      this.offset.y += beforeLogical.y - afterLogical.y;
+      this.clampOffset();
+    }
+    panBy(dxScreen, dyScreen) {
+      this.offset.x -= dxScreen / this.scale;
+      this.offset.y -= dyScreen / this.scale;
+      this.clampOffset();
+    }
+    // Keep the visible area overlapping the canvas region.
+    clampOffset() {
+      const margin = 200;
+      const visibleW = this.width / this.scale;
+      const visibleH = this.height / this.scale;
+      this.offset.x = Math.max(-margin, Math.min(MAX_CANVAS_SIZE + margin - visibleW, this.offset.x));
+      this.offset.y = Math.max(-margin, Math.min(MAX_CANVAS_SIZE + margin - visibleH, this.offset.y));
+    }
+    centerOn(point) {
+      this.offset.x = point.x - this.width / (2 * this.scale);
+      this.offset.y = point.y - this.height / (2 * this.scale);
+      this.clampOffset();
+    }
+  };
+
+  // src/models/types.ts
+  var HIGHLIGHTER_OPACITY = 0.35;
+  var HIGHLIGHTER_WIDTH_MULT = 4;
+  var NOTE_MAX_LENGTH = 255;
+  var NOTE_DEFAULT_BG = "#FFF59D";
+  var NOTE_DEFAULT_FONT_SIZE = 16;
+  var NOTE_DEFAULT_WIDTH = 200;
+  var NOTE_MIN_WIDTH = 80;
+  var NOTE_MAX_WIDTH = 1200;
+  var NOTE_PADDING = 10;
+  var NOTE_LINE_HEIGHT_FACTOR = 1.3;
+  function clampNoteText(text) {
+    const s = typeof text === "string" ? text : "";
+    return s.length > NOTE_MAX_LENGTH ? s.slice(0, NOTE_MAX_LENGTH) : s;
+  }
+  function pickReadableTextColor(bgHex) {
+    const hex = String(bgHex || "").trim();
+    let r = 255, g = 255, b = 255;
+    const m6 = /^#?([0-9a-f]{6})$/i.exec(hex);
+    const m3 = /^#?([0-9a-f]{3})$/i.exec(hex);
+    if (m6) {
+      r = parseInt(m6[1].slice(0, 2), 16);
+      g = parseInt(m6[1].slice(2, 4), 16);
+      b = parseInt(m6[1].slice(4, 6), 16);
+    } else if (m3) {
+      r = parseInt(m3[1][0] + m3[1][0], 16);
+      g = parseInt(m3[1][1] + m3[1][1], 16);
+      b = parseInt(m3[1][2] + m3[1][2], 16);
+    } else {
+      return "#222222";
+    }
+    const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luma > 0.6 ? "#222222" : "#ffffff";
+  }
+  var DEFAULT_CENTER_FONT_SIZE = 28;
+  function floorFontSize(n, fallback = DEFAULT_CENTER_FONT_SIZE) {
+    const v = typeof n === "number" && Number.isFinite(n) ? n : fallback;
+    return Math.max(1, Math.floor(v));
+  }
+  function normalizeSceneFontSizes(scene) {
+    if (scene.centerFontSize != null) {
+      scene.centerFontSize = floorFontSize(scene.centerFontSize, DEFAULT_CENTER_FONT_SIZE);
+    }
+    if (Array.isArray(scene.objects)) {
+      for (const obj of scene.objects) {
+        if (obj && obj.type === "text") {
+          obj.fontSize = floorFontSize(obj.fontSize, DEFAULT_CENTER_FONT_SIZE);
+        } else if (obj && obj.type === "note") {
+          obj.fontSize = floorFontSize(obj.fontSize, NOTE_DEFAULT_FONT_SIZE);
+        }
+      }
+    }
+  }
+  function shiftScene(scene, dx, dy) {
+    for (const o of scene.objects) {
+      if (o.type === "arrow") {
+        o.from.x += dx;
+        o.from.y += dy;
+        o.to.x += dx;
+        o.to.y += dy;
+      } else if (o.type === "highlighter") {
+        for (const p of o.points) {
+          p.x += dx;
+          p.y += dy;
+        }
+      } else if (o.type === "note" && o.pinned) {
+        continue;
+      } else {
+        o.pos.x += dx;
+        o.pos.y += dy;
+      }
+    }
+    scene.viewOffsetX += dx;
+    scene.viewOffsetY += dy;
+  }
+  function migrateSceneWorld(scene) {
+    var _a;
+    const saved = (_a = scene.worldSize) != null ? _a : 4096;
+    if (saved === MAX_CANVAS_SIZE) {
+      scene.worldSize = MAX_CANVAS_SIZE;
+      return false;
+    }
+    const shift = (MAX_CANVAS_SIZE - saved) / 2;
+    if (shift !== 0) shiftScene(scene, shift, shift);
+    scene.worldSize = MAX_CANVAS_SIZE;
+    return shift !== 0;
+  }
+  function newId(prefix) {
+    return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+  function emptyScene(name) {
+    const now = Date.now();
+    return {
+      id: newId("scene"),
+      name,
+      centerText: "",
+      centerFontSize: DEFAULT_CENTER_FONT_SIZE,
+      objects: [],
+      createdAt: now,
+      updatedAt: now,
+      viewOffsetX: 0,
+      viewOffsetY: 0,
+      viewScale: 1,
+      worldSize: MAX_CANVAS_SIZE
+    };
+  }
+
+  // src/models/SceneStore.ts
+  var SceneStore = class {
+    constructor(initial) {
+      this.listeners = [];
+      this.scene = initial != null ? initial : emptyScene("\uC0C8 \uC791\uC5C5");
+    }
+    get() {
+      return this.scene;
+    }
+    replace(next) {
+      this.scene = next;
+      this.emit();
+    }
+    subscribe(fn) {
+      this.listeners.push(fn);
+      return () => {
+        this.listeners = this.listeners.filter((l) => l !== fn);
+      };
+    }
+    touch() {
+      this.scene.updatedAt = Date.now();
+    }
+    emit() {
+      for (const l of this.listeners) l();
+    }
+    setCenterText(text) {
+      this.scene.centerText = text;
+      this.touch();
+      this.emit();
+    }
+    setCenterFontSize(size) {
+      this.scene.centerFontSize = Math.max(8, Math.min(200, floorFontSize(size)));
+      this.touch();
+      this.emit();
+    }
+    setName(name) {
+      this.scene.name = name;
+      this.touch();
+      this.emit();
+    }
+    setView(offset, scale) {
+      this.scene.viewOffsetX = offset.x;
+      this.scene.viewOffsetY = offset.y;
+      this.scene.viewScale = scale;
+    }
+    addArrow(from, to, color, thickness) {
+      const arrow = {
+        id: newId("arrow"),
+        type: "arrow",
+        from: clampToCanvas(from),
+        to: clampToCanvas(to),
+        color,
+        thickness
+      };
+      this.scene.objects.push(arrow);
+      this.touch();
+      this.emit();
+      return arrow;
+    }
+    addHighlighter(points, color, thickness) {
+      const clamped = points.map((p) => clampToCanvas(p));
+      const obj = {
+        id: newId("hl"),
+        type: "highlighter",
+        points: clamped,
+        color,
+        thickness
+      };
+      this.scene.objects.push(obj);
+      this.touch();
+      this.emit();
+      return obj;
+    }
+    addNote(pos, text, options) {
+      var _a, _b, _c, _d;
+      const opt = options || {};
+      const width = Math.max(NOTE_MIN_WIDTH, Math.min(NOTE_MAX_WIDTH, (_a = opt.width) != null ? _a : NOTE_DEFAULT_WIDTH));
+      const fontSize = floorFontSize((_b = opt.fontSize) != null ? _b : NOTE_DEFAULT_FONT_SIZE, NOTE_DEFAULT_FONT_SIZE);
+      const obj = {
+        id: newId("note"),
+        type: "note",
+        pos: clampToCanvas(pos),
+        text: clampNoteText(text),
+        width,
+        fontSize,
+        color: (_c = opt.color) != null ? _c : "#222222",
+        bgColor: (_d = opt.bgColor) != null ? _d : NOTE_DEFAULT_BG
+      };
+      this.scene.objects.push(obj);
+      this.touch();
+      this.emit();
+      return obj;
+    }
+    addText(pos, text, fontSize, color) {
+      const obj = {
+        id: newId("text"),
+        type: "text",
+        pos: clampToCanvas(pos),
+        text,
+        fontSize: floorFontSize(fontSize),
+        color
+      };
+      this.scene.objects.push(obj);
+      this.touch();
+      this.emit();
+      return obj;
+    }
+    update(id, mutator) {
+      const obj = this.scene.objects.find((o) => o.id === id);
+      if (!obj) return;
+      mutator(obj);
+      this.touch();
+      this.emit();
+    }
+    remove(id) {
+      const next = this.scene.objects.filter((o) => o.id !== id);
+      if (next.length === this.scene.objects.length) return;
+      this.scene.objects = next;
+      this.touch();
+      this.emit();
+    }
+    // Hit test in logical coordinates. Returns the topmost (latest drawn) object
+    // and which handle was hit, if any. Pinned notes live in screen space and
+    // are skipped here — the InputHandler tests them separately against the raw
+    // screen point before falling back to this logical pass.
+    hitTest(point, tolerance) {
+      for (let i = this.scene.objects.length - 1; i >= 0; i--) {
+        const obj = this.scene.objects[i];
+        if (obj.type === "note" && obj.pinned) continue;
+        const hit = this.hitObject(obj, point, tolerance);
+        if (hit.handle !== "none") return { object: obj, handle: hit.handle };
+      }
+      return { object: null, handle: "none" };
+    }
+    hitObject(obj, point, tolerance) {
+      if (obj.type === "arrow") {
+        if (vecDist(point, obj.from) <= tolerance) return { handle: "arrow-from" };
+        if (vecDist(point, obj.to) <= tolerance) return { handle: "arrow-to" };
+        const mid = { x: (obj.from.x + obj.to.x) / 2, y: (obj.from.y + obj.to.y) / 2 };
+        if (vecDist(point, mid) <= tolerance) return { handle: "arrow-mid" };
+        const d = pointToSegmentDistance(point, obj.from, obj.to);
+        if (d <= Math.max(tolerance, obj.thickness)) return { handle: "arrow-body" };
+      } else if (obj.type === "note") {
+        const { w, h } = estimateNoteBox(obj);
+        const cornerHit = Math.abs(point.x - (obj.pos.x + w)) <= tolerance && Math.abs(point.y - (obj.pos.y + h)) <= tolerance;
+        if (cornerHit) return { handle: "note-resize" };
+        const inside = point.x >= obj.pos.x - 2 && point.x <= obj.pos.x + w + 2 && point.y >= obj.pos.y - 2 && point.y <= obj.pos.y + h + 2;
+        if (inside) return { handle: "note-body" };
+      } else if (obj.type === "highlighter") {
+        const margin = Math.max(tolerance, obj.thickness * 2);
+        if (obj.points.length === 1) {
+          if (vecDist(point, obj.points[0]) <= margin) return { handle: "highlighter-body" };
+        } else {
+          for (let i = 0; i + 1 < obj.points.length; i++) {
+            const d = pointToSegmentDistance(point, obj.points[i], obj.points[i + 1]);
+            if (d <= margin) return { handle: "highlighter-body" };
+          }
+        }
+      } else {
+        const charWidth = obj.fontSize * 0.6;
+        const w = Math.max(charWidth, (obj.text.length || 3) * charWidth);
+        const h = obj.fontSize * 1.2;
+        const inside = point.x >= obj.pos.x - 4 && point.x <= obj.pos.x + w + 4 && point.y >= obj.pos.y - 4 && point.y <= obj.pos.y + h + 4;
+        const resize = Math.abs(point.x - (obj.pos.x + w + 4)) <= tolerance && Math.abs(point.y - (obj.pos.y + h + 4)) <= tolerance;
+        if (resize) return { handle: "text-resize" };
+        if (inside) return { handle: "text-body" };
+      }
+      return { handle: "none" };
+    }
+  };
+  function estimateNoteBox(note) {
+    const padding = NOTE_PADDING;
+    const lineHeight = note.fontSize * NOTE_LINE_HEIGHT_FACTOR;
+    const innerW = Math.max(1, note.width - padding * 2);
+    const avgCharW = Math.max(1, note.fontSize * 0.55);
+    const charsPerLine = Math.max(1, Math.floor(innerW / avgCharW));
+    const segments = (note.text || "").split("\n");
+    let lines = 0;
+    for (const s of segments) {
+      lines += Math.max(1, Math.ceil(s.length / charsPerLine));
+    }
+    if (lines === 0) lines = 1;
+    const h = lines * lineHeight + padding * 2;
+    return { w: note.width, h, lines };
+  }
+
+  // src/canvas/Renderer.ts
+  var _Renderer = class _Renderer {
+    constructor(ctx, view) {
+      this.ctx = ctx;
+      this.view = view;
+    }
+    // Draw the scene to a CanvasRenderingContext2D. The ctx is assumed to be set
+    // up with the device pixel ratio transform applied by the caller.
+    render(scene, opts) {
+      const { ctx, view } = this;
+      ctx.save();
+      ctx.fillStyle = "#fafafa";
+      ctx.fillRect(0, 0, view.width, view.height);
+      this.fillWorld();
+      if (opts.showGrid) this.drawGrid();
+      this.drawCenter(scene);
+      for (const obj of scene.objects) {
+        if (obj.type === "highlighter") this.drawHighlighter(obj, obj.id === opts.selectedId, false);
+      }
+      if (opts.draftHighlighter) this.drawHighlighter(opts.draftHighlighter, false, true);
+      for (const obj of scene.objects) {
+        if (obj.type === "highlighter") continue;
+        if (obj.type === "note" && obj.pinned) continue;
+        this.drawObject(obj, obj.id === opts.selectedId);
+      }
+      if (opts.draftArrow) this.drawArrow(opts.draftArrow, false, true);
+      for (const obj of scene.objects) {
+        if (obj.type === "note" && obj.pinned) {
+          this.drawPinnedNote(obj, obj.id === opts.selectedId);
+        }
+      }
+      ctx.restore();
+    }
+    // Render scene to a fresh offscreen canvas sized to the **content** bbox
+    // (with padding) — not the whole world. Allocating MAX×MAX up front would
+    // be 268 MB at 8192² and exceed iOS Safari's 16 M-pixel canvas limit, so
+    // we measure first, then size the buffer to fit. Used for PNG export.
+    renderToImage(scene, padding = 64) {
+      const bounds = this.contentBounds(scene, padding);
+      const w = Math.max(1, Math.round(bounds.w));
+      const h = Math.max(1, Math.round(bounds.h));
+      const off = document.createElement("canvas");
+      off.width = w;
+      off.height = h;
+      const ctx = off.getContext("2d");
+      if (!ctx) return off;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      const realCtx = this.ctx;
+      const realView = this.view;
+      const tmpView = new CanvasView();
+      tmpView.resize(w, h, 1);
+      tmpView.scale = 1;
+      tmpView.offset = { x: bounds.x, y: bounds.y };
+      this.ctx = ctx;
+      this.view = tmpView;
+      this.drawCenter(scene);
+      for (const obj of scene.objects) {
+        if (obj.type === "note" && obj.pinned) continue;
+        if (obj.type === "highlighter") this.drawHighlighter(obj, false, false);
+      }
+      for (const obj of scene.objects) {
+        if (obj.type === "note" && obj.pinned) continue;
+        if (obj.type !== "highlighter") this.drawObject(obj, false);
+      }
+      this.ctx = realCtx;
+      this.view = realView;
+      return off;
+    }
+    contentBounds(scene, padding) {
+      let minX = MAX_CANVAS_SIZE / 2 - 100;
+      let minY = MAX_CANVAS_SIZE / 2 - 100;
+      let maxX = MAX_CANVAS_SIZE / 2 + 100;
+      let maxY = MAX_CANVAS_SIZE / 2 + 100;
+      for (const o of scene.objects) {
+        if (o.type === "note" && o.pinned) continue;
+        if (o.type === "arrow") {
+          minX = Math.min(minX, o.from.x, o.to.x);
+          minY = Math.min(minY, o.from.y, o.to.y);
+          maxX = Math.max(maxX, o.from.x, o.to.x);
+          maxY = Math.max(maxY, o.from.y, o.to.y);
+        } else if (o.type === "highlighter") {
+          const pad = o.thickness * HIGHLIGHTER_WIDTH_MULT * 0.5;
+          for (const p of o.points) {
+            minX = Math.min(minX, p.x - pad);
+            minY = Math.min(minY, p.y - pad);
+            maxX = Math.max(maxX, p.x + pad);
+            maxY = Math.max(maxY, p.y + pad);
+          }
+        } else if (o.type === "note") {
+          const box = estimateNoteBox(o);
+          minX = Math.min(minX, o.pos.x);
+          minY = Math.min(minY, o.pos.y);
+          maxX = Math.max(maxX, o.pos.x + box.w);
+          maxY = Math.max(maxY, o.pos.y + box.h);
+        } else {
+          minX = Math.min(minX, o.pos.x);
+          minY = Math.min(minY, o.pos.y);
+          maxX = Math.max(maxX, o.pos.x + o.fontSize * Math.max(2, o.text.length));
+          maxY = Math.max(maxY, o.pos.y + o.fontSize * 1.4);
+        }
+      }
+      minX = Math.max(0, minX - padding);
+      minY = Math.max(0, minY - padding);
+      maxX = Math.min(MAX_CANVAS_SIZE, maxX + padding);
+      maxY = Math.min(MAX_CANVAS_SIZE, maxY + padding);
+      return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+    }
+    fillWorld() {
+      const { ctx, view } = this;
+      const tl = view.logicalToScreen({ x: 0, y: 0 });
+      const br = view.logicalToScreen({ x: MAX_CANVAS_SIZE, y: MAX_CANVAS_SIZE });
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+      ctx.strokeStyle = "#d0d0d0";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(tl.x + 0.5, tl.y + 0.5, br.x - tl.x, br.y - tl.y);
+    }
+    drawGrid() {
+      const { ctx, view } = this;
+      const step = 100;
+      ctx.strokeStyle = "#eee";
+      ctx.lineWidth = 1;
+      const startX = Math.floor(view.offset.x / step) * step;
+      const endX = view.offset.x + view.width / view.scale;
+      for (let x = startX; x <= endX; x += step) {
+        const sx = (x - view.offset.x) * view.scale;
+        ctx.beginPath();
+        ctx.moveTo(sx + 0.5, 0);
+        ctx.lineTo(sx + 0.5, view.height);
+        ctx.stroke();
+      }
+      const startY = Math.floor(view.offset.y / step) * step;
+      const endY = view.offset.y + view.height / view.scale;
+      for (let y = startY; y <= endY; y += step) {
+        const sy = (y - view.offset.y) * view.scale;
+        ctx.beginPath();
+        ctx.moveTo(0, sy + 0.5);
+        ctx.lineTo(view.width, sy + 0.5);
+        ctx.stroke();
+      }
+    }
+    drawCenter(scene) {
+      const { ctx, view } = this;
+      const center = { x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 };
+      const screen = view.logicalToScreen(center);
+      const baseFontSize = scene.centerFontSize || DEFAULT_CENTER_FONT_SIZE;
+      ctx.fillStyle = "#333";
+      const fontSize = Math.max(10, baseFontSize * view.scale);
+      ctx.font = `${fontSize}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const label = scene.centerText || "\uC8FC\uC81C / Topic";
+      const wrapWidth = Math.max(120, baseFontSize * 8) * view.scale;
+      this.wrapText(label, screen.x, screen.y, wrapWidth, fontSize * 1.1);
+    }
+    wrapText(text, cx, cy, maxWidth, lineHeight) {
+      const ctx = this.ctx;
+      const words = text.split(/\s+/);
+      const lines = [];
+      let current = "";
+      for (const w of words) {
+        const test = current ? current + " " + w : w;
+        if (ctx.measureText(test).width > maxWidth && current) {
+          lines.push(current);
+          current = w;
+        } else {
+          current = test;
+        }
+      }
+      if (current) lines.push(current);
+      const total = lines.length;
+      const startY = cy - (total - 1) * lineHeight / 2;
+      for (let i = 0; i < total; i++) {
+        ctx.fillText(lines[i], cx, startY + i * lineHeight);
+      }
+    }
+    drawObject(obj, selected) {
+      if (obj.type === "arrow") this.drawArrow(obj, selected, false);
+      else if (obj.type === "highlighter") this.drawHighlighter(obj, selected, false);
+      else if (obj.type === "note") this.drawNote(obj, selected);
+      else this.drawText(obj, selected);
+    }
+    // Lay out a note's text into wrapped lines using the live 2D context. Honors
+    // explicit \n and soft-wraps long words mid-string (no whitespace assumed —
+    // matches Korean/CJK behavior). Returns the rendered lines and the final
+    // box height in logical units.
+    layoutNoteText(text, innerWidth, fontSize) {
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.font = `${fontSize}px sans-serif`;
+      const lines = [];
+      const segments = (text || "").split("\n");
+      for (const seg of segments) {
+        if (seg.length === 0) {
+          lines.push("");
+          continue;
+        }
+        let current = "";
+        for (const ch of seg) {
+          const test = current + ch;
+          if (ctx.measureText(test).width > innerWidth && current.length > 0) {
+            lines.push(current);
+            current = ch;
+          } else {
+            current = test;
+          }
+        }
+        if (current.length > 0) lines.push(current);
+      }
+      ctx.restore();
+      const lineHeight = fontSize * NOTE_LINE_HEIGHT_FACTOR;
+      const height = Math.max(1, lines.length) * lineHeight + NOTE_PADDING * 2;
+      return { lines, height };
+    }
+    drawNote(n, selected) {
+      const { ctx, view } = this;
+      const pos = view.logicalToScreen(n.pos);
+      const innerLogical = Math.max(1, n.width - NOTE_PADDING * 2);
+      const laid = this.layoutNoteText(n.text, innerLogical, n.fontSize);
+      const wScreen = n.width * view.scale;
+      const hScreen = laid.height * view.scale;
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.18)";
+      ctx.shadowBlur = 6 * view.scale;
+      ctx.shadowOffsetX = 1 * view.scale;
+      ctx.shadowOffsetY = 2 * view.scale;
+      ctx.fillStyle = n.bgColor;
+      ctx.fillRect(pos.x, pos.y, wScreen, hScreen);
+      ctx.restore();
+      const fsScreen = n.fontSize * view.scale;
+      if (fsScreen >= _Renderer.NOTE_MIN_RENDER_PX) {
+        const padScreen = NOTE_PADDING * view.scale;
+        ctx.save();
+        ctx.fillStyle = n.color;
+        ctx.font = `${fsScreen}px sans-serif`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        const lineHeightScreen = fsScreen * NOTE_LINE_HEIGHT_FACTOR;
+        for (let i = 0; i < laid.lines.length; i++) {
+          ctx.fillText(laid.lines[i], pos.x + padScreen, pos.y + padScreen + i * lineHeightScreen);
+        }
+        ctx.restore();
+      }
+      if (selected) {
+        ctx.save();
+        ctx.strokeStyle = "#3a7afe";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(pos.x - 2, pos.y - 2, wScreen + 4, hScreen + 4);
+        ctx.setLineDash([]);
+        ctx.restore();
+        this.drawHandle(pos.x + wScreen, pos.y + hScreen);
+      }
+    }
+    // Render a pinned (viewport-fixed) note. pos/width/fontSize are screen
+    // pixels — no view transform. Drawn after everything else so the note
+    // sits on top regardless of pan/zoom. A small pin glyph in the upper-right
+    // corner makes the pinned state visually unambiguous.
+    drawPinnedNote(n, selected) {
+      const { ctx } = this;
+      const innerW = Math.max(1, n.width - NOTE_PADDING * 2);
+      const laid = this.layoutNoteText(n.text, innerW, n.fontSize);
+      const w = n.width;
+      const h = laid.height;
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.28)";
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 3;
+      ctx.fillStyle = n.bgColor;
+      ctx.fillRect(n.pos.x, n.pos.y, w, h);
+      ctx.restore();
+      if (n.fontSize >= _Renderer.NOTE_MIN_RENDER_PX) {
+        ctx.save();
+        ctx.fillStyle = n.color;
+        ctx.font = `${n.fontSize}px sans-serif`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        const lineHeight = n.fontSize * NOTE_LINE_HEIGHT_FACTOR;
+        for (let i = 0; i < laid.lines.length; i++) {
+          ctx.fillText(laid.lines[i], n.pos.x + NOTE_PADDING, n.pos.y + NOTE_PADDING + i * lineHeight);
+        }
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.font = "13px sans-serif";
+      ctx.textAlign = "right";
+      ctx.textBaseline = "top";
+      ctx.fillText("\u{1F4CC}", n.pos.x + w - 2, n.pos.y + 2);
+      ctx.restore();
+      if (selected) {
+        ctx.save();
+        ctx.strokeStyle = "#3a7afe";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(n.pos.x - 2, n.pos.y - 2, w + 4, h + 4);
+        ctx.setLineDash([]);
+        ctx.restore();
+        this.drawHandle(n.pos.x + w, n.pos.y + h);
+      }
+    }
+    drawHighlighter(hl, selected, isDraft) {
+      const { ctx, view } = this;
+      if (hl.points.length < 1) return;
+      const width = Math.max(1, hl.thickness * HIGHLIGHTER_WIDTH_MULT * view.scale);
+      ctx.save();
+      ctx.globalAlpha = isDraft ? HIGHLIGHTER_OPACITY * 0.7 : HIGHLIGHTER_OPACITY;
+      ctx.strokeStyle = hl.color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      const first = view.logicalToScreen(hl.points[0]);
+      ctx.moveTo(first.x, first.y);
+      if (hl.points.length === 1) {
+        ctx.lineTo(first.x, first.y);
+      } else {
+        for (let i = 1; i < hl.points.length; i++) {
+          const p = view.logicalToScreen(hl.points[i]);
+          ctx.lineTo(p.x, p.y);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+      if (selected) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const p of hl.points) {
+          const s = view.logicalToScreen(p);
+          if (s.x < minX) minX = s.x;
+          if (s.y < minY) minY = s.y;
+          if (s.x > maxX) maxX = s.x;
+          if (s.y > maxY) maxY = s.y;
+        }
+        const pad = width * 0.5 + 4;
+        ctx.save();
+        ctx.strokeStyle = "#3a7afe";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(minX - pad, minY - pad, maxX - minX + pad * 2, maxY - minY + pad * 2);
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+    drawArrow(arrow, selected, isDraft) {
+      const { ctx, view } = this;
+      const from = view.logicalToScreen(arrow.from);
+      const to = view.logicalToScreen(arrow.to);
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1) return;
+      const ux = dx / len;
+      const uy = dy / len;
+      const thick = Math.max(1, arrow.thickness * view.scale);
+      ctx.strokeStyle = isDraft ? "rgba(0,0,0,0.4)" : arrow.color;
+      ctx.fillStyle = isDraft ? "rgba(0,0,0,0.4)" : arrow.color;
+      ctx.lineWidth = thick;
+      ctx.lineCap = "round";
+      const headLen = Math.min(len, 12 + arrow.thickness * 3) * view.scale;
+      const shaftEndX = to.x - ux * headLen * 0.7;
+      const shaftEndY = to.y - uy * headLen * 0.7;
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(shaftEndX, shaftEndY);
+      ctx.stroke();
+      const headHalf = headLen * 0.5;
+      const px = -uy;
+      const py = ux;
+      ctx.beginPath();
+      ctx.moveTo(to.x, to.y);
+      ctx.lineTo(to.x - ux * headLen + px * headHalf, to.y - uy * headLen + py * headHalf);
+      ctx.lineTo(to.x - ux * headLen - px * headHalf, to.y - uy * headLen - py * headHalf);
+      ctx.closePath();
+      ctx.fill();
+      if (selected) {
+        this.drawHandle(from.x, from.y);
+        this.drawHandle(to.x, to.y);
+        this.drawHandle((from.x + to.x) / 2, (from.y + to.y) / 2, true);
+      }
+    }
+    drawText(t2, selected) {
+      const { ctx, view } = this;
+      const pos = view.logicalToScreen(t2.pos);
+      const fs = Math.max(8, t2.fontSize * view.scale);
+      ctx.font = `${fs}px sans-serif`;
+      ctx.fillStyle = t2.color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText(t2.text || "...", pos.x, pos.y);
+      if (selected) {
+        const w = ctx.measureText(t2.text || "...").width;
+        const h = fs * 1.2;
+        ctx.strokeStyle = "#3a7afe";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(pos.x - 4, pos.y - 4, w + 8, h + 8);
+        ctx.setLineDash([]);
+        this.drawHandle(pos.x + w + 4, pos.y + h + 4);
+      }
+    }
+    drawHandle(x, y, secondary = false) {
+      const ctx = this.ctx;
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = secondary ? "#ffd166" : "#3a7afe";
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+    }
+  };
+  // Minimum on-screen font size we'll actually draw text at. Below this the
+  // glyphs are unreadable anyway, and skipping them keeps the box geometry
+  // stable (see comment on drawNote about logical-unit layout).
+  _Renderer.NOTE_MIN_RENDER_PX = 6;
+  var Renderer = _Renderer;
+
+  // src/i18n/lang.ts
+  var strings = {
+    ko: {
+      appTitle: "\uD654\uC0B4\uD45C \uB9C8\uC778\uB4DC\uB9F5",
+      modeSelect: "\uC120\uD0DD",
+      modeArrow: "\uD654\uC0B4\uD45C",
+      modeText: "\uAE00\uC790",
+      modeHighlighter: "\uD615\uAD11\uD39C",
+      modeNote: "\uBA54\uBAA8",
+      modePan: "\uC774\uB3D9",
+      save: "\uC800\uC7A5",
+      saveAs: "\uC0C8\uC774\uB984\uC800\uC7A5",
+      newWork: "\uC0C8 \uC791\uC5C5",
+      delete: "\uC0AD\uC81C",
+      rename: "\uC774\uB984\uBCC0\uACBD",
+      exportPng: "PNG \uB0B4\uBCF4\uB0B4\uAE30",
+      exportJson: "JSON \uB0B4\uBCF4\uB0B4\uAE30",
+      importJson: "JSON \uAC00\uC838\uC624\uAE30",
+      language: "EN",
+      works: "\uC791\uC5C5 \uBAA9\uB85D",
+      centerHint: "\uAC00\uC6B4\uB370 \uC8FC\uC81C",
+      editCenter: "\uC8FC\uC81C \uD3B8\uC9D1",
+      promptCenter: "\uAC00\uC6B4\uB370 \uC8FC\uC81C\uB97C \uC785\uB825\uD558\uC138\uC694",
+      promptName: "\uC791\uC5C5 \uC774\uB984",
+      promptSaveAs: "\uC0C8 \uC774\uB984\uC73C\uB85C \uC791\uC5C5 \uC800\uC7A5",
+      promptRename: "\uC0C8 \uC774\uB984",
+      promptText: "\uAE00\uC790\uB97C \uC785\uB825\uD558\uC138\uC694",
+      promptNote: "\uBA54\uBAA8\uB97C \uC785\uB825\uD558\uC138\uC694 (\uCD5C\uB300 255\uC790, Ctrl+Enter \uB610\uB294 OK)",
+      pinNote: "\uBA54\uBAA8 \uD540 \uACE0\uC815 (\uD654\uBA74 \uC704\uC5D0 \uACE0\uC815)",
+      confirmDelete: "\uC815\uB9D0 \uC0AD\uC81C\uD560\uAE4C\uC694?",
+      confirmDeleteSelected: "\uC120\uD0DD\uD55C \uAC1D\uCCB4\uB97C \uC0AD\uC81C\uD560\uAE4C\uC694?",
+      zoomIn: "\uD655\uB300",
+      zoomOut: "\uCD95\uC18C",
+      fit: "\uB9DE\uCDA4",
+      selectColor: "\uC0C9\uC0C1",
+      thickness: "\uAD75\uAE30",
+      fontSize: "\uAE00\uC790 \uD06C\uAE30",
+      saved: "\uC800\uC7A5\uB428",
+      importedCount: "\uAC1C \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4",
+      invalidJson: "\uC798\uBABB\uB41C JSON \uD615\uC2DD\uC785\uB2C8\uB2E4",
+      invalidArrow: "\uC798\uBABB\uB41C .arrow \uD30C\uC77C \uD615\uC2DD\uC785\uB2C8\uB2E4 (\uCCAB \uC904\uC740 arrow, \uB458\uC9F8 \uC904\uC740 \uC8FC\uC81C)",
+      untitled: "\uC81C\uBAA9 \uC5C6\uC74C",
+      ok: "\uD655\uC778",
+      cancel: "\uCDE8\uC18C",
+      load: "\uBD88\uB7EC\uC624\uAE30",
+      close: "\uB2EB\uAE30",
+      noWorks: "\uC800\uC7A5\uB41C \uC791\uC5C5\uC774 \uC5C6\uC2B5\uB2C8\uB2E4",
+      sortLabel: "\uC815\uB82C",
+      sortByName: "\uC774\uB984\uC21C",
+      sortByDate: "\uCD5C\uADFC\uC218\uC815\uC21C",
+      unsavedNew: "\uBCC0\uACBD\uC0AC\uD56D\uC774 \uC788\uC2B5\uB2C8\uB2E4. \uC0C8\uB85C \uB9CC\uB4E4\uAE4C\uC694?",
+      unsavedLoad: "\uBCC0\uACBD\uC0AC\uD56D\uC774 \uC788\uC2B5\uB2C8\uB2E4. \uC800\uC7A5\uD560\uAE4C\uC694?",
+      dontSave: "\uC800\uC7A5 \uC548 \uD568",
+      centerFontSize: "\uC8FC\uC81C\uD06C\uAE30",
+      undo: "\uC2E4\uD589 \uCDE8\uC18C (Ctrl+Z)",
+      redo: "\uB2E4\uC2DC \uC2E4\uD589 (Ctrl+Y)",
+      help: "\uB3C4\uC6C0\uB9D0",
+      helpTitle: "\uB3C4\uC6C0\uB9D0",
+      helpSecModes: "\uBAA8\uB4DC \uC804\uD658",
+      helpSecKeys: "\uD0A4\uBCF4\uB4DC \uB2E8\uCD95\uD0A4",
+      helpSecMouse: "\uB9C8\uC6B0\uC2A4",
+      helpSecMobile: "\uBAA8\uBC14\uC77C",
+      helpSecToolbar: "\uD234\uBC14 \uB3D9\uC791",
+      helpSecTools: "\uB3C4\uAD6C",
+      helpSecFormat: ".arrow \uD14D\uC2A4\uD2B8 \uD3EC\uB9F7",
+      helpModes: "<kbd>V</kbd> \u2014 \uC120\uD0DD\n<kbd>A</kbd> \u2014 \uD654\uC0B4\uD45C\n<kbd>T</kbd> \u2014 \uAE00\uC790\n<kbd>N</kbd> \u2014 \uBA54\uBAA8\n<kbd>G</kbd> \u2014 \uD615\uAD11\uD39C\n<kbd>H</kbd> \u2014 \uC774\uB3D9",
+      helpKeys: "<kbd>Insert</kbd> / <kbd>+</kbd> \u2014 \uD654\uBA74 \uC911\uC559\uC5D0 \uD654\uC0B4\uD45C \uCD94\uAC00\n<kbd>Enter</kbd> \u2014 \uD654\uBA74 \uC911\uC559\uC5D0 \uAE00\uC790 \uCD94\uAC00\n<kbd>Delete</kbd> / <kbd>Backspace</kbd> \u2014 \uC120\uD0DD \uAC1D\uCCB4 \uC0AD\uC81C\n<kbd>Ctrl</kbd>/<kbd>\u2318</kbd> + <kbd>C</kbd> / <kbd>V</kbd> \u2014 \uC120\uD0DD \uAC1D\uCCB4 \uBCF5\uC0AC / \uBD99\uC5EC\uB123\uAE30\n<kbd>Ctrl</kbd>/<kbd>\u2318</kbd> + <kbd>Z</kbd> \u2014 \uC2E4\uD589 \uCDE8\uC18C (\uCD5C\uADFC 8\uB2E8\uACC4)\n<kbd>Ctrl</kbd>/<kbd>\u2318</kbd> + <kbd>Y</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> \u2014 \uB2E4\uC2DC \uC2E4\uD589\n<kbd>Ctrl</kbd>/<kbd>\u2318</kbd> + <kbd>S</kbd> \u2014 \uC800\uC7A5\n<kbd>Alt</kbd> + <kbd>N</kbd> \u2014 \uC0C8 \uBB38\uC11C\n<kbd>Alt</kbd> + <kbd>L</kbd> \u2014 \uBAA9\uB85D \uBCF4\uAE30\n<kbd>F1</kbd> \u2014 \uB3C4\uC6C0\uB9D0",
+      helpMouse: "\uBE48 \uACF3 \uB354\uBE14\uD074\uB9AD \u2014 \uAC00\uC6B4\uB370 \uC8FC\uC81C \uD3B8\uC9D1\n\uAC1D\uCCB4 \uD074\uB9AD \u2014 \uC120\uD0DD \uBC0F \uD578\uB4E4 \uD45C\uC2DC\n\uAC1D\uCCB4 \uB354\uBE14\uD074\uB9AD \u2014 \uAE00\uC790/\uBA54\uBAA8/\uC8FC\uC81C \uB0B4\uC6A9 \uD3B8\uC9D1\n\uD540\uB41C \uBA54\uBAA8 \uC6B0\uD074\uB9AD \u2014 \uD540 \uD574\uC81C\n\uB9C8\uC6B0\uC2A4 \uD720 \u2014 \uD655\uB300/\uCD95\uC18C\n<kbd>Shift</kbd> + \uB4DC\uB798\uADF8 / \uAC00\uC6B4\uB370 \uBC84\uD2BC / \uC774\uB3D9 \uBAA8\uB4DC \u2014 \uD328\uB2DD\n<kbd>Ctrl</kbd> + \uB4DC\uB798\uADF8 (\uD615\uAD11\uD39C) \u2014 \uC9C1\uC120 \uD615\uAD11\uD39C",
+      helpMobile: "\uB450 \uC190\uAC00\uB77D \uD540\uCE58 \u2014 \uD655\uB300/\uCD95\uC18C\n\uB450 \uC190\uAC00\uB77D \uB4DC\uB798\uADF8 \u2014 \uD328\uB2DD\n<kbd>Ctrl</kbd> \uD1A0\uAE00 + \uAC1D\uCCB4 \uB4DC\uB798\uADF8 \u2014 \uAC1D\uCCB4 \uBCF5\uC81C \uD6C4 \uC774\uB3D9\n<kbd>Ctrl</kbd> \uD1A0\uAE00 + \uD615\uAD11\uD39C \uB4DC\uB798\uADF8 \u2014 \uC9C1\uC120 \uD615\uAD11\uD39C",
+      helpToolbar: "\u{1F4BE} \uC800\uC7A5 \u2014 \uC774\uB984 \uBBF8\uC9C0\uC815 \uC791\uC5C5\uC774\uBA74 \uC774\uB984 \uC785\uB825\uCC3D\uC5D0 \uAC00\uC6B4\uB370 \uC8FC\uC81C\uAC00 \uBBF8\uB9AC \uCC44\uC6CC\uC838 Enter \uD55C \uBC88\uC774\uBA74 \uADF8 \uC774\uB984\uC73C\uB85C \uC800\uC7A5\uB429\uB2C8\uB2E4.\n\u{1F4DD} \uC0C8 \uC774\uB984\uC73C\uB85C \uC800\uC7A5 \u2014 \uD604\uC7AC \uC791\uC5C5\uC758 \uC0AC\uBCF8\uC744 \uC0C8 \uC774\uB984\uC73C\uB85C \uC800\uC7A5\uD569\uB2C8\uB2E4(\uC0C8 id). \uB2E8\uC21C \uC774\uB984 \uBCC0\uACBD\uC740 \uC791\uC5C5 \uBAA9\uB85D(\u{1F4CB})\uC5D0\uC11C \uAC00\uB2A5.\n\uC0C9\uC0C1 / \uAD75\uAE30 / \uAE00\uC790 \uD06C\uAE30 \uC785\uB825 \u2014 \uC120\uD0DD\uB41C \uAC1D\uCCB4\uAC00 \uC788\uC73C\uBA74 \uADF8 \uAC1D\uCCB4\uC5D0 \uC989\uC2DC \uC801\uC6A9\uB429\uB2C8\uB2E4(Undo \uAC00\uB2A5). \uC120\uD0DD\uC774 \uC5C6\uC73C\uBA74 \uB2E4\uC74C \uC2E0\uADDC \uAC1D\uCCB4\uC758 \uAE30\uBCF8\uAC12\uC73C\uB85C\uB9CC \uBCC0\uACBD. \uBA54\uBAA8 \uC120\uD0DD \uC2DC \uC0C9\uC0C1 \uC785\uB825\uC740 \uBC30\uACBD\uC0C9\uC744 \uBC14\uAFB8\uACE0 \uD14D\uC2A4\uD2B8\uC0C9\uC740 \uBA85\uB3C4\uC5D0 \uB530\uB77C \uC790\uB3D9 \uB300\uBE44.\n\uC88C\uCE21 \uC0C1\uB2E8 \uC81C\uBAA9 \u2014 \uAC00\uC6B4\uB370 \uC8FC\uC81C\uAC00 \uC788\uC73C\uBA74 \uADF8\uAC83\uC744, \uC5C6\uC73C\uBA74 \uC791\uC5C5 \uC774\uB984\uC744 \uD45C\uC2DC\uD569\uB2C8\uB2E4.\n\uC785\uB825 \uB3C4\uAD6C(\u27A1\uFE0F \uD654\uC0B4\uD45C / \u{1F524} \uAE00\uC790 / \u{1F5D2}\uFE0F \uBA54\uBAA8 / \u{1F58D}\uFE0F \uD615\uAD11\uD39C) \u2014 commit \uD6C4 \uC790\uB3D9\uC73C\uB85C \uC120\uD0DD \uBAA8\uB4DC \uC804\uD658\uB418\uC5B4 \uBC29\uAE08 \uB9CC\uB4E0 \uAC1D\uCCB4\uB97C \uACE7\uBC14\uB85C \uC774\uB3D9\xB7\uD06C\uAE30 \uC870\uC815 \uAC00\uB2A5. \uC5F0\uC18D \uC785\uB825\uC774 \uD544\uC694\uD558\uBA74 \uB2E8\uCD95\uD0A4(A\xB7T\xB7N\xB7G) \uB610\uB294 \uD234\uBC14 \uBC84\uD2BC\uC73C\uB85C \uB2E4\uC2DC \uC9C4\uC785.\n\u{1F5D2}\uFE0F \uBA54\uBAA8(Note) \u2014 Ctrl+Enter(\uB610\uB294 OK)\uB85C \uCD5C\uB300 255\uC790 \uBA40\uD2F0\uB77C\uC778 \uC785\uB825. \uB354\uBE14\uD074\uB9AD\uC73C\uB85C \uC7AC\uD3B8\uC9D1.\n\u{1F4CC} \uBA54\uBAA8 \uD540 \u2014 \uC120\uD0DD\uB41C \uBA54\uBAA8\uB97C \uD654\uBA74\uC5D0 \uACE0\uC815(\uBDF0\uD3EC\uD2B8 \uACE0\uC815). \uCE94\uBC84\uC2A4\uB97C \uC90C/\uD32C\uD574\uB3C4 \uADF8 \uC790\uB9AC\uC5D0 \uBA38\uBB34\uB984. \uD540\uB41C \uBA54\uBAA8 \uC6B0\uD074\uB9AD\uC73C\uB85C \uC989\uC2DC \uD574\uC81C.",
+      helpTools: "\u{1F980} \uCCB4\uC778 \uCD94\uAC00 \u2014 'A -> B -> C' \uD615\uC2DD\uC73C\uB85C \uD55C \uC904 \uC785\uB825\uD558\uBA74 \uAE00\uC790 \uB178\uB4DC\uB4E4\uACFC \uADF8 \uC0AC\uC774\uB97C \uC787\uB294 \uD654\uC0B4\uD45C\uAC00 \uAC00\uB85C\uB85C \uD55C \uBC88\uC5D0 \uCD94\uAC00\uB429\uB2C8\uB2E4. \uAD6C\uBD84\uC790\uB294 -> \uB610\uB294 \u2192. \uB9C8\uC9C0\uB9C9 \uB178\uB4DC\uB294 \uC790\uB3D9 \uC120\uD0DD\uB418\uC5B4 \uBC14\uB85C \uC704\uCE58\xB7\uD06C\uAE30 \uC870\uC815 \uAC00\uB2A5. \uD55C \uCCB4\uC778\uC740 \uB2E8\uC77C Undo \uB2E8\uACC4\uB85C \uBB36\uC784. \uCD5C\uB300 10\uAC1C \uC138\uADF8\uBA3C\uD2B8.",
+      helpFormat: "\u{1F4E5} JSON \uAC00\uC838\uC624\uAE30 \uBC84\uD2BC\uC740 .arrow \uD14D\uC2A4\uD2B8 \uD30C\uC77C\uB3C4 \uBC1B\uC2B5\uB2C8\uB2E4 \u2014 \uD0A4\uBCF4\uB4DC\uB9CC\uC73C\uB85C \uBE60\uB974\uAC8C \uC52C \uC9DC\uAE30.\n\n\uD615\uC2DD:\n  1\uC904: arrow (\uD30C\uC77C \uB9C8\uCEE4)\n  2\uC904: \uC8FC\uC81C (centerText)\n  3\uC904+: A -> B -> C \uD615\uD0DC \uCCB4\uC778 (-> \uB610\uB294 \u2192 \uB458 \uB2E4 \uC778\uC815)\n  '#'\uC740 \uC904 \uB05D\uAE4C\uC9C0 \uC8FC\uC11D, \uBE48 \uC904 \uBB34\uC2DC\n\n\uADDC\uCE59:\n  \u2022 \uC2DC\uC791\uC810\uC774 \uAE30\uC874 \uB178\uB4DC(\uC8FC\uC81C \uB610\uB294 \uC774\uC804 \uCCB4\uC778\uC758 \uB2E8\uC5B4)\uBA74 \uAC70\uAE30\uC11C \uAC00\uC9C0\uB97C \uC774\uC5B4 \uBD99\uC785\uB2C8\uB2E4.\n  \u2022 \uC0C8 \uB2E8\uC5B4\uAC00 \uC2DC\uC791\uC810\uC774\uBA74 \uB3C5\uB9BD\uB41C \uC0C8 \uB8E8\uD2B8\uB85C \uCD94\uAC00\uB429\uB2C8\uB2E4 \u2014 \uC8FC\uC81C\uC640 \uD654\uC0B4\uD45C\uB85C \uC5F0\uACB0\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. (\uC704\uCE58\uB294 \uC8FC\uC81C \uADFC\uCC98\uC5D0 \uC790\uB3D9 \uBC30\uCE58)\n  \u2022 \uAC01 \uBD80\uBAA8 \u2192 \uC790\uC2DD N\uAC1C\uB294 360\xB0/N \uAC04\uACA9\uC73C\uB85C \uC2DC\uACC4 \uBC29\uD5A5 \uD68C\uC804 \uBC30\uCE58, \uAE00\uC790 \uD06C\uAE30\uB294 24\uB85C \uD1B5\uC77C.\n\n\uC0D8\uD50C: docs/examples/spec.arrow",
+      cloneToggle: "Ctrl (\uBCF5\uC81C \uB4DC\uB798\uADF8 \uD1A0\uAE00)",
+      chainInsert: "\uCCB4\uC778 \uCD94\uAC00",
+      chainPlaceholder: "\uB3C5\uC11C -> \uC804\uACF5\uC11C\uC801 -> LLM"
+    },
+    en: {
+      appTitle: "Arrow Mind Map",
+      modeSelect: "Select",
+      modeArrow: "Arrow",
+      modeText: "Text",
+      modeHighlighter: "Highlighter",
+      modeNote: "Note",
+      modePan: "Pan",
+      save: "Save",
+      saveAs: "Save As",
+      newWork: "New Work",
+      delete: "Delete",
+      rename: "Rename",
+      exportPng: "Export PNG",
+      exportJson: "Export JSON",
+      importJson: "Import JSON",
+      language: "\uD55C",
+      works: "Works",
+      centerHint: "Center Topic",
+      editCenter: "Edit Topic",
+      promptCenter: "Enter the center topic",
+      promptName: "Work name",
+      promptSaveAs: "Save work as new name",
+      promptRename: "New name",
+      promptText: "Enter text",
+      promptNote: "Enter a note (max 255 chars; Ctrl+Enter or OK)",
+      pinNote: "Pin note (stick to viewport)",
+      confirmDelete: "Delete this work?",
+      confirmDeleteSelected: "Delete the selected object?",
+      zoomIn: "Zoom In",
+      zoomOut: "Zoom Out",
+      fit: "Fit",
+      selectColor: "Color",
+      thickness: "Thickness",
+      fontSize: "Font Size",
+      saved: "Saved",
+      importedCount: " imported",
+      invalidJson: "Invalid JSON",
+      invalidArrow: 'Invalid .arrow file (line 1 must be "arrow", line 2 the topic)',
+      untitled: "Untitled",
+      ok: "OK",
+      cancel: "Cancel",
+      load: "Load",
+      close: "Close",
+      noWorks: "No saved works",
+      sortLabel: "Sort",
+      sortByName: "Name",
+      sortByDate: "Recent",
+      unsavedNew: "Unsaved changes. New work?",
+      unsavedLoad: "Unsaved changes. Save them?",
+      dontSave: "Don't Save",
+      centerFontSize: "Topic Size",
+      undo: "Undo (Ctrl+Z)",
+      redo: "Redo (Ctrl+Y)",
+      help: "Help",
+      helpTitle: "Help",
+      helpSecModes: "Modes",
+      helpSecKeys: "Keyboard",
+      helpSecMouse: "Mouse",
+      helpSecMobile: "Mobile",
+      helpSecToolbar: "Toolbar",
+      helpSecTools: "Tools",
+      helpSecFormat: ".arrow text format",
+      helpModes: "<kbd>V</kbd> \u2014 Select\n<kbd>A</kbd> \u2014 Arrow\n<kbd>T</kbd> \u2014 Text\n<kbd>N</kbd> \u2014 Note\n<kbd>G</kbd> \u2014 Highlighter\n<kbd>H</kbd> \u2014 Pan",
+      helpKeys: "<kbd>Insert</kbd> / <kbd>+</kbd> \u2014 Add arrow at viewport center\n<kbd>Enter</kbd> \u2014 Add text at viewport center\n<kbd>Delete</kbd> / <kbd>Backspace</kbd> \u2014 Remove selected\n<kbd>Ctrl</kbd>/<kbd>\u2318</kbd> + <kbd>C</kbd> / <kbd>V</kbd> \u2014 Copy / paste selected object\n<kbd>Ctrl</kbd>/<kbd>\u2318</kbd> + <kbd>Z</kbd> \u2014 Undo (up to 8 steps)\n<kbd>Ctrl</kbd>/<kbd>\u2318</kbd> + <kbd>Y</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> \u2014 Redo\n<kbd>Ctrl</kbd>/<kbd>\u2318</kbd> + <kbd>S</kbd> \u2014 Save\n<kbd>Alt</kbd> + <kbd>N</kbd> \u2014 New work\n<kbd>Alt</kbd> + <kbd>L</kbd> \u2014 Open works list\n<kbd>F1</kbd> \u2014 Help",
+      helpMouse: "Double-click empty \u2014 Edit center topic\nClick object \u2014 Select & show handles\nDouble-click object \u2014 Edit text/note/topic content\nRight-click pinned note \u2014 Unpin\nMouse wheel \u2014 Zoom\n<kbd>Shift</kbd> + drag / Middle button / Pan mode \u2014 Pan\n<kbd>Ctrl</kbd> + drag (highlighter) \u2014 Straight stroke",
+      helpMobile: "Two-finger pinch \u2014 Zoom\nTwo-finger drag \u2014 Pan\n<kbd>Ctrl</kbd> toggle + drag object \u2014 Clone-and-move\n<kbd>Ctrl</kbd> toggle + highlighter drag \u2014 Straight stroke",
+      helpToolbar: "\u{1F4BE} Save \u2014 for an unnamed work, the name prompt is pre-filled with the center topic; one Enter saves under that name.\n\u{1F4DD} Save As \u2014 saves a COPY of the current work under a new name (new id). Renaming uses the Works list (\u{1F4CB}).\nColor / Thickness / Font-size inputs \u2014 apply to the selected object when one is selected (undoable); otherwise just change the default for the next new object. When a note is selected, the color picker drives the background; text color auto-adjusts for contrast.\nHeader title \u2014 follows the center topic when set, otherwise the work name.\nInput tools (\u27A1\uFE0F Arrow / \u{1F524} Text / \u{1F5D2}\uFE0F Note / \u{1F58D}\uFE0F Highlighter) \u2014 after commit, auto-switch to Select so the new object is immediately moveable/resizable. For repeated input, re-enter via shortcut (A\xB7T\xB7N\xB7G) or toolbar.\n\u{1F5D2}\uFE0F Note \u2014 multi-line input up to 255 chars; commit with Ctrl+Enter or OK. Double-click to re-edit.\n\u{1F4CC} Pin note \u2014 sticks the selected note to the viewport (immune to pan/zoom). Right-click a pinned note to unpin it.",
+      helpTools: "\u{1F980} Insert Chain \u2014 Type a single line like 'A -> B -> C' and the segments become text nodes joined by horizontal arrows. Separator is -> or \u2192. The last node is auto-selected for immediate tweaking. The whole chain collapses into one Undo step. Up to 10 segments.",
+      helpFormat: "\u{1F4E5} The JSON-import button also accepts .arrow text files \u2014 author whole scenes from the keyboard.\n\nFormat:\n  Line 1: arrow (file marker)\n  Line 2: topic (centerText)\n  Line 3+: chain like A -> B -> C (-> or \u2192 both work)\n  '#' starts a comment to end of line; blank lines are ignored\n\nRules:\n  \u2022 A chain that starts with an existing node name (the topic, or a word from a previous chain) extends from there.\n  \u2022 A new starting word becomes its own free-standing root \u2014 NOT connected to the topic by an arrow. (It's still placed near the topic in the layout.)\n  \u2022 Each parent fans its N children at 360\xB0/N apart, clockwise. Font size is unified at 24.\n\nSample: docs/examples/spec.arrow",
+      cloneToggle: "Ctrl (clone-drag toggle)",
+      chainInsert: "Insert Chain",
+      chainPlaceholder: "Read -> Textbook -> LLM"
+    }
+  };
+  var currentLang = "ko";
+  function setLang(code) {
+    currentLang = code;
+  }
+  function getLang() {
+    return currentLang;
+  }
+  function t(key) {
+    var _a, _b;
+    return (_b = (_a = strings[currentLang][key]) != null ? _a : strings.en[key]) != null ? _b : key;
+  }
+
+  // src/ui/CustomPrompt.ts
+  var stylesInjected = false;
+  function ensureModalStyles() {
+    injectStyles();
+  }
+  function injectStyles() {
+    if (stylesInjected) return;
+    stylesInjected = true;
+    const style = document.createElement("style");
+    style.textContent = `
+    .ap-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.42);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999;
+      animation: ap-fade 0.12s ease;
+    }
+    @keyframes ap-fade { from { opacity: 0; } to { opacity: 1; } }
+    .ap-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.22);
+      padding: 18px 18px 14px;
+      min-width: 300px;
+      max-width: 92vw;
+      font-family: inherit;
+      color: #222;
+    }
+    .ap-title {
+      font-size: 14px;
+      color: #444;
+      margin-bottom: 10px;
+      word-break: keep-all;
+    }
+    .ap-input {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 15px;
+      padding: 8px 10px;
+      border: 1px solid #d0d0d8;
+      border-radius: 6px;
+      outline: none;
+      font-family: inherit;
+    }
+    .ap-input:focus { border-color: #3a7afe; box-shadow: 0 0 0 2px rgba(58,122,254,0.15); }
+    .ap-actions {
+      display: flex; justify-content: flex-end; gap: 8px;
+      margin-top: 12px;
+    }
+    .ap-btn {
+      appearance: none; border: 1px solid #d0d0d8; background: #fff;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      color: #222;
+    }
+    .ap-btn:hover { background: #f0f3ff; }
+    .ap-btn.primary { background: #3a7afe; border-color: #3a7afe; color: #fff; }
+    .ap-btn.primary:hover { background: #2e6bf0; }
+    .ap-btn-sm { padding: 4px 10px; font-size: 12px; }
+    .ap-works-card { min-width: 380px; max-width: 92vw; max-height: 80vh; display: flex; flex-direction: column; }
+    .ap-works-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
+    .ap-works-head .ap-title { margin-bottom: 0; font-weight: 600; font-size: 15px; }
+    .ap-works-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+    .ap-works-item { display: flex; align-items: center; gap: 6px; padding: 8px 6px; border-bottom: 1px solid #f1f1f5; font-size: 13px; }
+    .ap-works-item.current { background: #f0f5ff; border-radius: 4px; }
+    .ap-works-item .work-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ap-works-empty { padding: 20px; text-align: center; color: #999; font-size: 13px; }
+    .ap-works-sort { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; color: #666; }
+    .ap-sort-label { color: #888; }
+    .ap-sort-btn.active { background: #3a7afe; border-color: #3a7afe; color: #fff; }
+  `;
+    document.head.appendChild(style);
+  }
+  function customPrompt(message, defaultValue = "", placeholder = "", options = {}) {
+    injectStyles();
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "ap-overlay";
+      const card = document.createElement("div");
+      card.className = "ap-card";
+      const title = document.createElement("div");
+      title.className = "ap-title";
+      title.textContent = message;
+      const multiline = !!options.multiline;
+      const input = multiline ? document.createElement("textarea") : document.createElement("input");
+      if (!multiline) input.type = "text";
+      input.className = "ap-input";
+      input.value = defaultValue != null ? defaultValue : "";
+      if (placeholder) input.placeholder = placeholder;
+      if (multiline) {
+        input.rows = 5;
+        input.style.resize = "vertical";
+        input.style.minHeight = "96px";
+      }
+      if (options.maxLength && options.maxLength > 0) {
+        input.maxLength = options.maxLength;
+      }
+      let counter = null;
+      if (options.maxLength && options.maxLength > 0) {
+        counter = document.createElement("div");
+        counter.className = "ap-counter";
+        counter.style.fontSize = "11px";
+        counter.style.color = "#888";
+        counter.style.textAlign = "right";
+        counter.style.marginTop = "4px";
+        const updateCounter = () => {
+          if (!counter) return;
+          counter.textContent = input.value.length + " / " + options.maxLength;
+        };
+        input.addEventListener("input", updateCounter);
+        updateCounter();
+      }
+      const actions = document.createElement("div");
+      actions.className = "ap-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "ap-btn";
+      cancelBtn.textContent = t("cancel");
+      const okBtn = document.createElement("button");
+      okBtn.type = "button";
+      okBtn.className = "ap-btn primary";
+      okBtn.textContent = t("ok");
+      actions.appendChild(cancelBtn);
+      actions.appendChild(okBtn);
+      card.appendChild(title);
+      card.appendChild(input);
+      if (counter) card.appendChild(counter);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      let finished = false;
+      const finish = (value) => {
+        if (finished) return;
+        finished = true;
+        document.removeEventListener("keydown", onKey2, true);
+        overlay.remove();
+        resolve(value);
+      };
+      const onKey2 = (ev) => {
+        if (ev.key === "Enter") {
+          if (ev.isComposing || ev.keyCode === 229) return;
+          if (multiline) {
+            if (!(ev.ctrlKey || ev.metaKey)) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            finish(input.value);
+            return;
+          }
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(input.value);
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(null);
+        }
+      };
+      document.addEventListener("keydown", onKey2, true);
+      okBtn.addEventListener("click", () => finish(input.value));
+      cancelBtn.addEventListener("click", () => finish(null));
+      overlay.addEventListener("mousedown", (ev) => {
+        if (ev.target === overlay) finish(null);
+      });
+      requestAnimationFrame(() => {
+        input.focus();
+        if (!multiline) input.select();
+      });
+    });
+  }
+  function customChoice(message, buttons) {
+    injectStyles();
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "ap-overlay";
+      const card = document.createElement("div");
+      card.className = "ap-card";
+      const title = document.createElement("div");
+      title.className = "ap-title";
+      title.textContent = message;
+      const actions = document.createElement("div");
+      actions.className = "ap-actions";
+      card.appendChild(title);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      let finished = false;
+      const finish = (value) => {
+        if (finished) return;
+        finished = true;
+        document.removeEventListener("keydown", onKey2, true);
+        overlay.remove();
+        resolve(value);
+      };
+      let primaryBtn = null;
+      for (const b of buttons) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ap-btn" + (b.variant === "primary" ? " primary" : "");
+        btn.textContent = b.label;
+        btn.addEventListener("click", () => finish(b.value));
+        actions.appendChild(btn);
+        if (b.variant === "primary") primaryBtn = btn;
+      }
+      const onKey2 = (ev) => {
+        if (ev.key === "Enter") {
+          if (ev.isComposing || ev.keyCode === 229) return;
+          if (!primaryBtn) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          primaryBtn.click();
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(null);
+        }
+      };
+      document.addEventListener("keydown", onKey2, true);
+      overlay.addEventListener("mousedown", (ev) => {
+        if (ev.target === overlay) finish(null);
+      });
+      requestAnimationFrame(() => {
+        var _a;
+        (_a = primaryBtn || actions.firstElementChild) == null ? void 0 : _a.focus();
+      });
+    });
+  }
+  function customConfirm(message) {
+    injectStyles();
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      overlay.className = "ap-overlay";
+      const card = document.createElement("div");
+      card.className = "ap-card";
+      const title = document.createElement("div");
+      title.className = "ap-title";
+      title.textContent = message;
+      const actions = document.createElement("div");
+      actions.className = "ap-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "ap-btn";
+      cancelBtn.textContent = t("cancel");
+      const okBtn = document.createElement("button");
+      okBtn.type = "button";
+      okBtn.className = "ap-btn primary";
+      okBtn.textContent = t("ok");
+      actions.appendChild(cancelBtn);
+      actions.appendChild(okBtn);
+      card.appendChild(title);
+      card.appendChild(actions);
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      let finished = false;
+      const finish = (value) => {
+        if (finished) return;
+        finished = true;
+        document.removeEventListener("keydown", onKey2, true);
+        overlay.remove();
+        resolve(value);
+      };
+      const onKey2 = (ev) => {
+        if (ev.key === "Enter") {
+          if (ev.isComposing || ev.keyCode === 229) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(true);
+        } else if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(false);
+        }
+      };
+      document.addEventListener("keydown", onKey2, true);
+      okBtn.addEventListener("click", () => finish(true));
+      cancelBtn.addEventListener("click", () => finish(false));
+      overlay.addEventListener("mousedown", (ev) => {
+        if (ev.target === overlay) finish(false);
+      });
+      requestAnimationFrame(() => okBtn.focus());
+    });
+  }
+
+  // src/input/InputHandler.ts
+  var HL_MIN_STEP_SCREEN = 2.5;
+  var TOUCH_TAP_DIST = 8;
+  var DOUBLE_TAP_TIME = 320;
+  var InputHandler = class {
+    constructor(canvas, view, store, cb) {
+      this.canvas = canvas;
+      this.view = view;
+      this.store = store;
+      this.cb = cb;
+      this.dragging = { kind: "none", startLogical: { x: 0, y: 0 }, startScreen: { x: 0, y: 0 }, lastScreen: { x: 0, y: 0 } };
+      this.selectedId = null;
+      this.lastTapTime = 0;
+      this.lastTapPos = { x: 0, y: 0 };
+      this.pinch = null;
+      // Pre-mutation scene snapshot captured at gesture start, committed to the
+      // undo stack only when the gesture actually changes the scene. This avoids
+      // polluting undo with no-op entries from click-without-drag.
+      this.pendingHistorySnap = null;
+      // --- Mouse handlers ---
+      this.onMouseDown = (e) => {
+        var _a, _b;
+        e.preventDefault();
+        const screen = this.getScreenFromEvent(e);
+        const logical = this.view.screenToLogical(screen);
+        if (e.button === 2) {
+          const pinned = this.hitPinnedNote(screen);
+          if (pinned && pinned.object && pinned.object.type === "note") {
+            this.selectedId = pinned.object.id;
+            this.cb.onSelect(this.selectedId);
+            if (this.cb.onUnpinNote) this.cb.onUnpinNote(pinned.object);
+            this.dragging = { kind: "none", startLogical: logical, startScreen: screen, lastScreen: screen };
+            this.cb.onChange();
+            return;
+          }
+          const tol = this.toleranceLogical();
+          const hit = this.store.hitTest(logical, tol);
+          this.selectedId = hit.object ? hit.object.id : null;
+          this.cb.onSelect(this.selectedId);
+          this.dragging = { kind: "none", startLogical: logical, startScreen: screen, lastScreen: screen };
+          this.cb.onChange();
+          return;
+        }
+        if (e.button === 1 || this.cb.getMode() === "pan" || e.shiftKey) {
+          this.dragging = { kind: "pan", startLogical: logical, startScreen: screen, lastScreen: screen };
+          return;
+        }
+        const wantsClone = e.ctrlKey || e.metaKey || !!((_b = (_a = this.cb).getModifierClone) == null ? void 0 : _b.call(_a));
+        this.beginPointer(screen, logical, wantsClone);
+      };
+      this.onMouseMove = (e) => {
+        var _a, _b;
+        const screen = this.getScreenFromEvent(e);
+        const straight = e.ctrlKey || e.metaKey || !!((_b = (_a = this.cb).getModifierClone) == null ? void 0 : _b.call(_a));
+        this.movePointer(screen, straight);
+      };
+      this.onMouseUp = (e) => {
+        const screen = this.getScreenFromEvent(e);
+        this.endPointer(screen);
+      };
+      this.onWheel = (e) => {
+        e.preventDefault();
+        const screen = this.getScreenFromEvent(e);
+        const factor = e.deltaY > 0 ? 0.9 : 1.1;
+        this.view.zoomAt(screen, factor);
+        this.cb.onChange();
+      };
+      this.onDblClick = (e) => {
+        e.preventDefault();
+        const screen = this.getScreenFromEvent(e);
+        const logical = this.view.screenToLogical(screen);
+        this.handleDoubleTap(logical, screen);
+      };
+      // --- Touch handlers ---
+      this.onTouchStart = (e) => {
+        var _a, _b;
+        e.preventDefault();
+        if (e.touches.length === 1) {
+          const screen = this.getScreenFromEvent(e.touches[0]);
+          const logical = this.view.screenToLogical(screen);
+          const now = performance.now();
+          if (now - this.lastTapTime < DOUBLE_TAP_TIME && vecDist(screen, this.lastTapPos) < TOUCH_TAP_DIST * 2) {
+            this.handleDoubleTap(logical, screen);
+            this.lastTapTime = 0;
+            return;
+          }
+          this.lastTapTime = now;
+          this.lastTapPos = screen;
+          const wantsClone = !!((_b = (_a = this.cb).getModifierClone) == null ? void 0 : _b.call(_a));
+          this.beginPointer(screen, logical, wantsClone);
+        } else if (e.touches.length === 2) {
+          this.dragging.kind = "none";
+          const a = this.getScreenFromEvent(e.touches[0]);
+          const b = this.getScreenFromEvent(e.touches[1]);
+          const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          this.pinch = {
+            startDist: vecDist(a, b),
+            startScale: this.view.scale,
+            startCenter: center,
+            lastCenter: center
+          };
+        }
+      };
+      this.onTouchMove = (e) => {
+        var _a, _b;
+        e.preventDefault();
+        if (e.touches.length === 1 && !this.pinch) {
+          const screen = this.getScreenFromEvent(e.touches[0]);
+          const straight = !!((_b = (_a = this.cb).getModifierClone) == null ? void 0 : _b.call(_a));
+          this.movePointer(screen, straight);
+        } else if (e.touches.length === 2 && this.pinch) {
+          const a = this.getScreenFromEvent(e.touches[0]);
+          const b = this.getScreenFromEvent(e.touches[1]);
+          const dist = Math.max(1, vecDist(a, b));
+          const center = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+          const factor = dist / this.pinch.startDist * (this.pinch.startScale / this.view.scale);
+          this.view.zoomAt(center, factor);
+          const dx = center.x - this.pinch.lastCenter.x;
+          const dy = center.y - this.pinch.lastCenter.y;
+          this.view.panBy(dx, dy);
+          this.pinch.lastCenter = center;
+          this.cb.onChange();
+        }
+      };
+      this.onTouchEnd = (e) => {
+        e.preventDefault();
+        if (e.touches.length === 0) {
+          this.pinch = null;
+          const t2 = e.changedTouches[0];
+          if (t2) {
+            const screen = this.getScreenFromEvent(t2);
+            this.endPointer(screen);
+          } else {
+            this.dragging.kind = "none";
+          }
+        } else if (e.touches.length < 2) {
+          this.pinch = null;
+        }
+      };
+      this.attach();
+    }
+    getSelectedId() {
+      return this.selectedId;
+    }
+    setSelected(id) {
+      this.selectedId = id;
+      this.cb.onSelect(id);
+      this.cb.onChange();
+    }
+    attach() {
+      const c = this.canvas;
+      c.addEventListener("mousedown", this.onMouseDown);
+      c.addEventListener("mousemove", this.onMouseMove);
+      window.addEventListener("mouseup", this.onMouseUp);
+      c.addEventListener("wheel", this.onWheel, { passive: false });
+      c.addEventListener("dblclick", this.onDblClick);
+      c.addEventListener("touchstart", this.onTouchStart, { passive: false });
+      c.addEventListener("touchmove", this.onTouchMove, { passive: false });
+      c.addEventListener("touchend", this.onTouchEnd, { passive: false });
+      c.addEventListener("contextmenu", (e) => e.preventDefault());
+    }
+    getScreenFromEvent(ev) {
+      const rect = this.canvas.getBoundingClientRect();
+      return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
+    }
+    toleranceLogical() {
+      return 12 / this.view.scale;
+    }
+    // Screen-space hit test that ONLY considers pinned notes. Called before the
+    // logical store.hitTest so pinned-note clicks short-circuit the canvas-
+    // coordinate path. 12 px tolerance matches the visible handle radius.
+    hitPinnedNote(screen) {
+      const tol = 12;
+      const objs = this.store.get().objects;
+      for (let i = objs.length - 1; i >= 0; i--) {
+        const o = objs[i];
+        if (o.type !== "note" || !o.pinned) continue;
+        const box = estimateNoteBox(o);
+        if (Math.abs(screen.x - (o.pos.x + box.w)) <= tol && Math.abs(screen.y - (o.pos.y + box.h)) <= tol) {
+          return { object: o, handle: "note-resize" };
+        }
+        if (screen.x >= o.pos.x - 2 && screen.x <= o.pos.x + box.w + 2 && screen.y >= o.pos.y - 2 && screen.y <= o.pos.y + box.h + 2) {
+          return { object: o, handle: "note-body" };
+        }
+      }
+      return null;
+    }
+    // Deep-clone the current scene into a snapshot suitable for undo. Cheap
+    // enough at typical scene sizes; correctness > micro-optimization.
+    snapshotScene() {
+      return JSON.parse(JSON.stringify(this.store.get()));
+    }
+    // Push the pending snapshot to undo iff one was stashed at gesture start.
+    // Called from movePointer the moment a mutating drag first changes the
+    // scene, and from endPointer right before draft commits.
+    flushPendingHistory() {
+      if (this.pendingHistorySnap && this.cb.commitHistorySnapshot) {
+        this.cb.commitHistorySnapshot(this.pendingHistorySnap);
+      }
+      this.pendingHistorySnap = null;
+    }
+    // --- Shared pointer flow ---
+    beginPointer(screen, logical, wantsClone = false) {
+      const mode = this.cb.getMode();
+      if (mode === "highlighter") {
+        const draft = {
+          id: "draft",
+          type: "highlighter",
+          points: [logical],
+          color: this.cb.getColor(),
+          thickness: this.cb.getThickness()
+        };
+        this.cb.onDraftHighlighter(draft);
+        this.dragging = {
+          kind: "draft-highlighter",
+          startLogical: logical,
+          startScreen: screen,
+          lastScreen: screen,
+          origin: { draft }
+        };
+        this.selectedId = null;
+        this.cb.onSelect(null);
+        this.cb.onChange();
+        return;
+      }
+      const pinned = this.hitPinnedNote(screen);
+      if (pinned && pinned.object && pinned.object.type === "note") {
+        const note = pinned.object;
+        this.selectedId = note.id;
+        this.cb.onSelect(note.id);
+        this.pendingHistorySnap = this.snapshotScene();
+        if (pinned.handle === "note-resize") {
+          this.dragging = {
+            kind: "resize-note",
+            objectId: note.id,
+            startLogical: logical,
+            startScreen: screen,
+            lastScreen: screen,
+            origin: { width: note.width, pos: { ...note.pos } },
+            pinned: true
+          };
+        } else {
+          this.dragging = {
+            kind: "move-object",
+            objectId: note.id,
+            startLogical: logical,
+            startScreen: screen,
+            lastScreen: screen,
+            origin: { pos: { ...note.pos } },
+            pinned: true
+          };
+        }
+        this.cb.onChange();
+        return;
+      }
+      const tol = this.toleranceLogical();
+      const hit = this.store.hitTest(logical, tol);
+      if (hit.object) {
+        this.selectedId = hit.object.id;
+        this.cb.onSelect(this.selectedId);
+        const handle = hit.handle;
+        if (handle === "arrow-from" || handle === "arrow-to") {
+          this.pendingHistorySnap = this.snapshotScene();
+          this.dragging = {
+            kind: "resize-arrow",
+            objectId: hit.object.id,
+            startLogical: logical,
+            startScreen: screen,
+            lastScreen: screen,
+            origin: { end: handle }
+          };
+          return;
+        }
+        if (handle === "note-resize") {
+          const note = hit.object;
+          this.pendingHistorySnap = this.snapshotScene();
+          this.dragging = {
+            kind: "resize-note",
+            objectId: hit.object.id,
+            startLogical: logical,
+            startScreen: screen,
+            lastScreen: screen,
+            origin: { width: note.width, pos: { ...note.pos } }
+          };
+          return;
+        }
+        if (handle === "text-resize") {
+          const t2 = hit.object;
+          this.pendingHistorySnap = this.snapshotScene();
+          this.dragging = {
+            kind: "resize-text",
+            objectId: hit.object.id,
+            startLogical: logical,
+            startScreen: screen,
+            lastScreen: screen,
+            origin: { fontSize: t2.fontSize, pos: { ...t2.pos } }
+          };
+          return;
+        }
+        if (wantsClone) {
+          if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
+        } else {
+          this.pendingHistorySnap = this.snapshotScene();
+        }
+        const target = wantsClone ? this.cloneForDrag(hit.object) : hit.object;
+        if (wantsClone) {
+          this.selectedId = target.id;
+          this.cb.onSelect(target.id);
+        }
+        this.dragging = {
+          kind: "move-object",
+          objectId: target.id,
+          startLogical: logical,
+          startScreen: screen,
+          lastScreen: screen,
+          origin: this.snapshotObject(target)
+        };
+        this.cb.onChange();
+        return;
+      }
+      if (mode === "arrow") {
+        const draft = {
+          id: "draft",
+          type: "arrow",
+          from: logical,
+          to: logical,
+          color: this.cb.getColor(),
+          thickness: this.cb.getThickness()
+        };
+        this.cb.onDraftChange(draft);
+        this.dragging = {
+          kind: "draft-arrow",
+          startLogical: logical,
+          startScreen: screen,
+          lastScreen: screen,
+          origin: { draft }
+        };
+        this.selectedId = null;
+        this.cb.onSelect(null);
+        this.cb.onChange();
+        return;
+      }
+      if (mode === "text") {
+        this.dragging = { kind: "none", startLogical: logical, startScreen: screen, lastScreen: screen };
+        void customPrompt(t("promptText"), "").then((text) => {
+          if (text && text.trim()) {
+            if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
+            const obj = this.store.addText(logical, text.trim(), this.cb.getFontSize(), this.cb.getColor());
+            this.selectedId = obj.id;
+            this.cb.onSelect(obj.id);
+            this.cb.onChange();
+            if (this.cb.setMode) this.cb.setMode("select");
+          }
+        });
+        return;
+      }
+      if (mode === "note") {
+        this.dragging = { kind: "none", startLogical: logical, startScreen: screen, lastScreen: screen };
+        void customPrompt(t("promptNote"), "", "", { multiline: true, maxLength: 255 }).then((text) => {
+          if (text != null && text.length > 0) {
+            if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
+            const obj = this.store.addNote(logical, clampNoteText(text), { color: this.cb.getColor() });
+            this.selectedId = obj.id;
+            this.cb.onSelect(obj.id);
+            this.cb.onChange();
+            if (this.cb.setMode) this.cb.setMode("select");
+          }
+        });
+        return;
+      }
+      this.selectedId = null;
+      this.cb.onSelect(null);
+      this.dragging = { kind: "pan", startLogical: logical, startScreen: screen, lastScreen: screen };
+      this.cb.onChange();
+    }
+    movePointer(screen, wantsStraight = false) {
+      var _a, _b, _c;
+      const drag = this.dragging;
+      if (drag.kind === "none") return;
+      const logical = this.view.screenToLogical(screen);
+      const dxScreen = screen.x - drag.lastScreen.x;
+      const dyScreen = screen.y - drag.lastScreen.y;
+      drag.lastScreen = screen;
+      if (drag.kind === "pan") {
+        this.view.panBy(dxScreen, dyScreen);
+        this.cb.onChange();
+        return;
+      }
+      if (drag.kind === "draft-arrow" && ((_a = drag.origin) == null ? void 0 : _a.draft)) {
+        const draft = drag.origin.draft;
+        draft.to = clampToCanvas(logical);
+        this.cb.onDraftChange(draft);
+        this.cb.onChange();
+        return;
+      }
+      if (drag.kind === "draft-highlighter" && ((_b = drag.origin) == null ? void 0 : _b.draft)) {
+        const draft = drag.origin.draft;
+        if (wantsStraight) {
+          draft.points = [drag.startLogical, clampToCanvas(logical)];
+          this.cb.onDraftHighlighter(draft);
+          this.cb.onChange();
+          return;
+        }
+        const last = draft.points[draft.points.length - 1];
+        const lastScreen = this.view.logicalToScreen(last);
+        if (vecDist(lastScreen, screen) >= HL_MIN_STEP_SCREEN) {
+          draft.points.push(clampToCanvas(logical));
+          this.cb.onDraftHighlighter(draft);
+          this.cb.onChange();
+        }
+        return;
+      }
+      if (drag.kind === "resize-arrow" && drag.objectId) {
+        this.flushPendingHistory();
+        const end = (_c = drag.origin) == null ? void 0 : _c.end;
+        this.store.update(drag.objectId, (o) => {
+          if (o.type !== "arrow") return;
+          if (end === "arrow-from") o.from = clampToCanvas(logical);
+          else o.to = clampToCanvas(logical);
+        });
+        return;
+      }
+      if (drag.kind === "move-object" && drag.objectId && drag.origin) {
+        this.flushPendingHistory();
+        if (drag.pinned) {
+          const dxS = screen.x - drag.startScreen.x;
+          const dyS = screen.y - drag.startScreen.y;
+          const orig = drag.origin;
+          this.store.update(drag.objectId, (o) => {
+            if (o.type !== "note") return;
+            o.pos = { x: orig.pos.x + dxS, y: orig.pos.y + dyS };
+          });
+          return;
+        }
+        const startLogical = drag.startLogical;
+        const dxLog = logical.x - startLogical.x;
+        const dyLog = logical.y - startLogical.y;
+        this.store.update(drag.objectId, (o) => {
+          if (o.type === "arrow") {
+            const orig = drag.origin;
+            o.from = clampToCanvas({ x: orig.from.x + dxLog, y: orig.from.y + dyLog });
+            o.to = clampToCanvas({ x: orig.to.x + dxLog, y: orig.to.y + dyLog });
+          } else if (o.type === "highlighter") {
+            const orig = drag.origin;
+            o.points = orig.points.map((p) => clampToCanvas({ x: p.x + dxLog, y: p.y + dyLog }));
+          } else {
+            const orig = drag.origin;
+            o.pos = clampToCanvas({ x: orig.pos.x + dxLog, y: orig.pos.y + dyLog });
+          }
+        });
+        return;
+      }
+      if (drag.kind === "resize-note" && drag.objectId && drag.origin) {
+        this.flushPendingHistory();
+        const orig = drag.origin;
+        const refX = drag.pinned ? screen.x : logical.x;
+        const nextWidth = Math.max(
+          NOTE_MIN_WIDTH,
+          Math.min(NOTE_MAX_WIDTH, refX - orig.pos.x)
+        );
+        this.store.update(drag.objectId, (o) => {
+          if (o.type !== "note") return;
+          o.width = nextWidth;
+        });
+        return;
+      }
+      if (drag.kind === "resize-text" && drag.objectId && drag.origin) {
+        this.flushPendingHistory();
+        const orig = drag.origin;
+        const ratio = Math.max(
+          0.3,
+          Math.min(
+            6,
+            (logical.x - orig.pos.x) / Math.max(20, orig.fontSize * 4)
+          )
+        );
+        this.store.update(drag.objectId, (o) => {
+          if (o.type !== "text") return;
+          o.fontSize = Math.max(8, Math.min(160, Math.floor(orig.fontSize * ratio)));
+        });
+        return;
+      }
+    }
+    endPointer(_screen) {
+      var _a, _b;
+      const drag = this.dragging;
+      if (drag.kind === "draft-arrow" && ((_a = drag.origin) == null ? void 0 : _a.draft)) {
+        const draft = drag.origin.draft;
+        const len = vecDist(draft.from, draft.to);
+        if (len > 4 / this.view.scale) {
+          if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
+          const created = this.store.addArrow(draft.from, draft.to, draft.color, draft.thickness);
+          this.selectedId = created.id;
+          this.cb.onSelect(created.id);
+          if (this.cb.setMode) this.cb.setMode("select");
+        }
+        this.cb.onDraftChange(null);
+      } else if (drag.kind === "draft-highlighter" && ((_b = drag.origin) == null ? void 0 : _b.draft)) {
+        const draft = drag.origin.draft;
+        let total = 0;
+        for (let i = 1; i < draft.points.length; i++) total += vecDist(draft.points[i - 1], draft.points[i]);
+        if (draft.points.length === 1 || total > 4 / this.view.scale) {
+          if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
+          const created = this.store.addHighlighter(draft.points, draft.color, draft.thickness);
+          this.selectedId = created.id;
+          this.cb.onSelect(created.id);
+          if (this.cb.setMode) this.cb.setMode("select");
+        }
+        this.cb.onDraftHighlighter(null);
+      }
+      this.pendingHistorySnap = null;
+      this.dragging = { kind: "none", startLogical: { x: 0, y: 0 }, startScreen: { x: 0, y: 0 }, lastScreen: { x: 0, y: 0 } };
+      this.cb.onChange();
+    }
+    handleDoubleTap(logical, screen) {
+      if (screen) {
+        const pinned = this.hitPinnedNote(screen);
+        if (pinned && pinned.object && pinned.object.type === "note") {
+          this.cb.onDoubleClickNote(pinned.object);
+          return;
+        }
+      }
+      const tol = this.toleranceLogical();
+      const hit = this.store.hitTest(logical, tol);
+      if (hit.object && hit.object.type === "text") {
+        this.cb.onDoubleClickText(hit.object);
+        return;
+      }
+      if (hit.object && hit.object.type === "note") {
+        this.cb.onDoubleClickNote(hit.object);
+        return;
+      }
+      if (!hit.object) {
+        this.cb.onDoubleClickEmpty(logical);
+      }
+    }
+    snapshotObject(obj) {
+      if (obj.type === "arrow") return { from: { ...obj.from }, to: { ...obj.to } };
+      if (obj.type === "highlighter") return { points: obj.points.map((p) => ({ ...p })) };
+      return { pos: { ...obj.pos } };
+    }
+    // Create a duplicate of `obj` at the same position so a Ctrl+drag can grab
+    // the duplicate and translate it while the original stays put.
+    cloneForDrag(obj) {
+      if (obj.type === "arrow") {
+        return this.store.addArrow({ ...obj.from }, { ...obj.to }, obj.color, obj.thickness);
+      }
+      if (obj.type === "highlighter") {
+        return this.store.addHighlighter(obj.points.map((p) => ({ ...p })), obj.color, obj.thickness);
+      }
+      if (obj.type === "note") {
+        return this.store.addNote({ ...obj.pos }, obj.text, {
+          width: obj.width,
+          fontSize: obj.fontSize,
+          color: obj.color,
+          bgColor: obj.bgColor
+        });
+      }
+      return this.store.addText({ ...obj.pos }, obj.text, obj.fontSize, obj.color);
+    }
+  };
+
+  // src/storage/IndexedDBStore.ts
+  var DB_NAME = "arrow-mindmap";
+  var DB_VERSION = 1;
+  var SCENES_STORE = "scenes";
+  var META_STORE = "meta";
+  var IndexedDBStore = class {
+    constructor() {
+      this.dbPromise = null;
+    }
+    open() {
+      if (this.dbPromise) return this.dbPromise;
+      this.dbPromise = new Promise((resolve, reject) => {
+        try {
+          const req = indexedDB.open(DB_NAME, DB_VERSION);
+          req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(SCENES_STORE)) {
+              db.createObjectStore(SCENES_STORE, { keyPath: "id" });
+            }
+            if (!db.objectStoreNames.contains(META_STORE)) {
+              db.createObjectStore(META_STORE);
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => {
+            var _a;
+            return reject((_a = req.error) != null ? _a : new Error("IndexedDB open failed"));
+          };
+        } catch (e) {
+          reject(e);
+        }
+      });
+      return this.dbPromise;
+    }
+    async tx(storeNames, mode, fn) {
+      const db = await this.open();
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction(storeNames, mode);
+        let result;
+        transaction.oncomplete = () => resolve(result);
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => {
+          var _a;
+          return reject((_a = transaction.error) != null ? _a : new Error("tx aborted"));
+        };
+        Promise.resolve(fn(transaction)).then((r) => {
+          result = r;
+        }).catch(reject);
+      });
+    }
+    async saveScene(scene) {
+      await this.tx(SCENES_STORE, "readwrite", (tx) => {
+        tx.objectStore(SCENES_STORE).put(scene);
+      });
+    }
+    async loadScene(id) {
+      return this.tx(SCENES_STORE, "readonly", (tx) => {
+        return new Promise((resolve, reject) => {
+          const req = tx.objectStore(SCENES_STORE).get(id);
+          req.onsuccess = () => {
+            var _a;
+            return resolve((_a = req.result) != null ? _a : null);
+          };
+          req.onerror = () => reject(req.error);
+        });
+      });
+    }
+    async listScenes() {
+      return this.tx(SCENES_STORE, "readonly", (tx) => {
+        return new Promise((resolve, reject) => {
+          const req = tx.objectStore(SCENES_STORE).getAll();
+          req.onsuccess = () => {
+            var _a;
+            const all = (_a = req.result) != null ? _a : [];
+            all.sort((a, b) => b.updatedAt - a.updatedAt);
+            resolve(all.map((s) => ({ id: s.id, name: s.name, updatedAt: s.updatedAt })));
+          };
+          req.onerror = () => reject(req.error);
+        });
+      });
+    }
+    async deleteScene(id) {
+      await this.tx(SCENES_STORE, "readwrite", (tx) => {
+        tx.objectStore(SCENES_STORE).delete(id);
+      });
+    }
+    async renameScene(id, name) {
+      const existing = await this.loadScene(id);
+      if (!existing) return;
+      existing.name = name;
+      existing.updatedAt = Date.now();
+      await this.saveScene(existing);
+    }
+    async setMeta(key, value) {
+      await this.tx(META_STORE, "readwrite", (tx) => {
+        tx.objectStore(META_STORE).put(value, key);
+      });
+    }
+    async getMeta(key) {
+      return this.tx(META_STORE, "readonly", (tx) => {
+        return new Promise((resolve, reject) => {
+          const req = tx.objectStore(META_STORE).get(key);
+          req.onsuccess = () => {
+            var _a;
+            return resolve((_a = req.result) != null ? _a : null);
+          };
+          req.onerror = () => reject(req.error);
+        });
+      });
+    }
+    async exportAll() {
+      const scenes = await this.tx(SCENES_STORE, "readonly", (tx) => {
+        return new Promise((resolve, reject) => {
+          const req = tx.objectStore(SCENES_STORE).getAll();
+          req.onsuccess = () => {
+            var _a;
+            return resolve((_a = req.result) != null ? _a : []);
+          };
+          req.onerror = () => reject(req.error);
+        });
+      });
+      return { scenes, version: DB_VERSION };
+    }
+    async importAll(payload, merge = true) {
+      if (!payload || !Array.isArray(payload.scenes)) {
+        throw new Error("Invalid import payload");
+      }
+      return this.tx(SCENES_STORE, "readwrite", (tx) => {
+        const store = tx.objectStore(SCENES_STORE);
+        if (!merge) store.clear();
+        let count = 0;
+        for (const s of payload.scenes) {
+          if (s && typeof s.id === "string") {
+            normalizeSceneFontSizes(s);
+            store.put(s);
+            count++;
+          }
+        }
+        return count;
+      });
+    }
+  };
+
+  // src/ui/Modals.ts
+  async function refreshWorks(app) {
+    try {
+      app.worksList = await app.db.listScenes();
+    } catch {
+      app.worksList = [];
+    }
+    renderWorks(app);
+  }
+  function openHelpModal(app) {
+    if (app.helpModalEl) return;
+    ensureModalStyles();
+    const overlay = document.createElement("div");
+    overlay.className = "ap-overlay";
+    const card = document.createElement("div");
+    card.className = "ap-card ap-help-card";
+    const header = document.createElement("div");
+    header.className = "ap-works-head";
+    const title = document.createElement("div");
+    title.className = "ap-title";
+    title.textContent = t("helpTitle");
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "ap-btn";
+    closeBtn.textContent = t("close");
+    header.append(title, closeBtn);
+    const body = document.createElement("div");
+    body.className = "ap-help-body";
+    const sections = [
+      ["helpSecModes", "helpModes"],
+      ["helpSecKeys", "helpKeys"],
+      ["helpSecMouse", "helpMouse"],
+      ["helpSecMobile", "helpMobile"],
+      ["helpSecToolbar", "helpToolbar"],
+      ["helpSecTools", "helpTools"],
+      ["helpSecFormat", "helpFormat"]
+    ];
+    for (const [titleKey, bodyKey] of sections) {
+      const sec = document.createElement("div");
+      sec.className = "sec";
+      sec.textContent = "[" + t(titleKey) + "]";
+      const txt = document.createElement("div");
+      txt.innerHTML = t(bodyKey);
+      body.append(sec, txt);
+      const spacer = document.createElement("div");
+      body.appendChild(spacer);
+    }
+    const sourceWrap = document.createElement("div");
+    sourceWrap.className = "ap-help-source";
+    sourceWrap.style.marginTop = "8px";
+    sourceWrap.style.fontSize = "12px";
+    sourceWrap.style.color = "#777";
+    const sourceLink = document.createElement("a");
+    sourceLink.href = "https://github.com/chobocho/arrow";
+    sourceLink.target = "_blank";
+    sourceLink.rel = "noopener noreferrer";
+    sourceLink.textContent = "github.com/chobocho/arrow";
+    sourceLink.style.color = "#3a7afe";
+    sourceLink.style.textDecoration = "none";
+    sourceWrap.appendChild(document.createTextNode("\u{1F4E6} "));
+    sourceWrap.appendChild(sourceLink);
+    body.appendChild(sourceWrap);
+    card.append(header, body);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    app.helpModalEl = overlay;
+    const onKey2 = (ev) => {
+      if (ev.key === "Escape" || ev.key === "F1") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        closeHelpModal(app);
+      }
+    };
+    document.addEventListener("keydown", onKey2, true);
+    app.helpModalCleanup = () => document.removeEventListener("keydown", onKey2, true);
+    closeBtn.addEventListener("click", () => closeHelpModal(app));
+    overlay.addEventListener("mousedown", (ev) => {
+      if (ev.target === overlay) closeHelpModal(app);
+    });
+  }
+  function closeHelpModal(app) {
+    if (!app.helpModalEl) return;
+    if (app.helpModalCleanup) app.helpModalCleanup();
+    app.helpModalEl.remove();
+    app.helpModalEl = null;
+    app.helpModalCleanup = null;
+  }
+  function openWorksModal(app) {
+    if (app.worksModalEl) return;
+    ensureModalStyles();
+    void refreshWorks(app);
+    const overlay = document.createElement("div");
+    overlay.className = "ap-overlay";
+    const card = document.createElement("div");
+    card.className = "ap-card ap-works-card";
+    const header = document.createElement("div");
+    header.className = "ap-works-head";
+    const title = document.createElement("div");
+    title.className = "ap-title";
+    title.textContent = t("works");
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "ap-btn";
+    closeBtn.textContent = t("close");
+    header.append(title, closeBtn);
+    const sortBar = document.createElement("div");
+    sortBar.className = "ap-works-sort";
+    const sortLabel = document.createElement("span");
+    sortLabel.className = "ap-sort-label";
+    sortLabel.textContent = t("sortLabel") + ":";
+    const makeSortBtn = (key, label) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ap-btn ap-btn-sm ap-sort-btn" + (app.worksSortKey === key ? " active" : "");
+      b.textContent = label;
+      b.dataset.sort = key;
+      b.addEventListener("click", () => {
+        app.worksSortKey = key;
+        renderWorks(app);
+      });
+      return b;
+    };
+    sortBar.append(sortLabel, makeSortBtn("name", t("sortByName")), makeSortBtn("date", t("sortByDate")));
+    const listEl = document.createElement("ul");
+    listEl.className = "ap-works-list";
+    listEl.id = "worksList";
+    card.append(header, sortBar, listEl);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    app.worksModalEl = overlay;
+    const onKey2 = (ev) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        closeWorksModal(app);
+      }
+    };
+    document.addEventListener("keydown", onKey2, true);
+    app.worksModalCleanup = () => document.removeEventListener("keydown", onKey2, true);
+    closeBtn.addEventListener("click", () => closeWorksModal(app));
+    overlay.addEventListener("mousedown", (ev) => {
+      if (ev.target === overlay) closeWorksModal(app);
+    });
+    renderWorks(app);
+  }
+  function renderWorks(app) {
+    if (!app.worksModalEl) return;
+    const ul = app.worksModalEl.querySelector("#worksList");
+    if (!ul) return;
+    const sortBtns = app.worksModalEl.querySelectorAll(".ap-sort-btn");
+    sortBtns.forEach((b) => {
+      const el = b;
+      el.classList.toggle("active", el.dataset.sort === app.worksSortKey);
+    });
+    ul.innerHTML = "";
+    const current = app.store.get().id;
+    if (app.worksList.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "ap-works-empty";
+      empty.textContent = t("noWorks");
+      ul.appendChild(empty);
+      return;
+    }
+    const sorted = app.worksList.slice().sort((a, b) => {
+      if (app.worksSortKey === "name") return a.name.localeCompare(b.name, void 0, { numeric: true, sensitivity: "base" });
+      return b.updatedAt - a.updatedAt;
+    });
+    for (const w of sorted) {
+      const li = document.createElement("li");
+      li.className = "ap-works-item" + (w.id === current ? " current" : "");
+      const name = document.createElement("span");
+      name.className = "work-name";
+      name.textContent = w.name;
+      name.title = new Date(w.updatedAt).toLocaleString();
+      const loadBtn = document.createElement("button");
+      loadBtn.type = "button";
+      loadBtn.className = "ap-btn ap-btn-sm";
+      loadBtn.textContent = t("load");
+      loadBtn.addEventListener("click", () => void loadWork(app, w.id));
+      const renameBtn = document.createElement("button");
+      renameBtn.type = "button";
+      renameBtn.className = "ap-btn ap-btn-sm";
+      renameBtn.textContent = t("rename");
+      renameBtn.addEventListener("click", () => void renameWork(app, w));
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "ap-btn ap-btn-sm";
+      delBtn.textContent = t("delete");
+      delBtn.addEventListener("click", () => void deleteWork(app, w));
+      li.append(name, loadBtn, renameBtn, delBtn);
+      ul.appendChild(li);
+    }
+  }
+  async function loadWork(app, id) {
+    if (!await confirmUnsaved(app)) return;
+    const scene = await app.db.loadScene(id);
+    if (!scene) return;
+    app.adoptScene(scene);
+    await app.db.setMeta("lastSceneId", id);
+    closeWorksModal(app);
+  }
+  function closeWorksModal(app) {
+    if (!app.worksModalEl) return;
+    if (app.worksModalCleanup) app.worksModalCleanup();
+    app.worksModalEl.remove();
+    app.worksModalEl = null;
+    app.worksModalCleanup = null;
+  }
+  async function renameWork(app, w) {
+    const name = await customPrompt(t("promptRename"), w.name);
+    if (name === null) return;
+    await app.db.renameScene(w.id, name.trim() || t("untitled"));
+    if (w.id === app.store.get().id) {
+      app.store.setName(name.trim() || t("untitled"));
+    }
+    await refreshWorks(app);
+  }
+  async function deleteWork(app, w) {
+    if (!await customConfirm(t("confirmDelete"))) return;
+    await app.db.deleteScene(w.id);
+    if (w.id === app.store.get().id) {
+      void newScene(app);
+    }
+    await refreshWorks(app);
+  }
+
+  // src/storage/ArrowFile.ts
+  var ARROW_FILE_FONT_SIZE = 24;
+  var ARROW_FILE_COLOR = "#222222";
+  var ARROW_FILE_THICKNESS = 4;
+  var ARROW_FILE_RING_RADIUS = 240;
+  var ARROW_FILE_RADIUS_FACTOR = 0.85;
+  var ARROW_FILE_NODE_PAD = 14;
+  function tokenize(content) {
+    const cleaned = [];
+    for (let raw of content.split(/\r?\n/)) {
+      const hashIdx = raw.indexOf("#");
+      if (hashIdx >= 0) raw = raw.substring(0, hashIdx);
+      const trimmed = raw.trim();
+      if (trimmed) cleaned.push(trimmed);
+    }
+    if (cleaned.length < 2) return null;
+    if (cleaned[0].toLowerCase() !== "arrow") return null;
+    const topic = cleaned[1];
+    const chains = [];
+    for (let i = 2; i < cleaned.length; i++) {
+      const parts = cleaned[i].split(/->|→/).map((s) => s.trim()).filter((s) => s.length > 0);
+      if (parts.length > 0) chains.push(parts);
+    }
+    return { topic, chains };
+  }
+  function buildTree(parsed) {
+    const topicNode = { label: parsed.topic, children: [], pos: { x: 0, y: 0 } };
+    const nodes = /* @__PURE__ */ new Map();
+    nodes.set(parsed.topic, topicNode);
+    const edges = [];
+    const seenEdges = /* @__PURE__ */ new Set();
+    const attachForLayoutOnly = (parent, child) => {
+      if (!parent.children.includes(child)) parent.children.push(child);
+    };
+    const linkParentChild = (parent, child) => {
+      const key = parent.label + "\0" + child.label;
+      if (seenEdges.has(key)) return;
+      seenEdges.add(key);
+      attachForLayoutOnly(parent, child);
+      edges.push([parent, child]);
+    };
+    for (const chain of parsed.chains) {
+      if (chain.length === 0) continue;
+      let parent;
+      const first = chain[0];
+      if (nodes.has(first)) {
+        parent = nodes.get(first);
+      } else {
+        const newRoot = { label: first, children: [], pos: null };
+        nodes.set(first, newRoot);
+        attachForLayoutOnly(topicNode, newRoot);
+        parent = newRoot;
+      }
+      for (let i = 1; i < chain.length; i++) {
+        const word = chain[i];
+        let child = nodes.get(word);
+        if (!child) {
+          child = { label: word, children: [], pos: null };
+          nodes.set(word, child);
+        }
+        linkParentChild(parent, child);
+        parent = child;
+      }
+    }
+    return { topicNode, nodes, edges };
+  }
+  function layoutTree(topicNode) {
+    const recurse = (parent, radius, startAngle) => {
+      const kids = parent.children;
+      if (kids.length === 0) return;
+      const step = 2 * Math.PI / kids.length;
+      for (let i = 0; i < kids.length; i++) {
+        const angle = startAngle + i * step;
+        const px = parent.pos.x + radius * Math.cos(angle);
+        const py = parent.pos.y + radius * Math.sin(angle);
+        kids[i].pos = { x: px, y: py };
+        recurse(kids[i], radius * ARROW_FILE_RADIUS_FACTOR, angle);
+      }
+    };
+    recurse(topicNode, ARROW_FILE_RING_RADIUS, -Math.PI / 2);
+  }
+  function buildObjects(topicNode, nodes, edges) {
+    const out = [];
+    const charW = ARROW_FILE_FONT_SIZE * 0.65;
+    const textHeight = ARROW_FILE_FONT_SIZE;
+    const halfWidths = /* @__PURE__ */ new Map();
+    const computeHalfWidth = (n) => {
+      const cached = halfWidths.get(n);
+      if (cached !== void 0) return cached;
+      const w = Math.max(charW, charW * n.label.length) / 2;
+      halfWidths.set(n, w);
+      return w;
+    };
+    for (const node of nodes.values()) {
+      if (node === topicNode) continue;
+      if (!node.pos) continue;
+      const hw = computeHalfWidth(node);
+      const tx = {
+        id: newId("text"),
+        type: "text",
+        pos: { x: node.pos.x - hw, y: node.pos.y - textHeight / 2 },
+        text: node.label,
+        fontSize: ARROW_FILE_FONT_SIZE,
+        color: ARROW_FILE_COLOR
+      };
+      out.push(tx);
+    }
+    for (const [from, to] of edges) {
+      if (!from.pos || !to.pos) continue;
+      const dx = to.pos.x - from.pos.x;
+      const dy = to.pos.y - from.pos.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1) continue;
+      const ux = dx / len;
+      const uy = dy / len;
+      const fromGap = from === topicNode ? ARROW_FILE_FONT_SIZE * 2.5 + ARROW_FILE_NODE_PAD : computeHalfWidth(from) + ARROW_FILE_NODE_PAD;
+      const toGap = computeHalfWidth(to) + ARROW_FILE_NODE_PAD;
+      if (fromGap + toGap >= len) continue;
+      const sx = from.pos.x + ux * fromGap;
+      const sy = from.pos.y + uy * fromGap;
+      const ex = to.pos.x - ux * toGap;
+      const ey = to.pos.y - uy * toGap;
+      const ar = {
+        id: newId("arrow"),
+        type: "arrow",
+        from: { x: sx, y: sy },
+        to: { x: ex, y: ey },
+        color: ARROW_FILE_COLOR,
+        thickness: ARROW_FILE_THICKNESS
+      };
+      out.push(ar);
+    }
+    return out;
+  }
+  function recenterToCanvas(objects) {
+    const shift = MAX_CANVAS_SIZE / 2;
+    for (const o of objects) {
+      if (o.type === "text" || o.type === "note") {
+        o.pos.x += shift;
+        o.pos.y += shift;
+      } else if (o.type === "arrow") {
+        o.from.x += shift;
+        o.from.y += shift;
+        o.to.x += shift;
+        o.to.y += shift;
+      } else {
+        for (const p of o.points) {
+          p.x += shift;
+          p.y += shift;
+        }
+      }
+    }
+  }
+  function parseArrowFile(content, sceneName) {
+    const parsed = tokenize(content);
+    if (!parsed) return null;
+    const { topicNode, nodes, edges } = buildTree(parsed);
+    layoutTree(topicNode);
+    const objects = buildObjects(topicNode, nodes, edges);
+    recenterToCanvas(objects);
+    const scene = emptyScene(sceneName || parsed.topic || "arrow");
+    scene.centerText = parsed.topic;
+    scene.objects = objects;
+    return scene;
+  }
+
+  // src/app/FileActions.ts
+  async function ensureName(app) {
+    let name = app.store.get().name;
+    const placeholders = [
+      t("newWork"),
+      t("untitled"),
+      "\uC0C8 \uC791\uC5C5",
+      "\uC81C\uBAA9 \uC5C6\uC74C",
+      "New Work",
+      "Untitled"
+    ];
+    if (!name || placeholders.indexOf(name) >= 0) {
+      const topic = (app.store.get().centerText || "").trim();
+      const input = await customPrompt(t("promptName"), topic);
+      if (input === null) return null;
+      name = input.trim() || t("untitled");
+      app.store.setName(name);
+    }
+    return name;
+  }
+  async function confirmUnsaved(app) {
+    if (!app.dirty) return true;
+    const choice = await customChoice(t("unsavedLoad"), [
+      { value: "cancel", label: t("cancel") },
+      { value: "discard", label: t("dontSave") },
+      { value: "save", label: t("save"), variant: "primary" }
+    ]);
+    if (choice === null || choice === "cancel") return false;
+    if (choice === "save") {
+      await save(app);
+      if (app.dirty) return false;
+    }
+    return true;
+  }
+  async function save(app) {
+    const name = await ensureName(app);
+    if (name === null) return;
+    const scene = app.store.get();
+    scene.viewOffsetX = app.view.offset.x;
+    scene.viewOffsetY = app.view.offset.y;
+    scene.viewScale = app.view.scale;
+    await app.db.saveScene(scene);
+    await app.db.setMeta("lastSceneId", scene.id);
+    app.dirty = false;
+    app.cancelAutosave();
+    await refreshWorks(app);
+    app.flashStatus(t("saved"));
+  }
+  async function saveAs(app) {
+    const input = await customPrompt(t("promptSaveAs"), app.store.get().name);
+    if (input === null) return;
+    const next = JSON.parse(JSON.stringify(app.store.get()));
+    next.id = "scene_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+    next.name = input.trim() || t("untitled");
+    next.createdAt = Date.now();
+    next.updatedAt = Date.now();
+    app.store.replace(next);
+    await app.db.saveScene(next);
+    await app.db.setMeta("lastSceneId", next.id);
+    app.dirty = false;
+    app.cancelAutosave();
+    await refreshWorks(app);
+    updateTitle(app);
+    app.flashStatus(t("saved"));
+  }
+  async function newScene(app) {
+    if (app.dirty && !await customConfirm(t("unsavedNew"))) {
+      return;
+    }
+    app.adoptScene(emptyScene(t("newWork")));
+    app.view.scale = 1;
+    app.view.offset = { x: MAX_CANVAS_SIZE / 2 - app.view.width / 2, y: MAX_CANVAS_SIZE / 2 - app.view.height / 2 };
+    app.requestRender();
+  }
+  async function deleteSelected(app) {
+    if (!app.selectedId) return;
+    if (!await customConfirm(t("confirmDeleteSelected"))) return;
+    app.pushHistory();
+    app.store.remove(app.selectedId);
+    app.selectedId = null;
+    updateSelectionUi(app);
+  }
+  function exportPng(app) {
+    const cropped = app.renderer.renderToImage(app.store.get());
+    const url = cropped.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    const base = app.store.get().name || "arrow";
+    a.download = `${base}_${todayStamp()}.png`;
+    a.click();
+  }
+  function todayStamp() {
+    const d = /* @__PURE__ */ new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}${m}${day}`;
+  }
+  async function exportJson(app) {
+    const all = await app.db.exportAll();
+    const blob = new Blob([JSON.stringify(all, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `arrow_${todayStamp()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  }
+  function importJsonClick() {
+    const inp = document.getElementById("fileImport");
+    inp.value = "";
+    inp.click();
+  }
+  async function handleImportFile(app, e) {
+    const inp = e.target;
+    const file = inp.files && inp.files[0];
+    if (!file) return;
+    const name = file.name || "";
+    const lower = name.toLowerCase();
+    const isArrow = lower.endsWith(".arrow");
+    try {
+      const text = await file.text();
+      if (isArrow) {
+        const base = name.replace(/\.[^./\\]+$/, "") || "arrow";
+        const scene = parseArrowFile(text, base);
+        if (!scene) {
+          window.alert(t("invalidArrow"));
+          return;
+        }
+        if (!await confirmUnsaved(app)) return;
+        const now = Date.now();
+        scene.createdAt = now;
+        scene.updatedAt = now;
+        app.adoptScene(scene);
+        await app.db.saveScene(scene);
+        await app.db.setMeta("lastSceneId", scene.id);
+        await refreshWorks(app);
+        app.flashStatus(t("saved"));
+        return;
+      }
+      const payload = JSON.parse(text);
+      const count = await app.db.importAll(payload, true);
+      await refreshWorks(app);
+      app.flashStatus(count + t("importedCount"));
+    } catch (err) {
+      console.warn(err);
+      window.alert(isArrow ? t("invalidArrow") : t("invalidJson"));
+    }
+  }
+  function fitToScreen(app) {
+    const scene = app.store.get();
+    if (scene.objects.length === 0) {
+      const center = { x: MAX_CANVAS_SIZE / 2, y: MAX_CANVAS_SIZE / 2 };
+      app.view.scale = 1;
+      app.view.centerOn(center);
+      app.requestRender();
+      return;
+    }
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const o of scene.objects) {
+      if (o.type === "arrow") {
+        minX = Math.min(minX, o.from.x, o.to.x);
+        minY = Math.min(minY, o.from.y, o.to.y);
+        maxX = Math.max(maxX, o.from.x, o.to.x);
+        maxY = Math.max(maxY, o.from.y, o.to.y);
+      } else if (o.type === "highlighter") {
+        for (const p of o.points) {
+          if (p.x < minX) minX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y > maxY) maxY = p.y;
+        }
+      } else {
+        minX = Math.min(minX, o.pos.x);
+        minY = Math.min(minY, o.pos.y);
+        maxX = Math.max(maxX, o.pos.x + o.fontSize * Math.max(2, o.text.length));
+        maxY = Math.max(maxY, o.pos.y + o.fontSize * 1.4);
+      }
+    }
+    const padding = 80;
+    const w = maxX - minX + padding * 2;
+    const h = maxY - minY + padding * 2;
+    const scale = Math.max(0.1, Math.min(2, Math.min(app.view.width / w, app.view.height / h)));
+    app.view.scale = scale;
+    app.view.centerOn({ x: (minX + maxX) / 2, y: (minY + maxY) / 2 });
+    app.requestRender();
+  }
+
+  // src/app/KeyboardActions.ts
+  function onKey(app, e) {
+    if (e.target && e.target.tagName === "INPUT") return;
+    if (app.worksModalEl) return;
+    if (app.helpModalEl) {
+      if (e.key === "F1") e.preventDefault();
+      return;
+    }
+    if (e.key === "F1") {
+      e.preventDefault();
+      openHelpModal(app);
+      return;
+    }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      if (app.selectedId) {
+        e.preventDefault();
+        void deleteSelected(app);
+      }
+    } else if (e.key === "Insert" || e.key === "+") {
+      e.preventDefault();
+      insertArrow(app);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      insertTextAtViewportCenter(app);
+    } else if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      void save(app);
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "c" || e.key === "C")) {
+      if (copySelected(app)) e.preventDefault();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "v" || e.key === "V")) {
+      if (pasteClone(app)) e.preventDefault();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "z" || e.key === "Z") && !e.shiftKey) {
+      e.preventDefault();
+      app.undo();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "y" || e.key === "Y" || (e.key === "z" || e.key === "Z") && e.shiftKey)) {
+      e.preventDefault();
+      app.redo();
+    } else if (e.altKey && e.code === "KeyL") {
+      e.preventDefault();
+      openWorksModal(app);
+    } else if (e.altKey && e.code === "KeyN") {
+      e.preventDefault();
+      void newScene(app);
+    } else if (e.key === "a") setMode(app, "arrow");
+    else if (e.key === "t") setMode(app, "text");
+    else if (e.key === "g") setMode(app, "highlighter");
+    else if (e.key === "v") setMode(app, "select");
+    else if (e.key === "h") setMode(app, "pan");
+  }
+  function copySelected(app) {
+    const sel = app.getSelectedObject();
+    if (!sel) return false;
+    app.clipboard = JSON.parse(JSON.stringify(sel));
+    app.flashStatus("copy");
+    return true;
+  }
+  function pasteClone(app) {
+    const clip = app.clipboard;
+    if (!clip) return false;
+    app.pushHistory();
+    const offset = 20;
+    let created;
+    if (clip.type === "arrow") {
+      const from = { x: clip.from.x + offset, y: clip.from.y + offset };
+      const to = { x: clip.to.x + offset, y: clip.to.y + offset };
+      created = app.store.addArrow(from, to, clip.color, clip.thickness);
+      clip.from = from;
+      clip.to = to;
+    } else if (clip.type === "highlighter") {
+      const shifted = clip.points.map((p) => ({ x: p.x + offset, y: p.y + offset }));
+      created = app.store.addHighlighter(shifted, clip.color, clip.thickness);
+      clip.points = shifted;
+    } else {
+      const pos = { x: clip.pos.x + offset, y: clip.pos.y + offset };
+      created = app.store.addText(pos, clip.text, clip.fontSize, clip.color);
+      clip.pos = pos;
+    }
+    app.selectedId = created.id;
+    app.input.setSelected(created.id);
+    app.flashStatus("paste");
+    return true;
+  }
+  var CHAIN_MAX_SEGMENTS = 10;
+  function objectTopLeft(obj) {
+    if (obj.type === "text" || obj.type === "note") return { x: obj.pos.x, y: obj.pos.y };
+    if (obj.type === "arrow") {
+      return { x: Math.min(obj.from.x, obj.to.x), y: Math.min(obj.from.y, obj.to.y) };
+    }
+    let minX = Infinity, minY = Infinity;
+    for (const p of obj.points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+    }
+    return { x: minX, y: minY };
+  }
+  function insertChain(app, raw) {
+    const all = raw.split(/->|→/).map((s) => s.trim()).filter((s) => s.length > 0);
+    if (all.length === 0) return 0;
+    const parts = all.slice(0, CHAIN_MAX_SEGMENTS);
+    const fontSize = app.fontSize;
+    const charWidth = fontSize * 0.65;
+    const textHeight = fontSize * 1.2;
+    const widths = parts.map((p) => Math.max(charWidth, charWidth * p.length));
+    const arrowLength = Math.max(60, fontSize * 2.5);
+    const gap = Math.max(4, fontSize * 0.15);
+    const totalWidth = widths.reduce((a, b) => a + b, 0) + (parts.length - 1) * arrowLength;
+    const sel = app.getSelectedObject();
+    let x;
+    let y;
+    if (sel) {
+      const anchor = objectTopLeft(sel);
+      x = anchor.x + 10;
+      y = anchor.y + 10;
+    } else {
+      const viewCenter = app.view.screenToLogical({
+        x: app.view.width / 2,
+        y: app.view.height / 2
+      });
+      x = viewCenter.x - totalWidth / 2;
+      y = viewCenter.y - textHeight / 2;
+    }
+    const arrowY = y + textHeight / 2;
+    app.pushHistory();
+    let lastCreatedId = null;
+    for (let i = 0; i < parts.length; i++) {
+      const created = app.store.addText({ x, y }, parts[i], fontSize, app.color);
+      lastCreatedId = created.id;
+      const textRight = x + widths[i];
+      if (i < parts.length - 1) {
+        const arrowFromX = textRight + gap;
+        const arrowToX = textRight + arrowLength - gap;
+        app.store.addArrow(
+          { x: arrowFromX, y: arrowY },
+          { x: arrowToX, y: arrowY },
+          app.color,
+          app.thickness
+        );
+        x = textRight + arrowLength;
+      }
+    }
+    if (lastCreatedId) {
+      app.selectedId = lastCreatedId;
+      app.input.setSelected(lastCreatedId);
+    }
+    return parts.length;
+  }
+  function insertTextAtViewportCenter(app) {
+    const center = app.view.screenToLogical({ x: app.view.width / 2, y: app.view.height / 2 });
+    void customPrompt(t("promptText"), "").then((text) => {
+      if (!text || !text.trim()) return;
+      app.pushHistory();
+      const obj = app.store.addText(center, text.trim(), app.fontSize, app.color);
+      app.selectedId = obj.id;
+      app.input.setSelected(obj.id);
+      setMode(app, "select");
+    });
+  }
+  function insertArrow(app) {
+    const visibleLogicalW = app.view.width / app.view.scale;
+    const gap = 5;
+    const arrows = app.store.get().objects.filter((o) => o.type === "arrow");
+    let lengthLogical;
+    if (arrows.length === 0) {
+      lengthLogical = Math.max(60, Math.min(400, visibleLogicalW * 0.25)) / 3;
+    } else {
+      let total = 0;
+      for (const a of arrows) total += Math.hypot(a.to.x - a.from.x, a.to.y - a.from.y);
+      lengthLogical = Math.max(30, total / arrows.length) / 3;
+    }
+    let from;
+    if (arrows.length === 0) {
+      const c = app.view.screenToLogical({ x: app.view.width / 2, y: app.view.height / 2 });
+      from = { x: c.x - lengthLogical / 2, y: c.y };
+    } else {
+      let maxX = -Infinity, minY = Infinity;
+      for (const a of arrows) {
+        maxX = Math.max(maxX, a.from.x, a.to.x);
+        minY = Math.min(minY, a.from.y, a.to.y);
+      }
+      from = { x: maxX + gap, y: minY - gap };
+    }
+    const to = { x: from.x + lengthLogical, y: from.y };
+    const fromC = clampToCanvas(from);
+    const toC = { x: clampToCanvas(to).x, y: fromC.y };
+    app.pushHistory();
+    const created = app.store.addArrow(fromC, toC, app.color, app.thickness);
+    app.selectedId = created.id;
+    app.input.setSelected(created.id);
+    setMode(app, "select");
+    app.flashStatus("+ arrow");
+  }
+
+  // src/ui/UiBindings.ts
+  var PALETTE_16 = [
+    "#000000",
+    "#424242",
+    "#9e9e9e",
+    "#ffffff",
+    "#f44336",
+    "#ff9800",
+    "#ffeb3b",
+    "#4caf50",
+    "#00bcd4",
+    "#2196f3",
+    "#3f51b5",
+    "#9c27b0",
+    "#e91e63",
+    "#795548",
+    "#009688",
+    "#607d8b"
+  ];
+  function bindUi(app) {
+    var _a;
+    const $ = (sel) => document.querySelector(sel);
+    $("#btnSelect").addEventListener("click", () => setMode(app, "select"));
+    $("#btnArrow").addEventListener("click", () => setMode(app, "arrow"));
+    $("#btnText").addEventListener("click", () => setMode(app, "text"));
+    $("#btnHighlighter").addEventListener("click", () => setMode(app, "highlighter"));
+    const btnNote = document.getElementById("btnNote");
+    if (btnNote) btnNote.addEventListener("click", () => setMode(app, "note"));
+    $("#btnPan").addEventListener("click", () => setMode(app, "pan"));
+    $("#btnSave").addEventListener("click", () => void save(app));
+    $("#btnSaveAs").addEventListener("click", () => void saveAs(app));
+    $("#btnNew").addEventListener("click", () => void newScene(app));
+    $("#btnExportPng").addEventListener("click", () => exportPng(app));
+    $("#btnExportJson").addEventListener("click", () => void exportJson(app));
+    $("#btnImportJson").addEventListener("click", () => importJsonClick());
+    $("#fileImport").addEventListener("change", (e) => void handleImportFile(app, e));
+    $("#btnLang").addEventListener("click", () => toggleLang(app));
+    $("#btnEditCenter").addEventListener("click", () => {
+      void customPrompt(t("promptCenter"), app.store.get().centerText).then((txt) => {
+        if (txt !== null) {
+          app.pushHistory();
+          app.store.setCenterText(txt);
+        }
+      });
+    });
+    const btnUndo = document.getElementById("btnUndo");
+    if (btnUndo) btnUndo.addEventListener("click", () => app.undo());
+    const btnRedo = document.getElementById("btnRedo");
+    if (btnRedo) btnRedo.addEventListener("click", () => app.redo());
+    $("#btnFit").addEventListener("click", () => fitToScreen(app));
+    $("#btnZoomIn").addEventListener("click", () => {
+      app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, 1.2);
+      app.requestRender();
+    });
+    $("#btnZoomOut").addEventListener("click", () => {
+      app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, 1 / 1.2);
+      app.requestRender();
+    });
+    $("#btnDelete").addEventListener("click", () => void deleteSelected(app));
+    const btnPin = document.getElementById("btnPinNote");
+    if (btnPin) btnPin.addEventListener("click", () => {
+      app.togglePinSelectedNote();
+      updateSelectionUi(app);
+    });
+    $("#btnWorks").addEventListener("click", () => openWorksModal(app));
+    $("#btnHelp").addEventListener("click", () => openHelpModal(app));
+    const chainBtn = document.getElementById("btnChain");
+    if (chainBtn) {
+      chainBtn.addEventListener("click", () => {
+        void customPrompt(t("chainInsert"), "", t("chainPlaceholder")).then((raw) => {
+          if (raw === null) return;
+          const n = insertChain(app, raw);
+          if (n > 0) app.flashStatus("+ chain (" + n + ")");
+        });
+      });
+    }
+    const ctrlBtn = document.getElementById("btnVirtualCtrl");
+    if (ctrlBtn) {
+      ctrlBtn.addEventListener("click", () => {
+        app.modifierClone = !app.modifierClone;
+        ctrlBtn.classList.toggle("active", app.modifierClone);
+      });
+    }
+    const colorEl = $("#inputColor");
+    colorEl.value = app.color;
+    const paletteEl = $("#colorPalette");
+    const updatePaletteActive = (hex) => {
+      const target = hex.toLowerCase();
+      paletteEl.querySelectorAll(".swatch").forEach((b) => {
+        b.classList.toggle("active", (b.dataset.color || "").toLowerCase() === target);
+      });
+    };
+    const applyColor = (hex) => {
+      const sel = app.getSelectedObject();
+      if (sel && sel.type === "note") {
+        const textColor = pickReadableTextColor(hex);
+        app.store.update(sel.id, (o) => {
+          if (o.type !== "note") return;
+          o.bgColor = hex;
+          o.color = textColor;
+        });
+      } else if (sel) {
+        app.store.update(sel.id, (o) => {
+          o.color = hex;
+        });
+      } else {
+        app.color = hex;
+      }
+      colorEl.value = hex;
+      updatePaletteActive(hex);
+    };
+    for (const hex of PALETTE_16) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "swatch";
+      btn.style.background = hex;
+      btn.dataset.color = hex;
+      btn.title = hex.toUpperCase();
+      btn.addEventListener("click", () => {
+        if (app.selectedId) app.pushHistory();
+        applyColor(hex);
+        colorEl.blur();
+        btn.blur();
+      });
+      paletteEl.appendChild(btn);
+    }
+    updatePaletteActive(app.color);
+    let pickerHistoryPushed = false;
+    colorEl.addEventListener("focus", () => {
+      pickerHistoryPushed = false;
+    });
+    colorEl.addEventListener("input", () => {
+      if (!pickerHistoryPushed && app.selectedId) {
+        app.pushHistory();
+        pickerHistoryPushed = true;
+      }
+      applyColor(colorEl.value);
+    });
+    colorEl.addEventListener("change", () => {
+      const btnSelect = document.getElementById("btnSelect");
+      btnSelect == null ? void 0 : btnSelect.focus();
+    });
+    colorEl.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const btnSelect = document.getElementById("btnSelect");
+      btnSelect == null ? void 0 : btnSelect.focus();
+    });
+    const thickEl = $("#inputThickness");
+    thickEl.value = String(app.thickness);
+    let thickHistoryPushed = false;
+    thickEl.addEventListener("focus", () => {
+      thickHistoryPushed = false;
+    });
+    thickEl.addEventListener("input", () => {
+      const raw = parseFloat(thickEl.value);
+      if (!Number.isFinite(raw)) return;
+      const sel = app.getSelectedObject();
+      if (sel && (sel.type === "arrow" || sel.type === "highlighter")) {
+        if (!thickHistoryPushed) {
+          app.pushHistory();
+          thickHistoryPushed = true;
+        }
+        const clamped = Math.max(1, Math.min(40, raw));
+        app.store.update(sel.id, (o) => {
+          if (o.type === "arrow" || o.type === "highlighter") o.thickness = clamped;
+        });
+      } else {
+        app.thickness = raw || 4;
+      }
+    });
+    thickEl.addEventListener("change", () => {
+      const sel = app.getSelectedObject();
+      if (sel && (sel.type === "arrow" || sel.type === "highlighter")) {
+        thickEl.value = String(sel.thickness);
+      } else {
+        thickEl.value = String(app.thickness);
+      }
+    });
+    thickEl.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const sel = app.getSelectedObject();
+      if (sel && (sel.type === "arrow" || sel.type === "highlighter")) {
+        thickEl.value = String(sel.thickness);
+      } else {
+        thickEl.value = String(app.thickness);
+      }
+      const btnSelect = document.getElementById("btnSelect");
+      btnSelect == null ? void 0 : btnSelect.focus();
+    });
+    const fontEl = $("#inputFontSize");
+    fontEl.value = String(app.fontSize);
+    let fontHistoryPushed = false;
+    fontEl.addEventListener("focus", () => {
+      fontHistoryPushed = false;
+    });
+    fontEl.addEventListener("input", () => {
+      const raw = parseFloat(fontEl.value);
+      if (!Number.isFinite(raw)) return;
+      const n = Math.floor(raw);
+      const sel = app.getSelectedObject();
+      if (sel && sel.type === "text") {
+        if (!fontHistoryPushed) {
+          app.pushHistory();
+          fontHistoryPushed = true;
+        }
+        app.store.update(sel.id, (o) => {
+          if (o.type === "text") o.fontSize = Math.max(8, Math.min(200, n));
+        });
+      } else {
+        app.fontSize = n || 28;
+      }
+    });
+    fontEl.addEventListener("change", () => {
+      const sel = app.getSelectedObject();
+      if (sel && sel.type === "text") fontEl.value = String(sel.fontSize);
+      else fontEl.value = String(app.fontSize);
+    });
+    fontEl.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const sel = app.getSelectedObject();
+      if (sel && sel.type === "text") fontEl.value = String(sel.fontSize);
+      else fontEl.value = String(app.fontSize);
+      const btnSelect = document.getElementById("btnSelect");
+      btnSelect == null ? void 0 : btnSelect.focus();
+    });
+    const centerFontEl = $("#inputCenterFontSize");
+    centerFontEl.value = String((_a = app.store.get().centerFontSize) != null ? _a : DEFAULT_CENTER_FONT_SIZE);
+    centerFontEl.addEventListener("input", () => {
+      const raw = parseFloat(centerFontEl.value);
+      if (!Number.isFinite(raw)) return;
+      app.store.setCenterFontSize(Math.floor(raw));
+    });
+    centerFontEl.addEventListener("change", () => {
+      var _a2;
+      centerFontEl.value = String((_a2 = app.store.get().centerFontSize) != null ? _a2 : DEFAULT_CENTER_FONT_SIZE);
+    });
+    centerFontEl.addEventListener("keydown", (e) => {
+      var _a2;
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      centerFontEl.value = String((_a2 = app.store.get().centerFontSize) != null ? _a2 : DEFAULT_CENTER_FONT_SIZE);
+      const btnSelect = document.getElementById("btnSelect");
+      btnSelect == null ? void 0 : btnSelect.focus();
+    });
+    applyLangToUi(app);
+    updateModeUi(app);
+    updateSelectionUi(app);
+    updateTitle(app);
+  }
+  function setMode(app, m) {
+    app.mode = m;
+    updateModeUi(app);
+  }
+  function updateModeUi(app) {
+    const map = {
+      select: "btnSelect",
+      arrow: "btnArrow",
+      text: "btnText",
+      highlighter: "btnHighlighter",
+      note: "btnNote",
+      pan: "btnPan"
+    };
+    for (const k of Object.keys(map)) {
+      const el = document.getElementById(map[k]);
+      if (!el) continue;
+      el.classList.toggle("active", k === app.mode);
+    }
+    document.body.dataset.mode = app.mode;
+  }
+  function updateSelectionUi(app) {
+    const btn = document.getElementById("btnDelete");
+    if (btn) btn.toggleAttribute("disabled", !app.selectedId);
+    const pinBtn = document.getElementById("btnPinNote");
+    if (pinBtn) {
+      const sel = app.getSelectedObject();
+      const isNote = !!sel && sel.type === "note";
+      pinBtn.toggleAttribute("disabled", !isNote);
+      pinBtn.classList.toggle("active", isNote && !!sel.pinned);
+    }
+  }
+  function updateTitle(app) {
+    const el = document.getElementById("titleName");
+    if (!el) return;
+    const scene = app.store.get();
+    const topic = (scene.centerText || "").trim();
+    el.textContent = topic || scene.name || t("untitled");
+  }
+  function applyLangToUi(app) {
+    const setText = (id, key) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = t(key);
+    };
+    const setTip = (id, key) => {
+      const el = document.getElementById(id);
+      if (el) el.title = t(key);
+    };
+    setTip("btnSelect", "modeSelect");
+    setTip("btnArrow", "modeArrow");
+    setTip("btnText", "modeText");
+    setTip("btnHighlighter", "modeHighlighter");
+    setTip("btnNote", "modeNote");
+    setTip("btnPan", "modePan");
+    setTip("btnSave", "save");
+    setTip("btnSaveAs", "saveAs");
+    setTip("btnNew", "newWork");
+    setTip("btnExportPng", "exportPng");
+    setTip("btnExportJson", "exportJson");
+    setTip("btnImportJson", "importJson");
+    setTip("btnEditCenter", "editCenter");
+    setTip("btnUndo", "undo");
+    setTip("btnRedo", "redo");
+    setTip("btnFit", "fit");
+    setTip("btnZoomIn", "zoomIn");
+    setTip("btnZoomOut", "zoomOut");
+    setTip("btnDelete", "delete");
+    setTip("btnPinNote", "pinNote");
+    setTip("btnWorks", "works");
+    setTip("btnHelp", "help");
+    setTip("btnVirtualCtrl", "cloneToggle");
+    setTip("btnChain", "chainInsert");
+    const langEl = document.getElementById("btnLang");
+    if (langEl) langEl.title = getLang() === "ko" ? "Switch to English" : "\uD55C\uAD6D\uC5B4\uB85C \uC804\uD658";
+    setText("labelColor", "selectColor");
+    setText("labelThickness", "thickness");
+    setText("labelFontSize", "fontSize");
+    setText("labelCenterFontSize", "centerFontSize");
+    document.title = t("appTitle");
+    updateTitle(app);
+    renderWorks(app);
+  }
+  function toggleLang(app) {
+    const next = getLang() === "ko" ? "en" : "ko";
+    setLang(next);
+    applyLangToUi(app);
+  }
+  function syncCenterFontInput(app) {
+    var _a;
+    const el = document.getElementById("inputCenterFontSize");
+    if (el) el.value = String((_a = app.store.get().centerFontSize) != null ? _a : DEFAULT_CENTER_FONT_SIZE);
+  }
+  function syncFontInputToSelection(app) {
+    const el = document.getElementById("inputFontSize");
+    if (!el) return;
+    if (document.activeElement === el) return;
+    const sel = app.getSelectedObject();
+    if (sel && sel.type === "text") el.value = String(sel.fontSize);
+    else el.value = String(app.fontSize);
+  }
+  function syncThicknessInputToSelection(app) {
+    const el = document.getElementById("inputThickness");
+    if (!el) return;
+    if (document.activeElement === el) return;
+    const sel = app.getSelectedObject();
+    if (sel && (sel.type === "arrow" || sel.type === "highlighter")) {
+      el.value = String(sel.thickness);
+    } else {
+      el.value = String(app.thickness);
+    }
+  }
+  function syncColorInputToSelection(app) {
+    const el = document.getElementById("inputColor");
+    if (!el) return;
+    if (document.activeElement === el) return;
+    const sel = app.getSelectedObject();
+    const hex = sel && sel.type === "note" ? sel.bgColor : sel ? sel.color : app.color;
+    el.value = hex;
+    const palette = document.getElementById("colorPalette");
+    if (palette) {
+      const target = hex.toLowerCase();
+      palette.querySelectorAll(".swatch").forEach((b) => {
+        b.classList.toggle("active", (b.dataset.color || "").toLowerCase() === target);
+      });
+    }
+  }
+
+  // src/app.ts
+  var _App = class _App {
+    constructor(root) {
+      this.view = new CanvasView();
+      this.store = new SceneStore();
+      this.db = new IndexedDBStore();
+      this.mode = "select";
+      this.color = "#222222";
+      this.thickness = 4;
+      this.fontSize = 28;
+      this.selectedId = null;
+      this.draftArrow = null;
+      this.draftHighlighter = null;
+      this.dirty = false;
+      this.worksList = [];
+      // Internal clipboard for Ctrl+C / Ctrl+V cloning. Holds a deep snapshot so
+      // edits to the original after Copy don't bleed into future Pastes.
+      this.clipboard = null;
+      this.worksModalEl = null;
+      this.worksModalCleanup = null;
+      this.worksSortKey = "date";
+      this.helpModalEl = null;
+      this.helpModalCleanup = null;
+      // Virtual Ctrl toggle (mobile): when true, the next pointer-drag on an
+      // object body is treated as a clone-and-drag, same as physical Ctrl/⌘.
+      this.modifierClone = false;
+      this.renderScheduled = false;
+      // Autosave: first object change after a clean state arms a 120s timer; on
+      // fire, the scene is silently persisted. Further changes within the window
+      // do NOT reset the timer (bounded staleness), so even continuous editing
+      // saves within two minutes of the first change.
+      this.autosaveTimer = null;
+      this.undoStack = [];
+      this.redoStack = [];
+      this.canvas = root.querySelector("#mainCanvas");
+      if (!this.canvas) throw new Error("canvas #mainCanvas not found");
+      const ctx = this.canvas.getContext("2d");
+      if (!ctx) throw new Error("2d context unavailable");
+      this.ctx = ctx;
+      this.renderer = new Renderer(this.ctx, this.view);
+      this.input = new InputHandler(this.canvas, this.view, this.store, {
+        getMode: () => this.mode,
+        setMode: (m) => setMode(this, m),
+        getColor: () => this.color,
+        getThickness: () => this.thickness,
+        getFontSize: () => this.fontSize,
+        onChange: () => this.requestRender(),
+        onSelect: (id) => {
+          this.selectedId = id;
+          updateSelectionUi(this);
+          syncFontInputToSelection(this);
+          syncColorInputToSelection(this);
+          syncThicknessInputToSelection(this);
+        },
+        onDoubleClickEmpty: () => {
+          void customPrompt(t("promptCenter"), this.store.get().centerText).then((txt) => {
+            if (txt !== null) {
+              this.pushHistory();
+              this.store.setCenterText(txt);
+            }
+          });
+        },
+        onDoubleClickText: (obj) => {
+          void customPrompt(t("promptText"), obj.text).then((txt) => {
+            if (txt !== null) {
+              this.pushHistory();
+              this.store.update(obj.id, (o) => {
+                if (o.type === "text") o.text = txt;
+              });
+            }
+          });
+        },
+        onUnpinNote: () => {
+          this.togglePinSelectedNote();
+        },
+        onDoubleClickNote: (obj) => {
+          void customPrompt(t("promptNote"), obj.text, "", { multiline: true, maxLength: 255 }).then((txt) => {
+            if (txt !== null) {
+              this.pushHistory();
+              this.store.update(obj.id, (o) => {
+                if (o.type === "note") o.text = txt.length > 255 ? txt.slice(0, 255) : txt;
+              });
+            }
+          });
+        },
+        onDraftChange: (draft) => {
+          this.draftArrow = draft;
+        },
+        onDraftHighlighter: (draft) => {
+          this.draftHighlighter = draft;
+        },
+        getModifierClone: () => this.modifierClone,
+        commitHistorySnapshot: (snap) => {
+          this.commitHistorySnapshot(snap);
+        }
+      });
+      this.store.subscribe(() => {
+        this.dirty = true;
+        this.armAutosave();
+        syncFontInputToSelection(this);
+        syncColorInputToSelection(this);
+        syncThicknessInputToSelection(this);
+        updateTitle(this);
+        this.requestRender();
+      });
+      window.addEventListener("resize", () => {
+        this.resize();
+        this.requestRender();
+      });
+      const flush = () => {
+        this.cancelAutosave();
+        if (this.dirty) void this.autosaveNow();
+      };
+      window.addEventListener("beforeunload", flush);
+      window.addEventListener("pagehide", flush);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") flush();
+      });
+      if (typeof ResizeObserver !== "undefined") {
+        const wrap = this.canvas.parentElement;
+        if (wrap) new ResizeObserver(() => {
+          this.resize();
+          this.requestRender();
+        }).observe(wrap);
+      }
+      window.addEventListener("keydown", (e) => onKey(this, e));
+      this.resize();
+      bindUi(this);
+      this.requestRender();
+      void this.bootstrap();
+    }
+    async bootstrap() {
+      try {
+        const lastId = await this.db.getMeta("lastSceneId");
+        if (lastId) {
+          const scene = await this.db.loadScene(lastId);
+          if (scene) {
+            this.adoptScene(scene);
+          }
+        }
+      } catch (e) {
+        console.warn("Could not restore last scene:", e);
+      }
+      await refreshWorks(this);
+      this.requestRender();
+    }
+    adoptScene(scene) {
+      if (scene.centerFontSize == null) scene.centerFontSize = DEFAULT_CENTER_FONT_SIZE;
+      normalizeSceneFontSizes(scene);
+      const shifted = migrateSceneWorld(scene);
+      if (shifted) this.dirty = true;
+      this.cancelAutosave();
+      this.undoStack = [];
+      this.redoStack = [];
+      this.store.replace(scene);
+      this.view.offset = { x: scene.viewOffsetX, y: scene.viewOffsetY };
+      this.view.scale = scene.viewScale > 0 ? scene.viewScale : 1;
+      this.selectedId = null;
+      this.dirty = false;
+      updateTitle(this);
+      syncCenterFontInput(this);
+      this.updateUndoRedoUi();
+      this.requestRender();
+    }
+    // Capture the current scene state and push it onto the undo stack. Use this
+    // *immediately before* a synchronous mutation so the snapshot represents the
+    // pre-change state. For drags, prefer commitHistorySnapshot() which lets the
+    // InputHandler stash a snapshot at gesture start and only commit it once a
+    // real mutation occurs (avoids no-op undo entries from click-without-drag).
+    pushHistory() {
+      this.commitHistorySnapshot(this.cloneSceneData());
+    }
+    commitHistorySnapshot(snap) {
+      this.undoStack.push(snap);
+      if (this.undoStack.length > _App.UNDO_LIMIT) this.undoStack.shift();
+      this.redoStack = [];
+      this.updateUndoRedoUi();
+    }
+    undo() {
+      if (this.undoStack.length === 0) return;
+      const current = this.cloneSceneData();
+      this.redoStack.push(current);
+      if (this.redoStack.length > _App.UNDO_LIMIT) this.redoStack.shift();
+      const prev = this.undoStack.pop();
+      this.applyHistorySnapshot(prev);
+      this.updateUndoRedoUi();
+    }
+    redo() {
+      if (this.redoStack.length === 0) return;
+      const current = this.cloneSceneData();
+      this.undoStack.push(current);
+      if (this.undoStack.length > _App.UNDO_LIMIT) this.undoStack.shift();
+      const next = this.redoStack.pop();
+      this.applyHistorySnapshot(next);
+      this.updateUndoRedoUi();
+    }
+    cloneSceneData() {
+      return JSON.parse(JSON.stringify(this.store.get()));
+    }
+    // Replace the scene with a historical snapshot. Pan/zoom is intentionally
+    // kept at its current value so undo doesn't scroll the canvas. If the
+    // selected object no longer exists in the restored scene, clear selection.
+    applyHistorySnapshot(scene) {
+      scene.viewOffsetX = this.view.offset.x;
+      scene.viewOffsetY = this.view.offset.y;
+      scene.viewScale = this.view.scale;
+      this.store.replace(scene);
+      if (this.selectedId && !scene.objects.find((o) => o.id === this.selectedId)) {
+        this.selectedId = null;
+        this.input.setSelected(null);
+      }
+    }
+    updateUndoRedoUi() {
+      const u = document.getElementById("btnUndo");
+      const r = document.getElementById("btnRedo");
+      if (u) u.toggleAttribute("disabled", this.undoStack.length === 0);
+      if (r) r.toggleAttribute("disabled", this.redoStack.length === 0);
+    }
+    armAutosave() {
+      if (this.autosaveTimer != null) return;
+      this.autosaveTimer = window.setTimeout(() => {
+        this.autosaveTimer = null;
+        void this.autosaveNow();
+      }, _App.AUTOSAVE_DELAY_MS);
+    }
+    cancelAutosave() {
+      if (this.autosaveTimer != null) {
+        clearTimeout(this.autosaveTimer);
+        this.autosaveTimer = null;
+      }
+    }
+    // Silent persist of the current scene. Skips the name prompt so the timer
+    // and unload paths never block on user input. Failures are swallowed (logged
+    // only) because a failed autosave should not break the editor.
+    async autosaveNow() {
+      if (!this.dirty) return;
+      const scene = this.store.get();
+      scene.viewOffsetX = this.view.offset.x;
+      scene.viewOffsetY = this.view.offset.y;
+      scene.viewScale = this.view.scale;
+      try {
+        await this.db.saveScene(scene);
+        await this.db.setMeta("lastSceneId", scene.id);
+        this.dirty = false;
+      } catch (e) {
+        console.warn("autosave failed", e);
+      }
+    }
+    getSelectedObject() {
+      if (!this.selectedId) return null;
+      return this.store.get().objects.find((o) => o.id === this.selectedId) || null;
+    }
+    // Toggle the pin state of the currently selected note. Pinning converts the
+    // note's pos/width/fontSize from logical → screen units so the visible size
+    // and on-screen position are preserved across the transition. Unpinning
+    // does the reverse conversion. Logical-space objects pan/zoom with the
+    // canvas; pinned notes float on top in screen coordinates.
+    togglePinSelectedNote() {
+      const sel = this.getSelectedObject();
+      if (!sel || sel.type !== "note") return;
+      this.pushHistory();
+      const scale = this.view.scale;
+      const offset = this.view.offset;
+      if (!sel.pinned) {
+        const screenX = (sel.pos.x - offset.x) * scale;
+        const screenY = (sel.pos.y - offset.y) * scale;
+        this.store.update(sel.id, (o) => {
+          if (o.type !== "note") return;
+          o.pos = { x: screenX, y: screenY };
+          o.width = o.width * scale;
+          o.fontSize = Math.max(8, Math.round(o.fontSize * scale));
+          o.pinned = true;
+        });
+      } else {
+        const logicalX = sel.pos.x / scale + offset.x;
+        const logicalY = sel.pos.y / scale + offset.y;
+        this.store.update(sel.id, (o) => {
+          if (o.type !== "note") return;
+          o.pos = { x: logicalX, y: logicalY };
+          o.width = o.width / scale;
+          o.fontSize = Math.max(8, Math.round(o.fontSize / scale));
+          o.pinned = false;
+        });
+      }
+    }
+    requestRender() {
+      if (this.renderScheduled) return;
+      this.renderScheduled = true;
+      requestAnimationFrame(() => {
+        this.renderScheduled = false;
+        this.draw();
+      });
+    }
+    draw() {
+      this.renderer.render(this.store.get(), {
+        selectedId: this.selectedId,
+        draftArrow: this.draftArrow,
+        draftHighlighter: this.draftHighlighter,
+        showGrid: true
+      });
+    }
+    resize() {
+      const dpr = window.devicePixelRatio || 1;
+      const wrap = this.canvas.parentElement;
+      const rect = wrap.getBoundingClientRect();
+      const w = Math.max(1, Math.round(rect.width * dpr));
+      const h = Math.max(1, Math.round(rect.height * dpr));
+      if (this.canvas.width !== w) this.canvas.width = w;
+      if (this.canvas.height !== h) this.canvas.height = h;
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.view.resize(rect.width, rect.height, dpr);
+    }
+    flashStatus(msg) {
+      const el = document.getElementById("statusBar");
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.add("visible");
+      setTimeout(() => el.classList.remove("visible"), 1400);
+    }
+  };
+  _App.AUTOSAVE_DELAY_MS = 12e4;
+  // Snapshot-based undo/redo. Each entry is a deep clone of SceneData captured
+  // *before* a mutating user operation. Capped to UNDO_LIMIT — beyond that the
+  // oldest entry is dropped. View (pan/zoom) is intentionally preserved across
+  // undo so scrolling is not a step the user can accidentally undo.
+  _App.UNDO_LIMIT = 8;
+  var App = _App;
+
+  // src/index.ts
+  var ArrowApp = {
+    // eslint-disable-line @typescript-eslint/no-redeclare
+    MAX_CANVAS_SIZE,
+    vecDist,
+    pointToSegmentDistance,
+    clampToCanvas,
+    newId,
+    emptyScene,
+    parseArrowFile,
+    floorFontSize,
+    normalizeSceneFontSizes,
+    migrateSceneWorld,
+    clampNoteText,
+    estimateNoteBox,
+    pickReadableTextColor,
+    NOTE_MAX_LENGTH,
+    NOTE_DEFAULT_BG,
+    NOTE_DEFAULT_FONT_SIZE,
+    NOTE_DEFAULT_WIDTH,
+    NOTE_MIN_WIDTH,
+    NOTE_MAX_WIDTH,
+    DEFAULT_CENTER_FONT_SIZE,
+    CanvasView,
+    Renderer,
+    SceneStore,
+    IndexedDBStore,
+    InputHandler,
+    App,
+    setLang,
+    getLang,
+    t
+  };
+  globalThis.ArrowApp = ArrowApp;
+  function boot() {
+    const root = document.getElementById("app");
+    if (!root) {
+      console.error("Root element #app not found");
+      return;
+    }
+    window.__arrowApp = new App(root);
+  }
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", boot);
+    } else {
+      boot();
+    }
+  }
+})();
+typeof module !== "undefined" && (module.exports = globalThis.ArrowApp);
+
+</script>
+</body>
+</html>
