@@ -76,6 +76,10 @@ const strings: Record<LangCode, Dict> = {
     cloneToggle: 'Ctrl (복제 드래그 토글)',
     chainInsert: '체인 추가',
     chainPlaceholder: '독서 -> 전공서적 -> LLM',
+    menuFile: '파일',
+    menuHelp: '도움말',
+    switchToEnglish: 'Switch to English',
+    switchToKorean: '한국어로 전환',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -150,6 +154,10 @@ const strings: Record<LangCode, Dict> = {
     cloneToggle: 'Ctrl (clone-drag toggle)',
     chainInsert: 'Insert Chain',
     chainPlaceholder: 'Read -> Textbook -> LLM',
+    menuFile: 'File',
+    menuHelp: 'Help',
+    switchToEnglish: 'Switch to English',
+    switchToKorean: 'Switch to Korean',
   },
 };
 

@@ -187,7 +187,6 @@
       <label class="field"><span id="labelCenterFontSize">주제크기</span><input type="number" id="inputCenterFontSize" min="1" max="200" value="28"></label>
     </div>
     <div class="group">
-      <button class="tool icon" id="btnEditCenter" title="주제 편집">🎯</button>
       <button class="tool icon" id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↩️</button>
       <button class="tool icon" id="btnRedo" title="다시 실행 (Ctrl+Y)" disabled>↪️</button>
       <button class="tool icon" id="btnPinNote" title="메모 핀 고정 (화면 위에 고정)" disabled>📌</button>
@@ -203,16 +202,10 @@
       <button class="tool icon" id="btnFit" title="맞춤">🔳</button>
     </div>
     <div class="group">
-      <button class="tool icon" id="btnNew" title="새 작업">🆕</button>
       <button class="tool icon" id="btnSave" title="저장">💾</button>
-      <button class="tool icon" id="btnSaveAs" title="새이름저장">📝</button>
-      <button class="tool icon" id="btnWorks" title="작업 목록">📋</button>
-      <button class="tool icon" id="btnExportPng" title="PNG 내보내기">🖼️</button>
-      <button class="tool icon" id="btnExportJson" title="JSON 내보내기">📤</button>
-      <button class="tool icon" id="btnImportJson" title="JSON 가져오기">📥</button>
       <input type="file" id="fileImport" accept="application/json,.json,.arrow" style="display:none">
-      <button class="tool icon" id="btnLang" title="Switch to English">🌐</button>
-      <button class="tool icon" id="btnHelp" title="도움말 (F1)">❓</button>
+      <button class="tool icon" id="btnFile" title="파일">📁</button>
+      <button class="tool icon" id="btnHelpMenu" title="도움말">❓</button>
     </div>
   </header>
   <div id="canvasWrap">
@@ -1093,7 +1086,11 @@
       helpFormat: "\u{1F4E5} JSON \uAC00\uC838\uC624\uAE30 \uBC84\uD2BC\uC740 .arrow \uD14D\uC2A4\uD2B8 \uD30C\uC77C\uB3C4 \uBC1B\uC2B5\uB2C8\uB2E4 \u2014 \uD0A4\uBCF4\uB4DC\uB9CC\uC73C\uB85C \uBE60\uB974\uAC8C \uC52C \uC9DC\uAE30.\n\n\uD615\uC2DD:\n  1\uC904: arrow (\uD30C\uC77C \uB9C8\uCEE4)\n  2\uC904: \uC8FC\uC81C (centerText)\n  3\uC904+: A -> B -> C \uD615\uD0DC \uCCB4\uC778 (-> \uB610\uB294 \u2192 \uB458 \uB2E4 \uC778\uC815)\n  '#'\uC740 \uC904 \uB05D\uAE4C\uC9C0 \uC8FC\uC11D, \uBE48 \uC904 \uBB34\uC2DC\n\n\uADDC\uCE59:\n  \u2022 \uC2DC\uC791\uC810\uC774 \uAE30\uC874 \uB178\uB4DC(\uC8FC\uC81C \uB610\uB294 \uC774\uC804 \uCCB4\uC778\uC758 \uB2E8\uC5B4)\uBA74 \uAC70\uAE30\uC11C \uAC00\uC9C0\uB97C \uC774\uC5B4 \uBD99\uC785\uB2C8\uB2E4.\n  \u2022 \uC0C8 \uB2E8\uC5B4\uAC00 \uC2DC\uC791\uC810\uC774\uBA74 \uB3C5\uB9BD\uB41C \uC0C8 \uB8E8\uD2B8\uB85C \uCD94\uAC00\uB429\uB2C8\uB2E4 \u2014 \uC8FC\uC81C\uC640 \uD654\uC0B4\uD45C\uB85C \uC5F0\uACB0\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4. (\uC704\uCE58\uB294 \uC8FC\uC81C \uADFC\uCC98\uC5D0 \uC790\uB3D9 \uBC30\uCE58)\n  \u2022 \uAC01 \uBD80\uBAA8 \u2192 \uC790\uC2DD N\uAC1C\uB294 360\xB0/N \uAC04\uACA9\uC73C\uB85C \uC2DC\uACC4 \uBC29\uD5A5 \uD68C\uC804 \uBC30\uCE58, \uAE00\uC790 \uD06C\uAE30\uB294 24\uB85C \uD1B5\uC77C.\n\n\uC0D8\uD50C: docs/examples/spec.arrow",
       cloneToggle: "Ctrl (\uBCF5\uC81C \uB4DC\uB798\uADF8 \uD1A0\uAE00)",
       chainInsert: "\uCCB4\uC778 \uCD94\uAC00",
-      chainPlaceholder: "\uB3C5\uC11C -> \uC804\uACF5\uC11C\uC801 -> LLM"
+      chainPlaceholder: "\uB3C5\uC11C -> \uC804\uACF5\uC11C\uC801 -> LLM",
+      menuFile: "\uD30C\uC77C",
+      menuHelp: "\uB3C4\uC6C0\uB9D0",
+      switchToEnglish: "Switch to English",
+      switchToKorean: "\uD55C\uAD6D\uC5B4\uB85C \uC804\uD658"
     },
     en: {
       appTitle: "Arrow Mind Map",
@@ -1167,7 +1164,11 @@
       helpFormat: "\u{1F4E5} The JSON-import button also accepts .arrow text files \u2014 author whole scenes from the keyboard.\n\nFormat:\n  Line 1: arrow (file marker)\n  Line 2: topic (centerText)\n  Line 3+: chain like A -> B -> C (-> or \u2192 both work)\n  '#' starts a comment to end of line; blank lines are ignored\n\nRules:\n  \u2022 A chain that starts with an existing node name (the topic, or a word from a previous chain) extends from there.\n  \u2022 A new starting word becomes its own free-standing root \u2014 NOT connected to the topic by an arrow. (It's still placed near the topic in the layout.)\n  \u2022 Each parent fans its N children at 360\xB0/N apart, clockwise. Font size is unified at 24.\n\nSample: docs/examples/spec.arrow",
       cloneToggle: "Ctrl (clone-drag toggle)",
       chainInsert: "Insert Chain",
-      chainPlaceholder: "Read -> Textbook -> LLM"
+      chainPlaceholder: "Read -> Textbook -> LLM",
+      menuFile: "File",
+      menuHelp: "Help",
+      switchToEnglish: "Switch to English",
+      switchToKorean: "Switch to Korean"
     }
   };
   var currentLang = "ko";
@@ -2939,6 +2940,154 @@
     app.flashStatus("+ arrow");
   }
 
+  // src/ui/Dropdown.ts
+  var stylesInjected2 = false;
+  function injectStyles2() {
+    if (stylesInjected2) return;
+    stylesInjected2 = true;
+    const style = document.createElement("style");
+    style.textContent = `
+    .ap-menu-wrap { position: relative; display: inline-block; }
+    .ap-menu-panel {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      min-width: 180px;
+      background: #fff;
+      border: 1px solid #e2e2ea;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+      padding: 4px 0;
+      z-index: 9000;
+      animation: ap-menu-pop 0.08s ease;
+    }
+    @keyframes ap-menu-pop {
+      from { opacity: 0; transform: translateY(-2px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .ap-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 8px 14px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      color: #222;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .ap-menu-item:hover:not([disabled]) { background: #f0f3ff; }
+    .ap-menu-item[disabled] { opacity: 0.45; cursor: not-allowed; }
+    .ap-menu-item .icon { width: 18px; text-align: center; }
+    .ap-menu-sep { height: 1px; background: #eef0f4; margin: 4px 0; }
+    @media (max-width: 720px) {
+      .ap-menu-panel { min-width: 200px; }
+      .ap-menu-item { padding: 10px 14px; font-size: 14px; }
+    }
+  `;
+    document.head.appendChild(style);
+  }
+  function wrapTrigger(trigger) {
+    const parent = trigger.parentElement;
+    if (parent && parent.classList.contains("ap-menu-wrap")) return parent;
+    const wrap = document.createElement("div");
+    wrap.className = "ap-menu-wrap";
+    if (parent) parent.insertBefore(wrap, trigger);
+    wrap.appendChild(trigger);
+    return wrap;
+  }
+  function createDropdownMenu(trigger, items) {
+    injectStyles2();
+    const wrap = wrapTrigger(trigger);
+    let panel = null;
+    let onDocPointerDown = null;
+    let onDocKeyDown = null;
+    function close() {
+      if (!panel) return;
+      panel.remove();
+      panel = null;
+      if (onDocPointerDown) {
+        document.removeEventListener("pointerdown", onDocPointerDown, true);
+        onDocPointerDown = null;
+      }
+      if (onDocKeyDown) {
+        document.removeEventListener("keydown", onDocKeyDown, true);
+        onDocKeyDown = null;
+      }
+    }
+    function render() {
+      const p = document.createElement("div");
+      p.className = "ap-menu-panel";
+      p.setAttribute("role", "menu");
+      for (const item of items) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ap-menu-item";
+        btn.setAttribute("role", "menuitem");
+        const isDisabled = item.disabled ? item.disabled() : false;
+        if (isDisabled) btn.setAttribute("disabled", "");
+        if (item.title) btn.title = item.title();
+        const iconSpan = document.createElement("span");
+        iconSpan.className = "icon";
+        iconSpan.textContent = item.emoji;
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "label";
+        labelSpan.textContent = item.label();
+        btn.append(iconSpan, labelSpan);
+        btn.addEventListener("click", () => {
+          if (item.disabled && item.disabled()) return;
+          close();
+          Promise.resolve().then(() => item.onSelect());
+        });
+        p.appendChild(btn);
+        if (item.separatorAfter) {
+          const sep = document.createElement("div");
+          sep.className = "ap-menu-sep";
+          p.appendChild(sep);
+        }
+      }
+      return p;
+    }
+    function open() {
+      if (panel) return;
+      panel = render();
+      wrap.appendChild(panel);
+      onDocPointerDown = (ev) => {
+        const target = ev.target;
+        if (!target) return;
+        if (panel && panel.contains(target)) return;
+        if (trigger.contains(target)) return;
+        close();
+      };
+      onDocKeyDown = (ev) => {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          ev.stopPropagation();
+          close();
+          trigger.focus();
+        }
+      };
+      document.addEventListener("pointerdown", onDocPointerDown, true);
+      document.addEventListener("keydown", onDocKeyDown, true);
+    }
+    trigger.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      if (panel) close();
+      else open();
+    });
+    return {
+      trigger,
+      open,
+      close,
+      isOpen: () => panel !== null
+    };
+  }
+
   // src/ui/UiBindings.ts
   var PALETTE_16 = [
     "#000000",
@@ -2969,21 +3118,9 @@
     if (btnNote) btnNote.addEventListener("click", () => setMode(app, "note"));
     $("#btnPan").addEventListener("click", () => setMode(app, "pan"));
     $("#btnSave").addEventListener("click", () => void save(app));
-    $("#btnSaveAs").addEventListener("click", () => void saveAs(app));
-    $("#btnNew").addEventListener("click", () => void newScene(app));
-    $("#btnExportPng").addEventListener("click", () => exportPng(app));
-    $("#btnExportJson").addEventListener("click", () => void exportJson(app));
-    $("#btnImportJson").addEventListener("click", () => importJsonClick());
     $("#fileImport").addEventListener("change", (e) => void handleImportFile(app, e));
-    $("#btnLang").addEventListener("click", () => toggleLang(app));
-    $("#btnEditCenter").addEventListener("click", () => {
-      void customPrompt(t("promptCenter"), app.store.get().centerText).then((txt) => {
-        if (txt !== null) {
-          app.pushHistory();
-          app.store.setCenterText(txt);
-        }
-      });
-    });
+    bindFileMenu(app);
+    bindHelpMenu(app);
     const btnUndo = document.getElementById("btnUndo");
     if (btnUndo) btnUndo.addEventListener("click", () => app.undo());
     const btnRedo = document.getElementById("btnRedo");
@@ -3003,8 +3140,6 @@
       app.togglePinSelectedNote();
       updateSelectionUi(app);
     });
-    $("#btnWorks").addEventListener("click", () => openWorksModal(app));
-    $("#btnHelp").addEventListener("click", () => openHelpModal(app));
     const chainBtn = document.getElementById("btnChain");
     if (chainBtn) {
       chainBtn.addEventListener("click", () => {
@@ -3191,6 +3326,45 @@
     updateSelectionUi(app);
     updateTitle(app);
   }
+  function bindFileMenu(app) {
+    const trigger = document.getElementById("btnFile");
+    if (!trigger) return;
+    const items = [
+      {
+        emoji: "\u{1F3AF}",
+        label: () => t("editCenter"),
+        onSelect: () => {
+          void customPrompt(t("promptCenter"), app.store.get().centerText).then((txt) => {
+            if (txt !== null) {
+              app.pushHistory();
+              app.store.setCenterText(txt);
+            }
+          });
+        },
+        separatorAfter: true
+      },
+      { emoji: "\u{1F195}", label: () => t("newWork"), onSelect: () => void newScene(app) },
+      { emoji: "\u{1F4DD}", label: () => t("saveAs"), onSelect: () => void saveAs(app) },
+      { emoji: "\u{1F4CB}", label: () => t("works"), onSelect: () => openWorksModal(app), separatorAfter: true },
+      { emoji: "\u{1F5BC}\uFE0F", label: () => t("exportPng"), onSelect: () => exportPng(app) },
+      { emoji: "\u{1F4E4}", label: () => t("exportJson"), onSelect: () => void exportJson(app) },
+      { emoji: "\u{1F4E5}", label: () => t("importJson"), onSelect: () => importJsonClick() }
+    ];
+    createDropdownMenu(trigger, items);
+  }
+  function bindHelpMenu(app) {
+    const trigger = document.getElementById("btnHelpMenu");
+    if (!trigger) return;
+    const items = [
+      {
+        emoji: "\u{1F310}",
+        label: () => getLang() === "ko" ? t("switchToEnglish") : t("switchToKorean"),
+        onSelect: () => toggleLang(app)
+      },
+      { emoji: "\u2753", label: () => t("help"), onSelect: () => openHelpModal(app) }
+    ];
+    createDropdownMenu(trigger, items);
+  }
   function setMode(app, m) {
     app.mode = m;
     updateModeUi(app);
@@ -3245,12 +3419,6 @@
     setTip("btnNote", "modeNote");
     setTip("btnPan", "modePan");
     setTip("btnSave", "save");
-    setTip("btnSaveAs", "saveAs");
-    setTip("btnNew", "newWork");
-    setTip("btnExportPng", "exportPng");
-    setTip("btnExportJson", "exportJson");
-    setTip("btnImportJson", "importJson");
-    setTip("btnEditCenter", "editCenter");
     setTip("btnUndo", "undo");
     setTip("btnRedo", "redo");
     setTip("btnFit", "fit");
@@ -3258,12 +3426,10 @@
     setTip("btnZoomOut", "zoomOut");
     setTip("btnDelete", "delete");
     setTip("btnPinNote", "pinNote");
-    setTip("btnWorks", "works");
-    setTip("btnHelp", "help");
+    setTip("btnFile", "menuFile");
+    setTip("btnHelpMenu", "menuHelp");
     setTip("btnVirtualCtrl", "cloneToggle");
     setTip("btnChain", "chainInsert");
-    const langEl = document.getElementById("btnLang");
-    if (langEl) langEl.title = getLang() === "ko" ? "Switch to English" : "\uD55C\uAD6D\uC5B4\uB85C \uC804\uD658";
     setText("labelColor", "selectColor");
     setText("labelThickness", "thickness");
     setText("labelFontSize", "fontSize");

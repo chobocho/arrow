@@ -56,6 +56,27 @@ nav.toc a { text-decoration: none; }
 <body>
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
+<h2 id="2026-05-17b">2026-05-17 — 툴바 메뉴 통합</h2>
+<h3 id="파일-도움말-메뉴-통합">📁 파일 / ❓ 도움말 드롭다운 메뉴로 9개 버튼을 2개로 통합</h3>
+<ul>
+<li>문제: 모바일에서 헤더 아이콘이 과다해 캔버스 영역이 좁아 보였음. 가로 스크롤이 발생했음.
+<li>설계: 통일성을 위해 데스크톱·모바일 모두 메뉴화. <code>💾 저장</code>만 가장 빈번한 동작이라 툴바에 상시 노출.
+<ul>
+<li><strong>📁 파일</strong>: 🎯 주제 편집 / 🆕 새 작업 / 📝 새이름저장 / 📋 작업 목록 / 🖼️ PNG 내보내기 / 📤 JSON 내보내기 / 📥 JSON 가져오기
+<li><strong>❓ 도움말</strong>: 🌐 언어 전환 (라벨이 대상 언어로 표시됨) / ❓ 도움말 모달
+</li>
+</ul>
+<li>구현:
+<ul>
+<li>새 컴포넌트 <code>src/ui/Dropdown.ts</code> — 외부 라이브러리 없이 트리거 래핑·외부 클릭·Esc 처리. 라벨/disabled는 getter라 언어 전환 후 다음 open에 즉시 반영.
+<li>i18n 추가: <code>menuFile</code>, <code>menuHelp</code>, <code>switchToEnglish</code>, <code>switchToKorean</code>.
+<li><code>UiBindings.ts</code>의 개별 버튼 바인딩을 <code>bindFileMenu</code> / <code>bindHelpMenu</code>로 대체.
+<li>HTML: 9개 개별 <code>&lt;button&gt;</code> 제거, <code>#btnFile</code>·<code>#btnHelpMenu</code> 두 개로 축소.
+</li>
+</ul>
+<li>테스트 7건 추가 (DOM 가드 — Node에서는 자동 스킵): open/close 라이프사이클, 외부 pointerdown, Esc, 항목 선택, disabled 가드, i18n 재렌더링. 73 → 80건, 전부 통과.
+</li>
+</ul>
 <h2 id="2026-05-17">2026-05-17</h2>
 <h3 id="테스트-스위트-점검-갭-보강">테스트 스위트 점검 — 명백한 중복 없음, 갭 8건 보강</h3>
 <ul>

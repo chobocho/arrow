@@ -806,6 +806,132 @@
       && scene.objects[1].fontSize >= 1, 'bad note fontSize replaced with integer ≥ 1');
   });
 
+  // ---- Dropdown menu (DOM only — skipped under Node) ----
+  // The dropdown wraps a trigger button so the panel can be positioned below
+  // it. These tests cover the lifecycle (open/close), the close triggers
+  // (outside click, Esc, item select), and the disabled-item guard.
+  function makeTrigger() {
+    var btn = document.createElement('button');
+    btn.id = 'tmpTrigger';
+    document.body.appendChild(btn);
+    return btn;
+  }
+  function cleanupTrigger(btn) {
+    var wrap = btn.parentElement;
+    if (wrap && wrap.classList.contains('ap-menu-wrap')) wrap.remove();
+    else btn.remove();
+  }
+
+  test('Dropdown: trigger click opens the panel', function () {
+    if (typeof document === 'undefined' || !A.createDropdownMenu) return;
+    var trigger = makeTrigger();
+    var handle = A.createDropdownMenu(trigger, [
+      { emoji: '🆕', label: function () { return 'New'; }, onSelect: function () {} }
+    ]);
+    assert(!handle.isOpen(), 'starts closed');
+    trigger.click();
+    assert(handle.isOpen(), 'opens after click');
+    assert(document.querySelector('.ap-menu-panel') !== null, 'panel mounted');
+    handle.close();
+    cleanupTrigger(trigger);
+  });
+
+  test('Dropdown: second trigger click closes the panel', function () {
+    if (typeof document === 'undefined' || !A.createDropdownMenu) return;
+    var trigger = makeTrigger();
+    var handle = A.createDropdownMenu(trigger, [
+      { emoji: '🆕', label: function () { return 'New'; }, onSelect: function () {} }
+    ]);
+    trigger.click();
+    trigger.click();
+    assert(!handle.isOpen(), 'closed after second click');
+    cleanupTrigger(trigger);
+  });
+
+  test('Dropdown: Esc closes the panel', function () {
+    if (typeof document === 'undefined' || !A.createDropdownMenu) return;
+    var trigger = makeTrigger();
+    var handle = A.createDropdownMenu(trigger, [
+      { emoji: '🆕', label: function () { return 'New'; }, onSelect: function () {} }
+    ]);
+    handle.open();
+    var ev = new KeyboardEvent('keydown', { key: 'Escape' });
+    document.dispatchEvent(ev);
+    assert(!handle.isOpen(), 'closed after Esc');
+    cleanupTrigger(trigger);
+  });
+
+  test('Dropdown: selecting an item runs onSelect and closes', function () {
+    if (typeof document === 'undefined' || !A.createDropdownMenu) return;
+    var trigger = makeTrigger();
+    var fired = 0;
+    var handle = A.createDropdownMenu(trigger, [
+      { emoji: '🆕', label: function () { return 'New'; }, onSelect: function () { fired++; } }
+    ]);
+    handle.open();
+    var item = document.querySelector('.ap-menu-item');
+    item.click();
+    assert(!handle.isOpen(), 'closes immediately on item click');
+    assert(fired === 1, 'onSelect ran exactly once, got ' + fired);
+    cleanupTrigger(trigger);
+  });
+
+  test('Dropdown: outside pointerdown closes the panel', function () {
+    if (typeof document === 'undefined' || !A.createDropdownMenu) return;
+    var trigger = makeTrigger();
+    var handle = A.createDropdownMenu(trigger, [
+      { emoji: '🆕', label: function () { return 'New'; }, onSelect: function () {} }
+    ]);
+    handle.open();
+    var outside = document.createElement('div');
+    document.body.appendChild(outside);
+    var ev = new PointerEvent('pointerdown', { bubbles: true });
+    outside.dispatchEvent(ev);
+    assert(!handle.isOpen(), 'closed after outside pointerdown');
+    outside.remove();
+    cleanupTrigger(trigger);
+  });
+
+  test('Dropdown: disabled item does not fire onSelect', function () {
+    if (typeof document === 'undefined' || !A.createDropdownMenu) return;
+    var trigger = makeTrigger();
+    var fired = 0;
+    var handle = A.createDropdownMenu(trigger, [
+      {
+        emoji: '🆕', label: function () { return 'New'; },
+        disabled: function () { return true; },
+        onSelect: function () { fired++; }
+      }
+    ]);
+    handle.open();
+    var item = document.querySelector('.ap-menu-item');
+    assert(item.hasAttribute('disabled'), 'item rendered as disabled');
+    item.click();
+    assert(fired === 0, 'onSelect did not run, fired=' + fired);
+    handle.close();
+    cleanupTrigger(trigger);
+  });
+
+  test('Dropdown: label getter re-renders on each open (i18n-aware)', function () {
+    if (typeof document === 'undefined' || !A.createDropdownMenu) return;
+    var trigger = makeTrigger();
+    var lang = 'ko';
+    var handle = A.createDropdownMenu(trigger, [
+      { emoji: '🌐', label: function () { return lang === 'ko' ? '도움말' : 'Help'; },
+        onSelect: function () {} }
+    ]);
+    handle.open();
+    var label1 = document.querySelector('.ap-menu-item .label').textContent;
+    assert(label1 === '도움말', 'ko label, got ' + label1);
+    handle.close();
+    lang = 'en';
+    handle.open();
+    var label2 = document.querySelector('.ap-menu-item .label').textContent;
+    assert(label2 === 'Help', 'en label after re-open, got ' + label2);
+    handle.close();
+    cleanupTrigger(trigger);
+  });
+
   // ---- summary ----
   var ok = results.length - failed;
   var msg = 'TOTAL ' + results.length + ' / PASS ' + ok + ' / FAIL ' + failed;

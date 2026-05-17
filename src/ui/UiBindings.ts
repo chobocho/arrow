@@ -16,6 +16,7 @@ import {
 } from '../app/FileActions.js';
 import { insertChain } from '../app/KeyboardActions.js';
 import { openHelpModal, openWorksModal, renderWorks } from './Modals.js';
+import { createDropdownMenu, DropdownItem } from './Dropdown.js';
 
 const PALETTE_16: readonly string[] = [
   '#000000', '#424242', '#9e9e9e', '#ffffff',
@@ -34,21 +35,9 @@ export function bindUi(app: App): void {
   if (btnNote) btnNote.addEventListener('click', () => setMode(app, 'note'));
   ($('#btnPan')).addEventListener('click', () => setMode(app, 'pan'));
   ($('#btnSave')).addEventListener('click', () => void save(app));
-  ($('#btnSaveAs')).addEventListener('click', () => void saveAs(app));
-  ($('#btnNew')).addEventListener('click', () => void newScene(app));
-  ($('#btnExportPng')).addEventListener('click', () => exportPng(app));
-  ($('#btnExportJson')).addEventListener('click', () => void exportJson(app));
-  ($('#btnImportJson')).addEventListener('click', () => importJsonClick());
   ($('#fileImport')).addEventListener('change', (e) => void handleImportFile(app, e));
-  ($('#btnLang')).addEventListener('click', () => toggleLang(app));
-  ($('#btnEditCenter')).addEventListener('click', () => {
-    void customPrompt(t('promptCenter'), app.store.get().centerText).then((txt) => {
-      if (txt !== null) {
-        app.pushHistory();
-        app.store.setCenterText(txt);
-      }
-    });
-  });
+  bindFileMenu(app);
+  bindHelpMenu(app);
   const btnUndo = document.getElementById('btnUndo');
   if (btnUndo) btnUndo.addEventListener('click', () => app.undo());
   const btnRedo = document.getElementById('btnRedo');
@@ -68,8 +57,6 @@ export function bindUi(app: App): void {
     app.togglePinSelectedNote();
     updateSelectionUi(app);
   });
-  ($('#btnWorks')).addEventListener('click', () => openWorksModal(app));
-  ($('#btnHelp')).addEventListener('click', () => openHelpModal(app));
 
   // Chain icon — opens a popup with a single-line input. Typing
   // "A -> B -> C" and pressing Enter (or OK) creates the text+arrow chain
@@ -291,6 +278,54 @@ export function bindUi(app: App): void {
   updateTitle(app);
 }
 
+// File menu — content + persistence actions consolidated under one trigger
+// so the mobile toolbar stays compact. The same menu is used on desktop for
+// visual consistency (option B in the design discussion). 💾 Save remains a
+// top-level toolbar button because it is the most frequent action.
+function bindFileMenu(app: App): void {
+  const trigger = document.getElementById('btnFile') as HTMLButtonElement | null;
+  if (!trigger) return;
+  const items: DropdownItem[] = [
+    {
+      emoji: '🎯',
+      label: () => t('editCenter'),
+      onSelect: () => {
+        void customPrompt(t('promptCenter'), app.store.get().centerText).then((txt) => {
+          if (txt !== null) {
+            app.pushHistory();
+            app.store.setCenterText(txt);
+          }
+        });
+      },
+      separatorAfter: true,
+    },
+    { emoji: '🆕', label: () => t('newWork'), onSelect: () => void newScene(app) },
+    { emoji: '📝', label: () => t('saveAs'), onSelect: () => void saveAs(app) },
+    { emoji: '📋', label: () => t('works'), onSelect: () => openWorksModal(app), separatorAfter: true },
+    { emoji: '🖼️', label: () => t('exportPng'), onSelect: () => exportPng(app) },
+    { emoji: '📤', label: () => t('exportJson'), onSelect: () => void exportJson(app) },
+    { emoji: '📥', label: () => t('importJson'), onSelect: () => importJsonClick() },
+  ];
+  createDropdownMenu(trigger, items);
+}
+
+// Help menu — language toggle and the help modal live here. The language
+// label flips with the current language so users always see the *target*
+// language (the one the click will switch to).
+function bindHelpMenu(app: App): void {
+  const trigger = document.getElementById('btnHelpMenu') as HTMLButtonElement | null;
+  if (!trigger) return;
+  const items: DropdownItem[] = [
+    {
+      emoji: '🌐',
+      label: () => (getLang() === 'ko' ? t('switchToEnglish') : t('switchToKorean')),
+      onSelect: () => toggleLang(app),
+    },
+    { emoji: '❓', label: () => t('help'), onSelect: () => openHelpModal(app) },
+  ];
+  createDropdownMenu(trigger, items);
+}
+
 export function setMode(app: App, m: EditorMode): void {
   app.mode = m;
   updateModeUi(app);
@@ -356,12 +391,6 @@ export function applyLangToUi(app: App): void {
   setTip('btnNote', 'modeNote');
   setTip('btnPan', 'modePan');
   setTip('btnSave', 'save');
-  setTip('btnSaveAs', 'saveAs');
-  setTip('btnNew', 'newWork');
-  setTip('btnExportPng', 'exportPng');
-  setTip('btnExportJson', 'exportJson');
-  setTip('btnImportJson', 'importJson');
-  setTip('btnEditCenter', 'editCenter');
   setTip('btnUndo', 'undo');
   setTip('btnRedo', 'redo');
   setTip('btnFit', 'fit');
@@ -369,13 +398,10 @@ export function applyLangToUi(app: App): void {
   setTip('btnZoomOut', 'zoomOut');
   setTip('btnDelete', 'delete');
   setTip('btnPinNote', 'pinNote');
-  setTip('btnWorks', 'works');
-  setTip('btnHelp', 'help');
+  setTip('btnFile', 'menuFile');
+  setTip('btnHelpMenu', 'menuHelp');
   setTip('btnVirtualCtrl', 'cloneToggle');
   setTip('btnChain', 'chainInsert');
-  // Language toggle: tooltip describes the target language.
-  const langEl = document.getElementById('btnLang');
-  if (langEl) langEl.title = getLang() === 'ko' ? 'Switch to English' : '한국어로 전환';
   setText('labelColor', 'selectColor');
   setText('labelThickness', 'thickness');
   setText('labelFontSize', 'fontSize');

@@ -30,6 +30,7 @@ import {
   pickReadableTextColor,
 } from './models/types.js';
 import { getLang, setLang, t } from './i18n/lang.js';
+import { createDropdownMenu } from './ui/Dropdown.js';
 
 // The shape every test expects. Keep additions paired with test-file updates.
 const ArrowApp = {  // eslint-disable-line @typescript-eslint/no-redeclare
@@ -62,6 +63,7 @@ const ArrowApp = {  // eslint-disable-line @typescript-eslint/no-redeclare
   setLang,
   getLang,
   t,
+  createDropdownMenu,
 };
 
 // Expose the ArrowApp surface on the global object. In browsers
