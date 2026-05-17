@@ -1,4 +1,4 @@
-import { Vec } from '../utils/geometry.js';
+import { MAX_CANVAS_SIZE, Vec } from '../utils/geometry.js';
 
 export type ObjectId = string;
 
@@ -98,6 +98,11 @@ export interface SceneData {
   viewOffsetX: number;
   viewOffsetY: number;
   viewScale: number;
+  // World extent at the time the scene was saved. Missing means legacy 4096.
+  // On load, App._adoptScene compares with current MAX_CANVAS_SIZE and shifts
+  // positions by (newMax - oldMax) / 2 so the topic anchor stays under the
+  // existing content.
+  worldSize?: number;
 }
 
 export const DEFAULT_CENTER_FONT_SIZE = 28;
@@ -127,6 +132,39 @@ export function normalizeSceneFontSizes(scene: SceneData): void {
   }
 }
 
+// Shift all positions in a scene by (dx, dy). Used by migrateSceneWorld when
+// the canvas extent grows so the topic anchor stays under existing content.
+function shiftScene(scene: SceneData, dx: number, dy: number): void {
+  for (const o of scene.objects) {
+    if (o.type === 'arrow') {
+      o.from.x += dx; o.from.y += dy;
+      o.to.x += dx;   o.to.y += dy;
+    } else if (o.type === 'highlighter') {
+      for (const p of o.points) { p.x += dx; p.y += dy; }
+    } else {
+      // text + note both anchor on pos.
+      o.pos.x += dx; o.pos.y += dy;
+    }
+  }
+  scene.viewOffsetX += dx;
+  scene.viewOffsetY += dy;
+}
+
+// Migrate a legacy scene to the current world size. Returns true when the
+// scene was actually shifted (caller can mark dirty for re-save). Idempotent:
+// once `worldSize === MAX_CANVAS_SIZE`, this is a no-op.
+export function migrateSceneWorld(scene: SceneData): boolean {
+  const saved = scene.worldSize ?? 4096; // legacy default before this field existed
+  if (saved === MAX_CANVAS_SIZE) {
+    scene.worldSize = MAX_CANVAS_SIZE;
+    return false;
+  }
+  const shift = (MAX_CANVAS_SIZE - saved) / 2;
+  if (shift !== 0) shiftScene(scene, shift, shift);
+  scene.worldSize = MAX_CANVAS_SIZE;
+  return shift !== 0;
+}
+
 export function newId(prefix: string): ObjectId {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -144,5 +182,6 @@ export function emptyScene(name: string): SceneData {
     viewOffsetX: 0,
     viewOffsetY: 0,
     viewScale: 1,
+    worldSize: MAX_CANVAS_SIZE,
   };
 }

@@ -631,6 +631,53 @@
     assert(got.bgColor === '#e91e63', 'bgColor updated, got ' + got.bgColor);
     assert(got.color === '#ffffff', 'color updated, got ' + got.color);
   });
+  test('migrateSceneWorld shifts legacy 4096 scenes by (MAX-4096)/2', function () {
+    if (!A.migrateSceneWorld) return;
+    var legacyMax = 4096;
+    var newMax = A.MAX_CANVAS_SIZE;
+    var shift = (newMax - legacyMax) / 2;
+    var scene = {
+      id: 'x', name: 'x', centerText: '', objects: [
+        { id: 'a1', type: 'arrow', from: { x: 100, y: 100 }, to: { x: 200, y: 100 }, color: '#000', thickness: 4 },
+        { id: 't1', type: 'text', pos: { x: 50, y: 60 }, text: 'hi', fontSize: 24, color: '#000' },
+        { id: 'h1', type: 'highlighter', points: [{ x: 10, y: 20 }, { x: 30, y: 40 }], color: '#ff0', thickness: 4 },
+        { id: 'n1', type: 'note', pos: { x: 70, y: 80 }, text: 'n', width: 200, fontSize: 16, color: '#222', bgColor: '#ff0' }
+      ],
+      createdAt: 0, updatedAt: 0, viewOffsetX: 5, viewOffsetY: 7, viewScale: 1
+      // intentionally no worldSize → legacy
+    };
+    var did = A.migrateSceneWorld(scene);
+    // If new MAX equals legacy 4096, migration is a no-op — guard the assertion.
+    if (newMax === legacyMax) {
+      assert(did === false, 'no-op when MAX unchanged');
+      return;
+    }
+    assert(did === true, 'returns true when shift applied');
+    assert(scene.worldSize === newMax, 'worldSize set to current MAX, got ' + scene.worldSize);
+    assert(scene.objects[0].from.x === 100 + shift && scene.objects[0].from.y === 100 + shift, 'arrow from shifted');
+    assert(scene.objects[0].to.x === 200 + shift, 'arrow to shifted');
+    assert(scene.objects[1].pos.x === 50 + shift && scene.objects[1].pos.y === 60 + shift, 'text shifted');
+    assert(scene.objects[2].points[0].x === 10 + shift && scene.objects[2].points[1].y === 40 + shift, 'highlighter pts shifted');
+    assert(scene.objects[3].pos.x === 70 + shift && scene.objects[3].pos.y === 80 + shift, 'note shifted');
+    assert(scene.viewOffsetX === 5 + shift && scene.viewOffsetY === 7 + shift, 'view offset shifted');
+  });
+  test('migrateSceneWorld is idempotent once worldSize === MAX', function () {
+    if (!A.migrateSceneWorld) return;
+    var scene = {
+      id: 'y', name: 'y', centerText: '', objects: [
+        { id: 't', type: 'text', pos: { x: 100, y: 100 }, text: 'a', fontSize: 24, color: '#000' }
+      ],
+      createdAt: 0, updatedAt: 0, viewOffsetX: 0, viewOffsetY: 0, viewScale: 1,
+      worldSize: A.MAX_CANVAS_SIZE
+    };
+    var did = A.migrateSceneWorld(scene);
+    assert(did === false, 'no-op on already-migrated scene');
+    assert(scene.objects[0].pos.x === 100, 'positions unchanged');
+  });
+  test('emptyScene stamps worldSize to current MAX', function () {
+    var s = A.emptyScene('z');
+    assert(s.worldSize === A.MAX_CANVAS_SIZE, 'worldSize set, got ' + s.worldSize);
+  });
   test('Note text honors clampNoteText helper (255 cap)', function () {
     if (!A.clampNoteText) return; // optional helper
     assert(A.clampNoteText('abc') === 'abc', 'short text passes through');

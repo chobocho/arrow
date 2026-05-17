@@ -4,7 +4,7 @@
   'use strict';
 
   // ---------- utils/geometry ----------
-  var MAX_CANVAS_SIZE = 4096;
+  var MAX_CANVAS_SIZE = 8192;
   function vec(x, y) { return { x: x, y: y }; }
   function vecDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
   function pointToSegmentDistance(p, a, b) {
@@ -118,8 +118,40 @@
       updatedAt: now,
       viewOffsetX: 0,
       viewOffsetY: 0,
-      viewScale: 1
+      viewScale: 1,
+      worldSize: MAX_CANVAS_SIZE
     };
+  }
+  // Shift all positions + view offset by (dx, dy). Used by migrateSceneWorld
+  // when the canvas extent grows so the topic anchor stays under existing
+  // content.
+  function shiftScene(scene, dx, dy) {
+    for (var i = 0; i < scene.objects.length; i++) {
+      var o = scene.objects[i];
+      if (o.type === 'arrow') {
+        o.from.x += dx; o.from.y += dy;
+        o.to.x += dx;   o.to.y += dy;
+      } else if (o.type === 'highlighter') {
+        for (var j = 0; j < o.points.length; j++) {
+          o.points[j].x += dx; o.points[j].y += dy;
+        }
+      } else {
+        // text + note both anchor on pos
+        o.pos.x += dx; o.pos.y += dy;
+      }
+    }
+    scene.viewOffsetX = (scene.viewOffsetX || 0) + dx;
+    scene.viewOffsetY = (scene.viewOffsetY || 0) + dy;
+  }
+  // Migrate a legacy scene to the current world size. Returns true when the
+  // scene was actually shifted (caller can mark dirty for re-save). Idempotent.
+  function migrateSceneWorld(scene) {
+    var saved = (scene.worldSize != null) ? scene.worldSize : 4096;
+    if (saved === MAX_CANVAS_SIZE) { scene.worldSize = MAX_CANVAS_SIZE; return false; }
+    var shift = (MAX_CANVAS_SIZE - saved) / 2;
+    if (shift !== 0) shiftScene(scene, shift, shift);
+    scene.worldSize = MAX_CANVAS_SIZE;
+    return shift !== 0;
   }
 
   // ---------- .arrow file parser ----------
@@ -679,21 +711,30 @@
     if (opts.draftArrow) this._drawArrow(opts.draftArrow, false, true);
     ctx.restore();
   };
+  // Render to an offscreen canvas sized to the **content** bbox (with
+  // padding) — not the whole world. MAX×MAX at 8192² would allocate ~268 MB
+  // and exceed iOS Safari's 16 M-pixel canvas limit, so we measure first
+  // and size the buffer to fit.
   Renderer.prototype.renderToImage = function (scene, padding) {
     if (padding == null) padding = 64;
+    var b = this._contentBounds(scene, padding);
+    var w = Math.max(1, Math.round(b.w));
+    var h = Math.max(1, Math.round(b.h));
     var off = document.createElement('canvas');
-    var W = MAX_CANVAS_SIZE, H = MAX_CANVAS_SIZE;
-    off.width = W; off.height = H;
+    off.width = w; off.height = h;
     var ctx = off.getContext('2d');
     if (!ctx) return off;
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, w, h);
 
+    // Pan the temp view so logical (b.x, b.y) maps to screen (0, 0).
+    // CanvasView.logicalToScreen is (logical - offset) * scale, so the
+    // offset is just the bbox origin. No cropping step needed.
     var realCtx = this.ctx, realView = this.view;
     var tmpView = new CanvasView();
-    tmpView.resize(W, H, 1);
+    tmpView.resize(w, h, 1);
     tmpView.scale = 1;
-    tmpView.offset = { x: 0, y: 0 };
+    tmpView.offset = { x: b.x, y: b.y };
     this.ctx = ctx; this.view = tmpView;
     this._drawCenter(scene);
     for (var ei = 0; ei < scene.objects.length; ei++) {
@@ -705,18 +746,7 @@
       if (io.type !== 'highlighter') this._drawObject(io, false, false);
     }
     this.ctx = realCtx; this.view = realView;
-
-    var b = this._contentBounds(scene, padding);
-    var cropped = document.createElement('canvas');
-    cropped.width = Math.max(1, Math.round(b.w));
-    cropped.height = Math.max(1, Math.round(b.h));
-    var c2 = cropped.getContext('2d');
-    if (c2) {
-      c2.fillStyle = '#ffffff';
-      c2.fillRect(0, 0, cropped.width, cropped.height);
-      c2.drawImage(off, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
-    }
-    return cropped;
+    return off;
   };
   Renderer.prototype._contentBounds = function (scene, padding) {
     var minX = MAX_CANVAS_SIZE / 2 - 120, minY = MAX_CANVAS_SIZE / 2 - 120;
@@ -1797,6 +1827,10 @@
     if (scene.centerFontSize == null) scene.centerFontSize = DEFAULT_CENTER_FONT_SIZE;
     // Legacy DB/JSON may carry decimal font sizes; coerce to integers on load.
     normalizeSceneFontSizes(scene);
+    // Shift positions when the canvas extent grew since save (legacy 4096 →
+    // current MAX). Keeps existing content under the topic anchor.
+    var migrated = migrateSceneWorld(scene);
+    if (migrated) this.dirty = true;
     this._cancelAutosave();
     // Different scene = different timeline. Drop in-memory undo history so
     // Undo right after Load doesn't restore the previous scene's state.
@@ -3054,6 +3088,7 @@
     parseArrowFile: parseArrowFile,
     floorFontSize: floorFontSize,
     normalizeSceneFontSizes: normalizeSceneFontSizes,
+    migrateSceneWorld: migrateSceneWorld,
     clampNoteText: clampNoteText,
     estimateNoteBox: estimateNoteBox,
     pickReadableTextColor: pickReadableTextColor,

@@ -53,11 +53,15 @@ export class Renderer {
     ctx.restore();
   }
 
-  // Render scene to a fresh offscreen canvas at full logical resolution. Used for PNG export.
+  // Render scene to a fresh offscreen canvas sized to the **content** bbox
+  // (with padding) — not the whole world. Allocating MAX×MAX up front would
+  // be 268 MB at 8192² and exceed iOS Safari's 16 M-pixel canvas limit, so
+  // we measure first, then size the buffer to fit. Used for PNG export.
   renderToImage(scene: SceneData, padding: number = 64): HTMLCanvasElement {
+    const bounds = this.contentBounds(scene, padding);
+    const w = Math.max(1, Math.round(bounds.w));
+    const h = Math.max(1, Math.round(bounds.h));
     const off = document.createElement('canvas');
-    const w = MAX_CANVAS_SIZE;
-    const h = MAX_CANVAS_SIZE;
     off.width = w;
     off.height = h;
     const ctx = off.getContext('2d');
@@ -65,13 +69,15 @@ export class Renderer {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, w, h);
 
-    // Save and use an "identity" view so coordinates map 1:1 to logical pixels.
+    // Use a temporary view at scale 1, panned so logical (bounds.x, bounds.y)
+    // maps to screen (0, 0). Logical → screen formula in CanvasView is
+    // (logical - offset) * scale, so offset = bounds origin is all we need.
     const realCtx = this.ctx;
     const realView = this.view;
     const tmpView = new CanvasView();
     tmpView.resize(w, h, 1);
     tmpView.scale = 1;
-    tmpView.offset = { x: 0, y: 0 };
+    tmpView.offset = { x: bounds.x, y: bounds.y };
     (this as any).ctx = ctx;
     (this as any).view = tmpView;
 
@@ -86,19 +92,7 @@ export class Renderer {
 
     (this as any).ctx = realCtx;
     (this as any).view = realView;
-
-    // Crop to content bounding box (with padding) for a tidy export.
-    const bounds = this.contentBounds(scene, padding);
-    const cropped = document.createElement('canvas');
-    cropped.width = Math.max(1, bounds.w);
-    cropped.height = Math.max(1, bounds.h);
-    const c2 = cropped.getContext('2d');
-    if (c2) {
-      c2.fillStyle = '#ffffff';
-      c2.fillRect(0, 0, cropped.width, cropped.height);
-      c2.drawImage(off, bounds.x, bounds.y, bounds.w, bounds.h, 0, 0, bounds.w, bounds.h);
-    }
-    return cropped;
+    return off;
   }
 
   private contentBounds(scene: SceneData, padding: number) {

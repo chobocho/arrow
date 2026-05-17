@@ -7,6 +7,7 @@ import {
   HighlighterObject,
   SceneData,
   SceneObject,
+  migrateSceneWorld,
   normalizeSceneFontSizes,
 } from './models/types.js';
 import { EditorMode, InputHandler } from './input/InputHandler.js';
@@ -194,6 +195,10 @@ export class App {
     // pre-integer builds. Coerce to integers on entry so the rest of the app
     // can assume integer math.
     normalizeSceneFontSizes(scene);
+    // Shift positions when the canvas extent grew since the scene was saved
+    // (e.g. legacy 4096 → current 8192). Keeps content under the topic anchor.
+    const shifted = migrateSceneWorld(scene);
+    if (shifted) this.dirty = true;
     this.cancelAutosave();
     // Different scene = different timeline. Drop any in-memory undo history so
     // pressing Undo right after Load doesn't restore the previous scene's state.

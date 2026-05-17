@@ -6,7 +6,7 @@ export interface Vec {
   y: number;
 }
 
-export const MAX_CANVAS_SIZE = 4096;
+export const MAX_CANVAS_SIZE = 8192;
 
 export function vec(x: number, y: number): Vec {
   return { x, y };

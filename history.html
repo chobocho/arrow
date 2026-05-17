@@ -57,6 +57,16 @@ nav.toc a { text-decoration: none; }
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
 <h2 id="2026-05-17">2026-05-17</h2>
+<h3 id="캔버스-최대-크기-8192-확장-export-경량화-마이그레이션">캔버스 최대 크기를 8192×8192로 확장 + PNG 내보내기 경량화 + 레거시 씬 마이그레이션</h3>
+<ul>
+<li>동기: 작업 공간을 4× 넓게(2D 기준) — 단, 그냥 <code>MAX_CANVAS_SIZE</code>만 키우면 PNG 내보내기 시 8192² × 4 = <strong>약 268 MB</strong> 비트맵 할당 + iOS Safari의 16M 픽셀 캔버스 한도 초과 위험.
+<li><code>renderToImage</code> 리팩토링: 콘텐츠 바운딩 박스 크기만큼 오프스크린 캔버스를 잡고, <code>tmpView.offset</code>을 bbox 원점으로 두어 한 번에 그림. 별도 잘라내기(crop) 단계 제거 — 메모리 사용량이 콘텐츠 크기에 비례.
+<li>레거시 호환: <code>SceneData.worldSize</code> 필드 신설(없으면 4096으로 가정). <code>migrateSceneWorld(scene)</code>이 저장 당시 worldSize와 현재 MAX 차이의 절반만큼 모든 객체(arrow/text/note/highlighter) 위치와 viewOffset을 이동시켜 주제 앵커(중앙) 아래에 기존 콘텐츠가 그대로 머무름. App._adoptScene에서 호출.
+<li><code>MAX_CANVAS_SIZE</code>: 4096 → 8192. <code>geometry.ts</code>와 <code>dist/bundle.js</code> 동시 갱신.
+<li><code>emptyScene</code>은 새 씬에 자동으로 <code>worldSize: MAX_CANVAS_SIZE</code> 기록.
+<li>테스트 3건 추가(레거시 4096 씬 시프트, 멱등성, emptyScene 스탬프) — 63/63 통과.
+</li>
+</ul>
 <h3 id="메모-축소-시-박스-크기-변형-버그-수정">메모(Note) 축소 시 박스 크기가 변형되는 버그 수정</h3>
 <ul>
 <li>증상: 캔버스를 축소하면 포스트잇 가로/세로 비율이 일정해 보이지 않음. 어떤 비율에서는 박스가 갑자기 길어졌다 짧아짐.
