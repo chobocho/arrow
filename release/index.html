@@ -2891,7 +2891,10 @@
     var url = cropped.toDataURL('image/png');
     var a = document.createElement('a');
     a.href = url;
-    a.download = (this.store.get().name || 'arrow') + '.png';
+    // Date-stamped filename so multiple exports of the same work in one
+    // folder don't overwrite each other.
+    var base = this.store.get().name || 'arrow';
+    a.download = base + '_' + todayStamp() + '.png';
     a.click();
   };
   // Local-date YYYYMMDD stamp for export filenames. Local (not UTC) so the

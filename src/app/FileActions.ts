@@ -112,7 +112,10 @@ export function exportPng(app: App): void {
   const url = cropped.toDataURL('image/png');
   const a = document.createElement('a');
   a.href = url;
-  a.download = (app.store.get().name || 'arrow') + '.png';
+  // Date-stamped filename so multiple exports of the same work in one folder
+  // don't overwrite each other.
+  const base = app.store.get().name || 'arrow';
+  a.download = `${base}_${todayStamp()}.png`;
   a.click();
 }
 
