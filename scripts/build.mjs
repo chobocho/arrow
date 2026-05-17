@@ -8,7 +8,6 @@
 // `module.exports` only when `module` is defined (Node CJS wrapper), so it
 // stays a no-op in the browser.
 
-import { build } from 'esbuild';
 import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +23,32 @@ const OUT_HTML = join(RELEASE_DIR, 'index.html');
 const args = new Set(process.argv.slice(2));
 const minify = args.has('--minify');
 const noInline = args.has('--no-inline');
+
+// Pick the best available esbuild flavor. Native is preferred (faster, tiny
+// install), but it ships a platform-specific binary — on environments like
+// Termux on Android the native install picks the wrong arch and crashes at
+// runtime. esbuild-wasm is pure JS, slower but universal. We probe native
+// with a tiny no-op transform and only fall back on failure, so most users
+// stay on the fast path.
+async function loadEsbuild() {
+  try {
+    const mod = await import('esbuild');
+    await mod.transform('0', { loader: 'js' }); // surfaces binary mismatch
+    return mod;
+  } catch (err) {
+    console.warn(
+      'native esbuild unavailable (' + (err?.message?.split('\n')[0] || err) + ')\n' +
+      ' → falling back to esbuild-wasm'
+    );
+    const wasm = await import('esbuild-wasm');
+    // Some versions need explicit initialize; ignore if already done.
+    if (typeof wasm.initialize === 'function') {
+      try { await wasm.initialize({}); } catch { /* idempotent */ }
+    }
+    return wasm;
+  }
+}
+const { build } = await loadEsbuild();
 
 // 1. Bundle ----------------------------------------------------------------
 await build({
