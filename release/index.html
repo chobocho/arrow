@@ -2894,14 +2894,24 @@
     a.download = (this.store.get().name || 'arrow') + '.png';
     a.click();
   };
+  // Local-date YYYYMMDD stamp for export filenames. Local (not UTC) so the
+  // filename matches the date on the user's clock.
+  function todayStamp() {
+    var d = new Date();
+    var y = String(d.getFullYear());
+    var m = String(d.getMonth() + 1);
+    var day = String(d.getDate());
+    if (m.length < 2) m = '0' + m;
+    if (day.length < 2) day = '0' + day;
+    return y + m + day;
+  }
   App.prototype._exportJson = function () {
-    var self = this;
     this.db.exportAll().then(function (all) {
       var blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = 'arrow-mindmap-export.json';
+      a.download = 'arrow_' + todayStamp() + '.json';
       a.click();
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     });

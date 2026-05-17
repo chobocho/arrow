@@ -116,13 +116,23 @@ export function exportPng(app: App): void {
   a.click();
 }
 
+// Format today's local date as YYYYMMDD for export filenames. Local (not UTC)
+// so the file the user just downloaded matches the date on their clock.
+function todayStamp(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}${m}${day}`;
+}
+
 export async function exportJson(app: App): Promise<void> {
   const all = await app.db.exportAll();
   const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'arrow-mindmap-export.json';
+  a.download = `arrow_${todayStamp()}.json`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

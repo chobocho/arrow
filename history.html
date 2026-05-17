@@ -57,6 +57,13 @@ nav.toc a { text-decoration: none; }
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
 <h2 id="2026-05-17">2026-05-17</h2>
+<h3 id="json-export-파일명-날짜-스탬프">JSON 내보내기 파일명을 <code>arrow_YYYYMMDD.json</code> 형식으로 변경</h3>
+<ul>
+<li>이전: 항상 <code>arrow-mindmap-export.json</code> — 여러 날짜의 백업을 같은 폴더에 모으면 덮어쓰기 위험.
+<li>변경: 내보내기 시점의 로컬 날짜로 <code>arrow_20260517.json</code>처럼 생성. 로컬 시각 기준(UTC 아님)이라 사용자의 달력과 일치.
+<li><code>todayStamp()</code> 헬퍼를 <code>FileActions.ts</code>와 번들에 각각 추가, <code>exportAll → download</code> 경로에서 사용.
+</li>
+</ul>
 <h3 id="도움말-모달-단축키-강조">도움말 모달의 모든 단축키를 키 캡 형태로 강조</h3>
 <ul>
 <li>변경: 도움말 본문 렌더링을 <code>textContent</code> → <code>innerHTML</code>로 전환(하드코딩 i18n 문자열만 들어가므로 안전), 모든 단축키 키를 <code>&lt;kbd&gt;</code>로 감쌈. <code>helpModes</code> · <code>helpKeys</code> · <code>helpMouse</code> · <code>helpMobile</code> 모두 한·영 갱신.
