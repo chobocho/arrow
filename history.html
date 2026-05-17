@@ -56,6 +56,21 @@ nav.toc a { text-decoration: none; }
 <body>
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
+<h2 id="2026-05-17d">2026-05-17 — ✏️ 편집 메뉴 추가</h2>
+<h3 id="편집-메뉴-주제크기-체인">툴바의 주제 크기 입력 + 🦀 체인 버튼을 편집 메뉴로 이동</h3>
+<ul>
+<li>의도: 모바일 헤더에 남아있던 <code>주제크기</code> 입력 필드(라벨+숫자 입력)와 단독 🦀 체인 버튼을 새 ✏️ 편집 메뉴로 통합. 가로 폭을 한 단계 더 줄임.
+<li>편집 메뉴 항목:
+<ul>
+<li>🔠 주제 크기 — <code>customPrompt</code>로 현재 값 미리 채워 표시. 입력값을 <code>parseInt</code> 후 <code>setCenterFontSize</code> 호출(저장소가 8~200으로 클램프).
+<li>🦀 체인 추가 — 기존 placeholder/플래시 그대로.
+</li>
+</ul>
+<li>정리: <code>syncCenterFontInput</code> 헬퍼와 <code>app.adoptScene</code>의 호출, <code>labelCenterFontSize</code> i18n setText 제거. <code>chainInsert</code> tip은 메뉴 라벨이 대체.
+<li>i18n: <code>menuEdit</code>, <code>promptCenterFontSize</code> 추가.
+<li>80/80 통과 유지(기존 드롭다운 테스트가 메뉴 동작을 커버).
+</li>
+</ul>
 <h2 id="2026-05-17c">2026-05-17 — 드롭다운 클리핑 버그 수정</h2>
 <h3 id="dropdown-fixed-positioning">툴바 메뉴 패널이 헤더에 가려 보이지 않던 문제 수정</h3>
 <ul>

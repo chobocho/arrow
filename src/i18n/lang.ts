@@ -77,9 +77,11 @@ const strings: Record<LangCode, Dict> = {
     chainInsert: '체인 추가',
     chainPlaceholder: '독서 -> 전공서적 -> LLM',
     menuFile: '파일',
+    menuEdit: '편집',
     menuHelp: '도움말',
     switchToEnglish: 'Switch to English',
     switchToKorean: '한국어로 전환',
+    promptCenterFontSize: '주제 글자 크기 (8 ~ 200)',
   },
   en: {
     appTitle: 'Arrow Mind Map',
@@ -155,9 +157,11 @@ const strings: Record<LangCode, Dict> = {
     chainInsert: 'Insert Chain',
     chainPlaceholder: 'Read -> Textbook -> LLM',
     menuFile: 'File',
+    menuEdit: 'Edit',
     menuHelp: 'Help',
     switchToEnglish: 'Switch to English',
     switchToKorean: 'Switch to Korean',
+    promptCenterFontSize: 'Topic font size (8 to 200)',
   },
 };
 

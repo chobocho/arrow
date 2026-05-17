@@ -184,16 +184,12 @@
       <div class="color-palette" id="colorPalette"></div>
       <label class="field"><span id="labelThickness">굵기</span><input type="number" id="inputThickness" min="1" max="40" value="4"></label>
       <label class="field"><span id="labelFontSize">글자크기</span><input type="number" id="inputFontSize" min="1" max="200" value="28"></label>
-      <label class="field"><span id="labelCenterFontSize">주제크기</span><input type="number" id="inputCenterFontSize" min="1" max="200" value="28"></label>
     </div>
     <div class="group">
       <button class="tool icon" id="btnUndo" title="실행 취소 (Ctrl+Z)" disabled>↩️</button>
       <button class="tool icon" id="btnRedo" title="다시 실행 (Ctrl+Y)" disabled>↪️</button>
       <button class="tool icon" id="btnPinNote" title="메모 핀 고정 (화면 위에 고정)" disabled>📌</button>
       <button class="tool icon" id="btnDelete" title="삭제" disabled>🗑️</button>
-    </div>
-    <div class="group">
-      <button class="tool icon" id="btnChain" title="체인 추가">🦀</button>
     </div>
     <div class="spacer"></div>
     <div class="group">
@@ -205,6 +201,7 @@
       <button class="tool icon" id="btnSave" title="저장">💾</button>
       <input type="file" id="fileImport" accept="application/json,.json,.arrow" style="display:none">
       <button class="tool icon" id="btnFile" title="파일">📁</button>
+      <button class="tool icon" id="btnEdit" title="편집">✏️</button>
       <button class="tool icon" id="btnHelpMenu" title="도움말">❓</button>
     </div>
   </header>
@@ -1088,9 +1085,11 @@
       chainInsert: "\uCCB4\uC778 \uCD94\uAC00",
       chainPlaceholder: "\uB3C5\uC11C -> \uC804\uACF5\uC11C\uC801 -> LLM",
       menuFile: "\uD30C\uC77C",
+      menuEdit: "\uD3B8\uC9D1",
       menuHelp: "\uB3C4\uC6C0\uB9D0",
       switchToEnglish: "Switch to English",
-      switchToKorean: "\uD55C\uAD6D\uC5B4\uB85C \uC804\uD658"
+      switchToKorean: "\uD55C\uAD6D\uC5B4\uB85C \uC804\uD658",
+      promptCenterFontSize: "\uC8FC\uC81C \uAE00\uC790 \uD06C\uAE30 (8 ~ 200)"
     },
     en: {
       appTitle: "Arrow Mind Map",
@@ -1166,9 +1165,11 @@
       chainInsert: "Insert Chain",
       chainPlaceholder: "Read -> Textbook -> LLM",
       menuFile: "File",
+      menuEdit: "Edit",
       menuHelp: "Help",
       switchToEnglish: "Switch to English",
-      switchToKorean: "Switch to Korean"
+      switchToKorean: "Switch to Korean",
+      promptCenterFontSize: "Topic font size (8 to 200)"
     }
   };
   var currentLang = "ko";
@@ -3122,7 +3123,6 @@
     "#607d8b"
   ];
   function bindUi(app) {
-    var _a;
     const $ = (sel) => document.querySelector(sel);
     $("#btnSelect").addEventListener("click", () => setMode(app, "select"));
     $("#btnArrow").addEventListener("click", () => setMode(app, "arrow"));
@@ -3134,6 +3134,7 @@
     $("#btnSave").addEventListener("click", () => void save(app));
     $("#fileImport").addEventListener("change", (e) => void handleImportFile(app, e));
     bindFileMenu(app);
+    bindEditMenu(app);
     bindHelpMenu(app);
     const btnUndo = document.getElementById("btnUndo");
     if (btnUndo) btnUndo.addEventListener("click", () => app.undo());
@@ -3154,16 +3155,6 @@
       app.togglePinSelectedNote();
       updateSelectionUi(app);
     });
-    const chainBtn = document.getElementById("btnChain");
-    if (chainBtn) {
-      chainBtn.addEventListener("click", () => {
-        void customPrompt(t("chainInsert"), "", t("chainPlaceholder")).then((raw) => {
-          if (raw === null) return;
-          const n = insertChain(app, raw);
-          if (n > 0) app.flashStatus("+ chain (" + n + ")");
-        });
-      });
-    }
     const ctrlBtn = document.getElementById("btnVirtualCtrl");
     if (ctrlBtn) {
       ctrlBtn.addEventListener("click", () => {
@@ -3316,25 +3307,6 @@
       const btnSelect = document.getElementById("btnSelect");
       btnSelect == null ? void 0 : btnSelect.focus();
     });
-    const centerFontEl = $("#inputCenterFontSize");
-    centerFontEl.value = String((_a = app.store.get().centerFontSize) != null ? _a : DEFAULT_CENTER_FONT_SIZE);
-    centerFontEl.addEventListener("input", () => {
-      const raw = parseFloat(centerFontEl.value);
-      if (!Number.isFinite(raw)) return;
-      app.store.setCenterFontSize(Math.floor(raw));
-    });
-    centerFontEl.addEventListener("change", () => {
-      var _a2;
-      centerFontEl.value = String((_a2 = app.store.get().centerFontSize) != null ? _a2 : DEFAULT_CENTER_FONT_SIZE);
-    });
-    centerFontEl.addEventListener("keydown", (e) => {
-      var _a2;
-      if (e.key !== "Enter") return;
-      e.preventDefault();
-      centerFontEl.value = String((_a2 = app.store.get().centerFontSize) != null ? _a2 : DEFAULT_CENTER_FONT_SIZE);
-      const btnSelect = document.getElementById("btnSelect");
-      btnSelect == null ? void 0 : btnSelect.focus();
-    });
     applyLangToUi(app);
     updateModeUi(app);
     updateSelectionUi(app);
@@ -3363,6 +3335,38 @@
       { emoji: "\u{1F5BC}\uFE0F", label: () => t("exportPng"), onSelect: () => exportPng(app) },
       { emoji: "\u{1F4E4}", label: () => t("exportJson"), onSelect: () => void exportJson(app) },
       { emoji: "\u{1F4E5}", label: () => t("importJson"), onSelect: () => importJsonClick() }
+    ];
+    createDropdownMenu(trigger, items);
+  }
+  function bindEditMenu(app) {
+    const trigger = document.getElementById("btnEdit");
+    if (!trigger) return;
+    const items = [
+      {
+        emoji: "\u{1F520}",
+        label: () => t("centerFontSize"),
+        onSelect: () => {
+          var _a;
+          const current = String((_a = app.store.get().centerFontSize) != null ? _a : DEFAULT_CENTER_FONT_SIZE);
+          void customPrompt(t("promptCenterFontSize"), current).then((raw) => {
+            if (raw === null) return;
+            const n = parseInt(raw.trim(), 10);
+            if (!Number.isFinite(n)) return;
+            app.store.setCenterFontSize(n);
+          });
+        }
+      },
+      {
+        emoji: "\u{1F980}",
+        label: () => t("chainInsert"),
+        onSelect: () => {
+          void customPrompt(t("chainInsert"), "", t("chainPlaceholder")).then((raw) => {
+            if (raw === null) return;
+            const n = insertChain(app, raw);
+            if (n > 0) app.flashStatus("+ chain (" + n + ")");
+          });
+        }
+      }
     ];
     createDropdownMenu(trigger, items);
   }
@@ -3441,13 +3445,12 @@
     setTip("btnDelete", "delete");
     setTip("btnPinNote", "pinNote");
     setTip("btnFile", "menuFile");
+    setTip("btnEdit", "menuEdit");
     setTip("btnHelpMenu", "menuHelp");
     setTip("btnVirtualCtrl", "cloneToggle");
-    setTip("btnChain", "chainInsert");
     setText("labelColor", "selectColor");
     setText("labelThickness", "thickness");
     setText("labelFontSize", "fontSize");
-    setText("labelCenterFontSize", "centerFontSize");
     document.title = t("appTitle");
     updateTitle(app);
     renderWorks(app);
@@ -3456,11 +3459,6 @@
     const next = getLang() === "ko" ? "en" : "ko";
     setLang(next);
     applyLangToUi(app);
-  }
-  function syncCenterFontInput(app) {
-    var _a;
-    const el = document.getElementById("inputCenterFontSize");
-    if (el) el.value = String((_a = app.store.get().centerFontSize) != null ? _a : DEFAULT_CENTER_FONT_SIZE);
   }
   function syncFontInputToSelection(app) {
     const el = document.getElementById("inputFontSize");
@@ -3657,7 +3655,6 @@
       this.selectedId = null;
       this.dirty = false;
       updateTitle(this);
-      syncCenterFontInput(this);
       this.updateUndoRedoUi();
       this.requestRender();
     }

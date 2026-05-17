@@ -37,6 +37,7 @@ export function bindUi(app: App): void {
   ($('#btnSave')).addEventListener('click', () => void save(app));
   ($('#fileImport')).addEventListener('change', (e) => void handleImportFile(app, e));
   bindFileMenu(app);
+  bindEditMenu(app);
   bindHelpMenu(app);
   const btnUndo = document.getElementById('btnUndo');
   if (btnUndo) btnUndo.addEventListener('click', () => app.undo());
@@ -57,21 +58,6 @@ export function bindUi(app: App): void {
     app.togglePinSelectedNote();
     updateSelectionUi(app);
   });
-
-  // Chain icon — opens a popup with a single-line input. Typing
-  // "A -> B -> C" and pressing Enter (or OK) creates the text+arrow chain
-  // at the viewport center. The chain-format example sits in the input
-  // placeholder so the dialog title stays short.
-  const chainBtn = document.getElementById('btnChain');
-  if (chainBtn) {
-    chainBtn.addEventListener('click', () => {
-      void customPrompt(t('chainInsert'), '', t('chainPlaceholder')).then((raw) => {
-        if (raw === null) return;
-        const n = insertChain(app, raw);
-        if (n > 0) app.flashStatus('+ chain (' + n + ')');
-      });
-    });
-  }
 
   // Virtual Ctrl: sticky toggle that mirrors physical Ctrl/⌘ for drag-clone.
   // Tapping toggles; remains active until tapped again, so users can clone
@@ -252,26 +238,6 @@ export function bindUi(app: App): void {
     btnSelect?.focus();
   });
 
-  const centerFontEl = $('#inputCenterFontSize') as HTMLInputElement;
-  centerFontEl.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
-  centerFontEl.addEventListener('input', () => {
-    const raw = parseFloat(centerFontEl.value);
-    if (!Number.isFinite(raw)) return;
-    app.store.setCenterFontSize(Math.floor(raw));
-  });
-  centerFontEl.addEventListener('change', () => {
-    centerFontEl.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
-  });
-  // Mirror of #inputFontSize: Enter commits the value and hands focus back to
-  // the Select-mode button so keyboard shortcuts resume working.
-  centerFontEl.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    centerFontEl.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
-    const btnSelect = document.getElementById('btnSelect');
-    btnSelect?.focus();
-  });
-
   applyLangToUi(app);
   updateModeUi(app);
   updateSelectionUi(app);
@@ -305,6 +271,43 @@ function bindFileMenu(app: App): void {
     { emoji: '🖼️', label: () => t('exportPng'), onSelect: () => exportPng(app) },
     { emoji: '📤', label: () => t('exportJson'), onSelect: () => void exportJson(app) },
     { emoji: '📥', label: () => t('importJson'), onSelect: () => importJsonClick() },
+  ];
+  createDropdownMenu(trigger, items);
+}
+
+// Edit menu — actions that need a typed value (topic font size) or a small
+// free-form prompt (chain insert). Hosting these in a menu keeps the toolbar
+// uncluttered while leaving the operations one tap away.
+function bindEditMenu(app: App): void {
+  const trigger = document.getElementById('btnEdit') as HTMLButtonElement | null;
+  if (!trigger) return;
+  const items: DropdownItem[] = [
+    {
+      emoji: '🔠',
+      label: () => t('centerFontSize'),
+      onSelect: () => {
+        const current = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
+        void customPrompt(t('promptCenterFontSize'), current).then((raw) => {
+          if (raw === null) return;
+          const n = parseInt(raw.trim(), 10);
+          // Silently ignore non-numeric input — the store clamps the value
+          // to 8..200 for us once a finite number is provided.
+          if (!Number.isFinite(n)) return;
+          app.store.setCenterFontSize(n);
+        });
+      },
+    },
+    {
+      emoji: '🦀',
+      label: () => t('chainInsert'),
+      onSelect: () => {
+        void customPrompt(t('chainInsert'), '', t('chainPlaceholder')).then((raw) => {
+          if (raw === null) return;
+          const n = insertChain(app, raw);
+          if (n > 0) app.flashStatus('+ chain (' + n + ')');
+        });
+      },
+    },
   ];
   createDropdownMenu(trigger, items);
 }
@@ -399,13 +402,12 @@ export function applyLangToUi(app: App): void {
   setTip('btnDelete', 'delete');
   setTip('btnPinNote', 'pinNote');
   setTip('btnFile', 'menuFile');
+  setTip('btnEdit', 'menuEdit');
   setTip('btnHelpMenu', 'menuHelp');
   setTip('btnVirtualCtrl', 'cloneToggle');
-  setTip('btnChain', 'chainInsert');
   setText('labelColor', 'selectColor');
   setText('labelThickness', 'thickness');
   setText('labelFontSize', 'fontSize');
-  setText('labelCenterFontSize', 'centerFontSize');
   document.title = t('appTitle');
   updateTitle(app);
   renderWorks(app);
@@ -415,11 +417,6 @@ export function toggleLang(app: App): void {
   const next: LangCode = getLang() === 'ko' ? 'en' : 'ko';
   setLang(next);
   applyLangToUi(app);
-}
-
-export function syncCenterFontInput(app: App): void {
-  const el = document.getElementById('inputCenterFontSize') as HTMLInputElement | null;
-  if (el) el.value = String(app.store.get().centerFontSize ?? DEFAULT_CENTER_FONT_SIZE);
 }
 
 // When the selection changes, mirror the font-size input to the selected

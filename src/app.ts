@@ -17,7 +17,6 @@ import { customPrompt } from './ui/CustomPrompt.js';
 import {
   bindUi,
   setMode,
-  syncCenterFontInput,
   syncColorInputToSelection,
   syncFontInputToSelection,
   syncThicknessInputToSelection,
@@ -215,7 +214,6 @@ export class App {
     this.selectedId = null;
     this.dirty = false;
     updateTitle(this);
-    syncCenterFontInput(this);
     this.updateUndoRedoUi();
     this.requestRender();
   }
