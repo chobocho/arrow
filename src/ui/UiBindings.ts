@@ -1,6 +1,6 @@
 import type { App } from '../app.js';
 import type { EditorMode } from '../input/InputHandler.js';
-import { DEFAULT_CENTER_FONT_SIZE } from '../models/types.js';
+import { DEFAULT_CENTER_FONT_SIZE, pickReadableTextColor } from '../models/types.js';
 import { LangCode, getLang, setLang, t } from '../i18n/lang.js';
 import { customPrompt } from './CustomPrompt.js';
 import {
@@ -102,11 +102,20 @@ export function bindUi(app: App): void {
     });
   };
   // Apply a chosen color. When an object is selected, recolor it in place;
-  // otherwise update the default color used for newly created objects. Mirrors
-  // the selection-aware behavior of the font-size input.
+  // otherwise update the default color used for newly created objects. Notes
+  // are special-cased: the color picker drives the sticky-note **background**
+  // and the text color is auto-chosen for contrast — one control, no fighting
+  // unreadable yellow-on-yellow.
   const applyColor = (hex: string): void => {
     const sel = app.getSelectedObject();
-    if (sel) {
+    if (sel && sel.type === 'note') {
+      const textColor = pickReadableTextColor(hex);
+      app.store.update(sel.id, (o) => {
+        if (o.type !== 'note') return;
+        o.bgColor = hex;
+        o.color = textColor;
+      });
+    } else if (sel) {
       app.store.update(sel.id, (o) => { o.color = hex; });
     } else {
       app.color = hex;
@@ -412,7 +421,9 @@ export function syncColorInputToSelection(app: App): void {
   // would yank the picker's cursor back.
   if (document.activeElement === el) return;
   const sel = app.getSelectedObject();
-  const hex = sel ? sel.color : app.color;
+  // For notes, the picker drives the background color (the post-it identity)
+  // — mirror that so the swatches highlight the right value.
+  const hex = sel && sel.type === 'note' ? sel.bgColor : sel ? sel.color : app.color;
   el.value = hex;
   const palette = document.getElementById('colorPalette');
   if (palette) {

@@ -62,6 +62,30 @@ export function clampNoteText(text: unknown): string {
   return s.length > NOTE_MAX_LENGTH ? s.slice(0, NOTE_MAX_LENGTH) : s;
 }
 
+// Pick a high-contrast text color (black or white) for a given background hex.
+// Accepts "#rgb", "#rrggbb", or other unparseable strings (returns black). Uses
+// the WCAG relative-luminance approximation, simplified for our small palette.
+export function pickReadableTextColor(bgHex: string): string {
+  const hex = String(bgHex || '').trim();
+  let r = 255, g = 255, b = 255;
+  const m6 = /^#?([0-9a-f]{6})$/i.exec(hex);
+  const m3 = /^#?([0-9a-f]{3})$/i.exec(hex);
+  if (m6) {
+    r = parseInt(m6[1].slice(0, 2), 16);
+    g = parseInt(m6[1].slice(2, 4), 16);
+    b = parseInt(m6[1].slice(4, 6), 16);
+  } else if (m3) {
+    r = parseInt(m3[1][0] + m3[1][0], 16);
+    g = parseInt(m3[1][1] + m3[1][1], 16);
+    b = parseInt(m3[1][2] + m3[1][2], 16);
+  } else {
+    return '#222222';
+  }
+  // Perceived brightness — quick approximation good enough for picker choices.
+  const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luma > 0.6 ? '#222222' : '#ffffff';
+}
+
 export interface SceneData {
   id: string;
   name: string;

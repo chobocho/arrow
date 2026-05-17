@@ -42,6 +42,28 @@
     var s = (typeof text === 'string') ? text : '';
     return s.length > NOTE_MAX_LENGTH ? s.slice(0, NOTE_MAX_LENGTH) : s;
   }
+  // Pick a readable text color (dark or white) for a given background hex.
+  // Falls back to dark for unparseable strings. Used when the user recolors
+  // a note's bg so the text never goes unreadable yellow-on-yellow.
+  function pickReadableTextColor(bgHex) {
+    var hex = String(bgHex || '').trim();
+    var r = 255, g = 255, b = 255;
+    var m6 = /^#?([0-9a-f]{6})$/i.exec(hex);
+    var m3 = /^#?([0-9a-f]{3})$/i.exec(hex);
+    if (m6) {
+      r = parseInt(m6[1].slice(0, 2), 16);
+      g = parseInt(m6[1].slice(2, 4), 16);
+      b = parseInt(m6[1].slice(4, 6), 16);
+    } else if (m3) {
+      r = parseInt(m3[1].charAt(0) + m3[1].charAt(0), 16);
+      g = parseInt(m3[1].charAt(1) + m3[1].charAt(1), 16);
+      b = parseInt(m3[1].charAt(2) + m3[1].charAt(2), 16);
+    } else {
+      return '#222222';
+    }
+    var luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luma > 0.6 ? '#222222' : '#ffffff';
+  }
   // Cheap, ctx-free estimate of a note's bounding box. Splits on \n, soft-wraps
   // by an average-char-width heuristic. The renderer measures pixel-accurate
   // wrapping via ctx.measureText; this helper covers hit-testing & fit.
@@ -1912,7 +1934,9 @@
     // would yank the picker's cursor back.
     if (document.activeElement === el) return;
     var sel = this._getSelectedObject();
-    var hex = sel ? sel.color : this.color;
+    // Notes: the picker reflects the **background** color (the post-it
+    // identity), since that's what applyColor sets when a note is selected.
+    var hex = (sel && sel.type === 'note') ? sel.bgColor : (sel ? sel.color : this.color);
     el.value = hex;
     var palette = document.getElementById('colorPalette');
     if (palette) {
@@ -2038,10 +2062,19 @@
     }
     // Apply a chosen color. When an object is selected, recolor it in place;
     // otherwise update the default color used for newly created objects.
-    // Mirrors the selection-aware behavior of the font-size input.
+    // Notes are special-cased: the color picker drives the sticky-note
+    // **background**, with text color auto-chosen for contrast — one control,
+    // no unreadable yellow-on-yellow.
     function applyColor(hex) {
       var sel = self._getSelectedObject();
-      if (sel) {
+      if (sel && sel.type === 'note') {
+        var textColor = pickReadableTextColor(hex);
+        self.store.update(sel.id, function (o) {
+          if (o.type !== 'note') return;
+          o.bgColor = hex;
+          o.color = textColor;
+        });
+      } else if (sel) {
         self.store.update(sel.id, function (o) { o.color = hex; });
       } else {
         self.color = hex;
@@ -3012,6 +3045,7 @@
     normalizeSceneFontSizes: normalizeSceneFontSizes,
     clampNoteText: clampNoteText,
     estimateNoteBox: estimateNoteBox,
+    pickReadableTextColor: pickReadableTextColor,
     NOTE_MAX_LENGTH: NOTE_MAX_LENGTH,
     NOTE_DEFAULT_BG: NOTE_DEFAULT_BG,
     NOTE_DEFAULT_FONT_SIZE: NOTE_DEFAULT_FONT_SIZE,

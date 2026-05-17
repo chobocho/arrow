@@ -613,6 +613,24 @@
     var hit = s.hitTest({ x: 2000, y: 2000 }, 5);
     assert(hit.handle === 'none', 'no hit far away');
   });
+  test('pickReadableTextColor returns dark on light bg and vice versa', function () {
+    if (!A.pickReadableTextColor) return;
+    // The default sticky-yellow is light enough to demand dark text.
+    assert(A.pickReadableTextColor('#FFF59D') === '#222222', 'light yellow → dark text');
+    assert(A.pickReadableTextColor('#ffffff') === '#222222', 'white → dark text');
+    assert(A.pickReadableTextColor('#000000') === '#ffffff', 'black → white text');
+    assert(A.pickReadableTextColor('#222222') === '#ffffff', 'dark gray → white text');
+    // Garbage input falls back gracefully.
+    assert(A.pickReadableTextColor('not a color') === '#222222', 'invalid input → default dark');
+  });
+  test('SceneStore.update can recolor a note (bgColor + color)', function () {
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: 0, y: 0 }, 'hi');
+    s.update(n.id, function (o) { if (o.type === 'note') { o.bgColor = '#e91e63'; o.color = '#ffffff'; } });
+    var got = s.get().objects[0];
+    assert(got.bgColor === '#e91e63', 'bgColor updated, got ' + got.bgColor);
+    assert(got.color === '#ffffff', 'color updated, got ' + got.color);
+  });
   test('Note text honors clampNoteText helper (255 cap)', function () {
     if (!A.clampNoteText) return; // optional helper
     assert(A.clampNoteText('abc') === 'abc', 'short text passes through');

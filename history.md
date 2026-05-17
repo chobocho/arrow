@@ -4,6 +4,14 @@
 
 ## 2026-05-17
 
+### 메모(Note) 배경색 사용자 변경 지원
+
+- 메모가 선택된 상태에서 색상 입력/팔레트를 조작하면 **메모 배경(bgColor)** 이 즉시 바뀝니다. (이전에는 잘 보이지도 않는 `color`(텍스트색)에만 적용)
+- 텍스트 색은 새 배경의 명도(luma 근사)에 따라 자동으로 검정/흰색이 선택되어 어떤 배경이든 가독성 유지. 헬퍼 `pickReadableTextColor(hex)` 추가.
+- 색상 입력의 selection 동기화도 메모 선택 시 `bgColor`를 표시하도록 갱신 — 팔레트 active 상태가 실제 배경과 일치.
+- Undo로 색 변경 되돌리기 가능(기존 picker-session push 로직 그대로 활용).
+- 테스트 2건 추가(대비 함수의 light/dark/garbage 입력, store.update로 bgColor+color 동시 갱신) — 60/60 통과.
+
 ### 포스트잇 컨셉의 메모(Note) 객체 추가
 
 - 데이터 모델: `NoteObject` 신설 (`type: 'note'`, `pos`, `text`, `width`, `fontSize`, `color`, `bgColor`). 최대 255자(`NOTE_MAX_LENGTH`)로 자동 트림. `normalizeSceneFontSizes`가 note의 fontSize 정수화도 처리.
