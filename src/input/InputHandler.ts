@@ -644,9 +644,11 @@ export class InputHandler {
         const created = this.store.addHighlighter(draft.points, draft.color, draft.thickness);
         this.selectedId = created.id;
         this.cb.onSelect(created.id);
+        // After commit, drop back to Select so the just-drawn stroke is
+        // immediately moveable/resizable — matches arrow/text/note flow.
+        if (this.cb.setMode) this.cb.setMode('select');
       }
       this.cb.onDraftHighlighter(null);
-      // Stay in highlighter mode for consecutive strokes.
     }
     // Pending snapshot belonged to a click-without-drag (or a drag that didn't
     // mutate the scene). Discard it — no undo entry needed.

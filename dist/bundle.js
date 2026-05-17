@@ -1806,9 +1806,11 @@
         var hcreated = this.store.addHighlighter(hdraft.points, hdraft.color, hdraft.thickness);
         this.selectedId = hcreated.id;
         this.cb.onSelect(hcreated.id);
+        // After commit, drop back to Select for immediate edit — matches
+        // arrow/text/note flow.
+        if (this.cb.setMode) this.cb.setMode('select');
       }
       this.cb.onDraftHighlighter(null);
-      // Stay in highlighter mode for consecutive strokes.
     }
     // Pending snapshot belonged to a click-without-drag (or a no-op drag).
     // Discard so undo doesn't get a no-op entry.
