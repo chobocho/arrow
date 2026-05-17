@@ -49,7 +49,11 @@ export function openHelpModal(app: App): void {
     sec.className = 'sec';
     sec.textContent = '[' + t(titleKey) + ']';
     const txt = document.createElement('div');
-    txt.textContent = t(bodyKey);
+    // innerHTML so the i18n strings can embed <kbd> tags around shortcut
+    // keys. All help strings are hardcoded — no user input — so this is
+    // safe. `white-space: pre-line` on .ap-help-body still turns `\n` into
+    // line breaks.
+    txt.innerHTML = t(bodyKey);
     body.append(sec, txt);
     const spacer = document.createElement('div');
     body.appendChild(spacer);

@@ -57,6 +57,14 @@ nav.toc a { text-decoration: none; }
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
 <h2 id="2026-05-17">2026-05-17</h2>
+<h3 id="도움말-모달-단축키-강조">도움말 모달의 모든 단축키를 키 캡 형태로 강조</h3>
+<ul>
+<li>변경: 도움말 본문 렌더링을 <code>textContent</code> → <code>innerHTML</code>로 전환(하드코딩 i18n 문자열만 들어가므로 안전), 모든 단축키 키를 <code>&lt;kbd&gt;</code>로 감쌈. <code>helpModes</code> · <code>helpKeys</code> · <code>helpMouse</code> · <code>helpMobile</code> 모두 한·영 갱신.
+<li>스타일: <code>index.html</code>에 <code>.ap-help-body kbd</code> CSS 추가 — 작은 키 캡(테두리, 모노 폰트, 살짝 강조된 색)으로 표현되어 단축키가 본문 가운데서 한눈에 띔.
+<li><code>helpModes</code>에 누락되어 있던 <strong>N — 메모</strong> 항목도 함께 보강(번들에는 이미 있었지만 TS 소스에서 누락).
+<li>릴리스 단일 파일은 인라인 빌드 시 <code>index.html</code>의 새 CSS도 함께 포함되어 별도 변경 없음.
+</li>
+</ul>
 <h3 id="도움말-모달-갱신">도움말 모달을 새 흐름·기능에 맞춰 갱신</h3>
 <ul>
 <li><code>helpToolbar</code> — "글자 모드 commit 후 자동 select" 안내를 "<strong>입력 도구 4종 모두 commit 후 자동 select</strong>"로 일반화. 단축키(A·T·N·G) 안내 포함.
