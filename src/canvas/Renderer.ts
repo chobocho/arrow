@@ -251,17 +251,27 @@ export class Renderer {
     return { lines, height };
   }
 
+  // Minimum on-screen font size we'll actually draw text at. Below this the
+  // glyphs are unreadable anyway, and skipping them keeps the box geometry
+  // stable (see comment on drawNote about logical-unit layout).
+  private static readonly NOTE_MIN_RENDER_PX = 6;
+
   private drawNote(n: NoteObject, selected: boolean): void {
     const { ctx, view } = this;
     const pos = view.logicalToScreen(n.pos);
+    // Lay out wrapping in LOGICAL units so the line count is stable across
+    // zoom. Previously we wrapped at `fsScreen = max(8, fontSize*scale)`,
+    // which clamped at 8px during zoom-out — the narrower screen-pixel box
+    // could no longer fit the 8px glyphs, so the wrap exploded into more
+    // lines and the box visually grew taller. Wrap in logical, scale the
+    // result, and the box stays geometrically proportional.
+    const innerLogical = Math.max(1, n.width - NOTE_PADDING * 2);
+    const laid = this.layoutNoteText(n.text, innerLogical, n.fontSize);
     const wScreen = n.width * view.scale;
-    const fsScreen = Math.max(8, n.fontSize * view.scale);
-    const padScreen = NOTE_PADDING * view.scale;
-    const innerW = Math.max(1, wScreen - padScreen * 2);
-    const { lines, height } = this.layoutNoteText(n.text, innerW, fsScreen);
-    const hScreen = height;
+    const hScreen = laid.height * view.scale;
 
-    // Subtle drop shadow — keeps post-it feel without obscuring siblings.
+    // Box with a subtle drop shadow — always rendered so the user can still
+    // see/select the note even when the text isn't drawn.
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.18)';
     ctx.shadowBlur = 6 * view.scale;
@@ -271,22 +281,22 @@ export class Renderer {
     ctx.fillRect(pos.x, pos.y, wScreen, hScreen);
     ctx.restore();
 
-    // Text — top-left within the inner padded area.
-    ctx.save();
-    ctx.fillStyle = n.color;
-    ctx.font = `${fsScreen}px sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    const lineHeight = fsScreen * NOTE_LINE_HEIGHT_FACTOR;
-    for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], pos.x + padScreen, pos.y + padScreen + i * lineHeight);
+    // Text — skip when zoomed out far enough that glyphs would be sub-6px and
+    // illegible. Drawing micro-text wastes ctx work and produces visual noise.
+    const fsScreen = n.fontSize * view.scale;
+    if (fsScreen >= Renderer.NOTE_MIN_RENDER_PX) {
+      const padScreen = NOTE_PADDING * view.scale;
+      ctx.save();
+      ctx.fillStyle = n.color;
+      ctx.font = `${fsScreen}px sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const lineHeightScreen = fsScreen * NOTE_LINE_HEIGHT_FACTOR;
+      for (let i = 0; i < laid.lines.length; i++) {
+        ctx.fillText(laid.lines[i], pos.x + padScreen, pos.y + padScreen + i * lineHeightScreen);
+      }
+      ctx.restore();
     }
-    ctx.restore();
-
-    // Persist the measured height back to the model so the SceneStore's cheap
-    // estimate stays close to the rendered truth between frames. (Read-only on
-    // its own — moving / resizing still owns the source of truth.)
-    (n as { _renderedHeight?: number })._renderedHeight = hScreen / view.scale;
 
     if (selected) {
       ctx.save();

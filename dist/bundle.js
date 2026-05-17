@@ -849,16 +849,23 @@
     var height = Math.max(1, lines.length) * lineHeight + NOTE_PADDING * 2;
     return { lines: lines, height: height };
   };
+  // Minimum on-screen font size before we stop drawing glyphs (zoomed out
+  // far enough that text is sub-pixel garbage anyway).
+  var NOTE_MIN_RENDER_PX = 6;
   Renderer.prototype._drawNote = function (n, selected) {
     var ctx = this.ctx, view = this.view;
     var pos = view.logicalToScreen(n.pos);
+    // Lay out the text in LOGICAL units so the line count is stable across
+    // zoom. Previously the wrap ran on screen-pixel font with a floor at 8px;
+    // during zoom-out, the box shrank but the floored font no longer fit, so
+    // the wrap exploded into more lines and the box visually grew taller.
+    // Wrap in logical, scale the result — box geometry stays proportional.
+    var innerLogical = Math.max(1, n.width - NOTE_PADDING * 2);
+    var laid = this._layoutNoteText(n.text, innerLogical, n.fontSize);
     var wScreen = n.width * view.scale;
-    var fsScreen = Math.max(8, n.fontSize * view.scale);
-    var padScreen = NOTE_PADDING * view.scale;
-    var innerW = Math.max(1, wScreen - padScreen * 2);
-    var laid = this._layoutNoteText(n.text, innerW, fsScreen);
-    var hScreen = laid.height;
-    // Subtle drop shadow keeps the post-it feel.
+    var hScreen = laid.height * view.scale;
+    // Box with subtle drop shadow — always drawn so the note is visible/
+    // selectable even when text is skipped at low zoom.
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.18)';
     ctx.shadowBlur = 6 * view.scale;
@@ -867,17 +874,21 @@
     ctx.fillStyle = n.bgColor || NOTE_DEFAULT_BG;
     ctx.fillRect(pos.x, pos.y, wScreen, hScreen);
     ctx.restore();
-    // Text — top-left within the inner padded area.
-    ctx.save();
-    ctx.fillStyle = n.color || '#222';
-    ctx.font = fsScreen + 'px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    var lineHeight = fsScreen * NOTE_LINE_HEIGHT_FACTOR;
-    for (var i = 0; i < laid.lines.length; i++) {
-      ctx.fillText(laid.lines[i], pos.x + padScreen, pos.y + padScreen + i * lineHeight);
+    // Text — skip when zoomed out enough that glyphs are sub-readable.
+    var fsScreen = n.fontSize * view.scale;
+    if (fsScreen >= NOTE_MIN_RENDER_PX) {
+      var padScreen = NOTE_PADDING * view.scale;
+      ctx.save();
+      ctx.fillStyle = n.color || '#222';
+      ctx.font = fsScreen + 'px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      var lineHeightScreen = fsScreen * NOTE_LINE_HEIGHT_FACTOR;
+      for (var i = 0; i < laid.lines.length; i++) {
+        ctx.fillText(laid.lines[i], pos.x + padScreen, pos.y + padScreen + i * lineHeightScreen);
+      }
+      ctx.restore();
     }
-    ctx.restore();
     if (selected) {
       ctx.save();
       ctx.strokeStyle = '#3a7afe';

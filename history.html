@@ -57,6 +57,15 @@ nav.toc a { text-decoration: none; }
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
 <h2 id="2026-05-17">2026-05-17</h2>
+<h3 id="메모-축소-시-박스-크기-변형-버그-수정">메모(Note) 축소 시 박스 크기가 변형되는 버그 수정</h3>
+<ul>
+<li>증상: 캔버스를 축소하면 포스트잇 가로/세로 비율이 일정해 보이지 않음. 어떤 비율에서는 박스가 갑자기 길어졌다 짧아짐.
+<li>원인: 렌더 시 폰트 크기를 <code>Math.max(8, fontSize * view.scale)</code>로 잘라서, 축소 시 박스 너비는 비율대로 줄어드는데 폰트는 8px에서 고정 → 좁아진 박스에 8px 글자가 못 들어가 줄바꿈 수가 늘어남 → 화면상 박스 세로가 다시 커짐.
+<li>수정: 줄바꿈을 항상 <strong>로지컬 폰트 크기</strong>로 계산(<code>_layoutNoteText(text, innerLogical, n.fontSize)</code>), 박스 크기는 그 로지컬 결과를 <code>view.scale</code>로 곱해서 그림. 박스 비율이 줌과 무관하게 안정.
+<li>추가: 실제 렌더링 폰트가 6px(<code>NOTE_MIN_RENDER_PX</code>) 미만이면 글자 자체를 그리지 않음 — 박스만 보임. 가독성 없는 글자에 렌더 비용을 쓰지 않고, 사용자에게도 깔끔.
+<li>hit-test는 이미 로지컬 단위(<code>estimateNoteBox</code>) 기반이라 동작/선택 영역은 그대로 유지.
+</li>
+</ul>
 <h3 id="문서-html-전환">문서 형식 전환 — history.md / TODO.md → history.html / todo.html</h3>
 <ul>
 <li>동기: 작업 이력과 TODO를 브라우저에서 바로 보기 좋게 — 마크다운 뷰어 없이도 색상·계층이 살아남도록 HTML로 전환.
