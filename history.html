@@ -57,6 +57,17 @@ nav.toc a { text-decoration: none; }
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
 <h2 id="2026-05-17">2026-05-17</h2>
+<h3 id="빌드-자동화-esbuild">빌드 자동화 — esbuild로 <code>src/*.ts</code> → <code>dist/bundle.js</code> 자동 생성</h3>
+<ul>
+<li>동기: 그동안 <code>src/*.ts</code>와 <code>dist/bundle.js</code>(vanilla JS IIFE)를 동일 로직으로 손으로 동기화하고 있었음 — 변경마다 두 번 쓰고, 두 곳이 어긋날 가능성 누적(실제로 <code>helpModes</code>의 N 항목 누락 사례 있었음). 한쪽만 유지하고 다른 쪽을 빌드하는 표준 흐름으로 정리.
+<li>도입: <code>esbuild</code>(dev dep) + 작은 <code>scripts/build.mjs</code> 진입 — IIFE 번들 생성 후 <code>release/index.html</code>에 인라인. <code>--global-name</code> 대신 <code>src/index.ts</code>가 <code>globalThis.ArrowApp</code>에 직접 박는 부수효과 + CJS 푸터 한 줄로 노드 <code>require()</code>도 지원(동일 아티팩트가 브라우저·노드 모두 커버).
+<li><code>src/index.ts</code> 신규 — 테스트가 의존하는 ArrowApp 표면(API 함수·클래스·상수)을 한 곳에 모아 노출.
+<li>빌드 스크립트 갱신: <code>build.sh</code> / <code>build.bat</code>이 <code>scripts/build.mjs</code>로 위임. <code>npm install</code>이 없으면 자동 실행. <code>package.json</code>에 <code>build</code> / <code>test</code> / <code>typecheck</code> / <code>watch</code> 등 npm 스크립트 정의.
+<li>테스트 호환: 일부 테스트가 옛 번들의 underscore 컨벤션(<code>_cloneSceneData</code>, <code>_updateUndoRedoUi</code>, <code>_applyHistorySnapshot</code>)을 참조하던 것을 TS 소스 실제 이름으로 정렬 — 65/65 통과.
+<li>빌드 산출물(<code>dist/</code>, <code>release/</code>)을 <code>.gitignore</code>에 추가하고 git 추적에서 제외. 클론 후 <code>npm install && bash build.sh</code> 한 번으로 동일 산출물 재생성 가능.
+<li>릴리스 단일 파일 정책(외부 의존 0)은 그대로 유지 — esbuild는 빌드타임 의존성이며 산출물에는 포함되지 않음.
+</li>
+</ul>
 <h3 id="png-export-파일명-날짜-스탬프">PNG 내보내기 파일명 뒤에 <code>_YYYYMMDD</code> 날짜 스탬프 추가</h3>
 <ul>
 <li>이전: <code>{작업이름}.png</code> — 같은 작업의 여러 시점 백업을 한 폴더에 모으면 덮어쓰기 위험.

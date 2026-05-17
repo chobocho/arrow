@@ -377,19 +377,19 @@
       input: { setSelected: function () {} },
       undoStack: [],
       redoStack: [],
-      _updateUndoRedoUi: function () {},
+      updateUndoRedoUi: function () {},
     };
     // Use prototype methods.
     var P = A.App.prototype;
     var pushHistory = P.pushHistory, commit = P.commitHistorySnapshot;
-    var undo = P.undo, redo = P.redo, applySnap = P._applyHistorySnapshot;
-    var clone = P._cloneSceneData;
-    stub._cloneSceneData = clone;
+    var undo = P.undo, redo = P.redo, applySnap = P.applyHistorySnapshot;
+    var clone = P.cloneSceneData;
+    stub.cloneSceneData = clone;
     stub.pushHistory = pushHistory;
     stub.commitHistorySnapshot = commit;
     stub.undo = undo;
     stub.redo = redo;
-    stub._applyHistorySnapshot = applySnap;
+    stub.applyHistorySnapshot = applySnap;
     // Take a snapshot, mutate, undo, redo.
     stub.pushHistory();
     store.addArrow({ x: 0, y: 0 }, { x: 100, y: 0 }, '#000', 4);
@@ -409,8 +409,8 @@
       input: { setSelected: function () {} },
       undoStack: [],
       redoStack: [],
-      _updateUndoRedoUi: function () {},
-      _cloneSceneData: A.App.prototype._cloneSceneData,
+      updateUndoRedoUi: function () {},
+      cloneSceneData: A.App.prototype.cloneSceneData,
     };
     stub.pushHistory = A.App.prototype.pushHistory;
     stub.commitHistorySnapshot = A.App.prototype.commitHistorySnapshot;
@@ -423,7 +423,7 @@
       store: new A.SceneStore(),
       undoStack: [],
       redoStack: [{ marker: 'old' }],
-      _updateUndoRedoUi: function () {},
+      updateUndoRedoUi: function () {},
     };
     stub.commitHistorySnapshot = A.App.prototype.commitHistorySnapshot;
     stub.commitHistorySnapshot({ marker: 'new' });
