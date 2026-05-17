@@ -63,6 +63,11 @@ export function bindUi(app: App): void {
     app.requestRender();
   });
   ($('#btnDelete')).addEventListener('click', () => void deleteSelected(app));
+  const btnPin = document.getElementById('btnPinNote');
+  if (btnPin) btnPin.addEventListener('click', () => {
+    app.togglePinSelectedNote();
+    updateSelectionUi(app);
+  });
   ($('#btnWorks')).addEventListener('click', () => openWorksModal(app));
   ($('#btnHelp')).addEventListener('click', () => openHelpModal(app));
 
@@ -311,6 +316,16 @@ export function updateModeUi(app: App): void {
 export function updateSelectionUi(app: App): void {
   const btn = document.getElementById('btnDelete');
   if (btn) btn.toggleAttribute('disabled', !app.selectedId);
+  // Pin button: only active for note selections. Reflects current pin state
+  // with the .active class so the user can see whether the toggle will pin
+  // or unpin on the next click.
+  const pinBtn = document.getElementById('btnPinNote');
+  if (pinBtn) {
+    const sel = app.getSelectedObject();
+    const isNote = !!sel && sel.type === 'note';
+    pinBtn.toggleAttribute('disabled', !isNote);
+    pinBtn.classList.toggle('active', isNote && !!(sel as { pinned?: boolean }).pinned);
+  }
 }
 
 // Header title follows the center topic when it has content; otherwise it
@@ -353,6 +368,7 @@ export function applyLangToUi(app: App): void {
   setTip('btnZoomIn', 'zoomIn');
   setTip('btnZoomOut', 'zoomOut');
   setTip('btnDelete', 'delete');
+  setTip('btnPinNote', 'pinNote');
   setTip('btnWorks', 'works');
   setTip('btnHelp', 'help');
   setTip('btnVirtualCtrl', 'cloneToggle');

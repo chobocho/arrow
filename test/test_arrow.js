@@ -631,6 +631,29 @@
     assert(got.bgColor === '#e91e63', 'bgColor updated, got ' + got.bgColor);
     assert(got.color === '#ffffff', 'color updated, got ' + got.color);
   });
+  test('SceneStore hitTest skips pinned notes (handled in screen space)', function () {
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: 100, y: 100 }, 'hi');
+    s.update(n.id, function (o) { if (o.type === 'note') o.pinned = true; });
+    // Logical hit-test must NOT see the pinned note even at its old location.
+    var hit = s.hitTest({ x: 110, y: 115 }, 5);
+    assert(hit.object === null, 'pinned note not returned by logical hit-test');
+  });
+  test('migrateSceneWorld does NOT shift pinned notes', function () {
+    if (!A.migrateSceneWorld) return;
+    if (A.MAX_CANVAS_SIZE === 4096) return; // no-op env
+    var scene = {
+      id: 'p', name: 'p', centerText: '', objects: [
+        { id: 'np', type: 'note', pos: { x: 50, y: 60 }, text: 'pinned', width: 200, fontSize: 16, color: '#222', bgColor: '#ff0', pinned: true },
+        { id: 'nu', type: 'note', pos: { x: 70, y: 80 }, text: 'free',   width: 200, fontSize: 16, color: '#222', bgColor: '#ff0' }
+      ],
+      createdAt: 0, updatedAt: 0, viewOffsetX: 0, viewOffsetY: 0, viewScale: 1
+    };
+    var shift = (A.MAX_CANVAS_SIZE - 4096) / 2;
+    A.migrateSceneWorld(scene);
+    assert(scene.objects[0].pos.x === 50 && scene.objects[0].pos.y === 60, 'pinned pos untouched, got ' + scene.objects[0].pos.x + ',' + scene.objects[0].pos.y);
+    assert(scene.objects[1].pos.x === 70 + shift, 'unpinned note shifted, got ' + scene.objects[1].pos.x);
+  });
   test('migrateSceneWorld shifts legacy 4096 scenes by (MAX-4096)/2', function () {
     if (!A.migrateSceneWorld) return;
     var legacyMax = 4096;

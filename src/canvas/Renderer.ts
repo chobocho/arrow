@@ -46,9 +46,21 @@ export class Renderer {
     }
     if (opts.draftHighlighter) this.drawHighlighter(opts.draftHighlighter, false, true);
     for (const obj of scene.objects) {
-      if (obj.type !== 'highlighter') this.drawObject(obj, obj.id === opts.selectedId);
+      if (obj.type === 'highlighter') continue;
+      if (obj.type === 'note' && obj.pinned) continue; // separate pass below
+      this.drawObject(obj, obj.id === opts.selectedId);
     }
     if (opts.draftArrow) this.drawArrow(opts.draftArrow, false, true);
+
+    // Pinned notes are viewport-fixed — drawn last in screen space so they
+    // sit on top of everything and ignore pan/zoom. The ctx transform here
+    // is just the DPR transform (no view scale), so feeding pos/width/font
+    // directly in screen pixels does the right thing.
+    for (const obj of scene.objects) {
+      if (obj.type === 'note' && obj.pinned) {
+        this.drawPinnedNote(obj, obj.id === opts.selectedId);
+      }
+    }
 
     ctx.restore();
   }
@@ -82,11 +94,15 @@ export class Renderer {
     (this as any).view = tmpView;
 
     // Center marker first, then objects (highlighter under everything else).
+    // Pinned notes are viewport overlay — they don't belong in a static PNG
+    // of the diagram. Users can un-pin if they want them captured.
     this.drawCenter(scene);
     for (const obj of scene.objects) {
+      if (obj.type === 'note' && obj.pinned) continue;
       if (obj.type === 'highlighter') this.drawHighlighter(obj, false, false);
     }
     for (const obj of scene.objects) {
+      if (obj.type === 'note' && obj.pinned) continue;
       if (obj.type !== 'highlighter') this.drawObject(obj, false);
     }
 
@@ -101,6 +117,7 @@ export class Renderer {
     let maxX = MAX_CANVAS_SIZE / 2 + 100;
     let maxY = MAX_CANVAS_SIZE / 2 + 100;
     for (const o of scene.objects) {
+      if (o.type === 'note' && o.pinned) continue; // viewport overlay
       if (o.type === 'arrow') {
         minX = Math.min(minX, o.from.x, o.to.x);
         minY = Math.min(minY, o.from.y, o.to.y);
@@ -302,6 +319,59 @@ export class Renderer {
       ctx.restore();
       // Resize handle at the bottom-right corner — drag to change box width.
       this.drawHandle(pos.x + wScreen, pos.y + hScreen);
+    }
+  }
+
+  // Render a pinned (viewport-fixed) note. pos/width/fontSize are screen
+  // pixels — no view transform. Drawn after everything else so the note
+  // sits on top regardless of pan/zoom. A small pin glyph in the upper-right
+  // corner makes the pinned state visually unambiguous.
+  private drawPinnedNote(n: NoteObject, selected: boolean): void {
+    const { ctx } = this;
+    const innerW = Math.max(1, n.width - NOTE_PADDING * 2);
+    const laid = this.layoutNoteText(n.text, innerW, n.fontSize);
+    const w = n.width;
+    const h = laid.height;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.28)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = n.bgColor;
+    ctx.fillRect(n.pos.x, n.pos.y, w, h);
+    ctx.restore();
+
+    if (n.fontSize >= Renderer.NOTE_MIN_RENDER_PX) {
+      ctx.save();
+      ctx.fillStyle = n.color;
+      ctx.font = `${n.fontSize}px sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const lineHeight = n.fontSize * NOTE_LINE_HEIGHT_FACTOR;
+      for (let i = 0; i < laid.lines.length; i++) {
+        ctx.fillText(laid.lines[i], n.pos.x + NOTE_PADDING, n.pos.y + NOTE_PADDING + i * lineHeight);
+      }
+      ctx.restore();
+    }
+
+    // Pin marker — small badge in the upper-right corner.
+    ctx.save();
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText('📌', n.pos.x + w - 2, n.pos.y + 2);
+    ctx.restore();
+
+    if (selected) {
+      ctx.save();
+      ctx.strokeStyle = '#3a7afe';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(n.pos.x - 2, n.pos.y - 2, w + 4, h + 4);
+      ctx.setLineDash([]);
+      ctx.restore();
+      this.drawHandle(n.pos.x + w, n.pos.y + h);
     }
   }
 

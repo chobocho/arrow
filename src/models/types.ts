@@ -34,12 +34,16 @@ export interface HighlighterObject {
 export interface NoteObject {
   id: ObjectId;
   type: 'note';
-  pos: Vec;          // top-left in logical coordinates
+  // When `pinned` is true, `pos` / `width` / `fontSize` are interpreted as
+  // SCREEN pixels (top-left of the viewport, no zoom scaling). Otherwise they
+  // are logical canvas units like every other object.
+  pos: Vec;
   text: string;      // \n for explicit line breaks; capped at NOTE_MAX_LENGTH
-  width: number;     // box width in logical units; height auto from wrapped text
+  width: number;
   fontSize: number;
   color: string;     // text color
   bgColor: string;   // sticky-note background color
+  pinned?: boolean;
 }
 
 export type SceneObject = ArrowObject | TextObject | HighlighterObject | NoteObject;
@@ -141,8 +145,12 @@ function shiftScene(scene: SceneData, dx: number, dy: number): void {
       o.to.x += dx;   o.to.y += dy;
     } else if (o.type === 'highlighter') {
       for (const p of o.points) { p.x += dx; p.y += dy; }
+    } else if (o.type === 'note' && o.pinned) {
+      // Pinned notes live in screen space — world-extent migration does not
+      // apply, leave them alone.
+      continue;
     } else {
-      // text + note both anchor on pos.
+      // text + (unpinned) note both anchor on pos.
       o.pos.x += dx; o.pos.y += dy;
     }
   }

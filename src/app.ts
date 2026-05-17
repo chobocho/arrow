@@ -315,6 +315,42 @@ export class App {
     return this.store.get().objects.find((o) => o.id === this.selectedId) || null;
   }
 
+  // Toggle the pin state of the currently selected note. Pinning converts the
+  // note's pos/width/fontSize from logical → screen units so the visible size
+  // and on-screen position are preserved across the transition. Unpinning
+  // does the reverse conversion. Logical-space objects pan/zoom with the
+  // canvas; pinned notes float on top in screen coordinates.
+  togglePinSelectedNote(): void {
+    const sel = this.getSelectedObject();
+    if (!sel || sel.type !== 'note') return;
+    this.pushHistory();
+    const scale = this.view.scale;
+    const offset = this.view.offset;
+    if (!sel.pinned) {
+      // Logical → screen: screen = (logical - offset) * scale
+      const screenX = (sel.pos.x - offset.x) * scale;
+      const screenY = (sel.pos.y - offset.y) * scale;
+      this.store.update(sel.id, (o) => {
+        if (o.type !== 'note') return;
+        o.pos = { x: screenX, y: screenY };
+        o.width = o.width * scale;
+        o.fontSize = Math.max(8, Math.round(o.fontSize * scale));
+        o.pinned = true;
+      });
+    } else {
+      // Screen → logical: logical = screen / scale + offset
+      const logicalX = sel.pos.x / scale + offset.x;
+      const logicalY = sel.pos.y / scale + offset.y;
+      this.store.update(sel.id, (o) => {
+        if (o.type !== 'note') return;
+        o.pos = { x: logicalX, y: logicalY };
+        o.width = o.width / scale;
+        o.fontSize = Math.max(8, Math.round(o.fontSize / scale));
+        o.pinned = false;
+      });
+    }
+  }
+
   requestRender(): void {
     if (this.renderScheduled) return;
     this.renderScheduled = true;

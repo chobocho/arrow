@@ -1,6 +1,6 @@
 import { Vec, clampToCanvas, vecDist } from '../utils/geometry.js';
 import { CanvasView } from '../canvas/CanvasView.js';
-import { SceneStore, HitHandle } from '../models/SceneStore.js';
+import { SceneStore, HitHandle, HitResult, estimateNoteBox } from '../models/SceneStore.js';
 import {
   ArrowObject,
   HighlighterObject,
@@ -47,6 +47,9 @@ interface DragState {
   // For moving an object, remember the original anchor positions.
   origin?: any;
   lastScreen: Vec;
+  // Pinned notes use screen-space deltas instead of logical ones for move/
+  // resize. Set when the gesture begins on a pinned note.
+  pinned?: boolean;
 }
 
 // Minimum distance between consecutive captured points in a highlighter
@@ -110,6 +113,32 @@ export class InputHandler {
 
   private toleranceLogical(): number {
     return 12 / this.view.scale;
+  }
+
+  // Screen-space hit test that ONLY considers pinned notes. Called before the
+  // logical store.hitTest so pinned-note clicks short-circuit the canvas-
+  // coordinate path. 12 px tolerance matches the visible handle radius.
+  private hitPinnedNote(screen: Vec): HitResult | null {
+    const tol = 12;
+    const objs = this.store.get().objects;
+    for (let i = objs.length - 1; i >= 0; i--) {
+      const o = objs[i];
+      if (o.type !== 'note' || !o.pinned) continue;
+      const box = estimateNoteBox(o);
+      if (
+        Math.abs(screen.x - (o.pos.x + box.w)) <= tol &&
+        Math.abs(screen.y - (o.pos.y + box.h)) <= tol
+      ) {
+        return { object: o, handle: 'note-resize' };
+      }
+      if (
+        screen.x >= o.pos.x - 2 && screen.x <= o.pos.x + box.w + 2 &&
+        screen.y >= o.pos.y - 2 && screen.y <= o.pos.y + box.h + 2
+      ) {
+        return { object: o, handle: 'note-body' };
+      }
+    }
+    return null;
   }
 
   // Deep-clone the current scene into a snapshot suitable for undo. Cheap
@@ -176,7 +205,7 @@ export class InputHandler {
     e.preventDefault();
     const screen = this.getScreenFromEvent(e);
     const logical = this.view.screenToLogical(screen);
-    this.handleDoubleTap(logical);
+    this.handleDoubleTap(logical, screen);
   };
 
   // --- Touch handlers ---
@@ -190,7 +219,7 @@ export class InputHandler {
         now - this.lastTapTime < DOUBLE_TAP_TIME &&
         vecDist(screen, this.lastTapPos) < TOUCH_TAP_DIST * 2
       ) {
-        this.handleDoubleTap(logical);
+        this.handleDoubleTap(logical, screen);
         this.lastTapTime = 0;
         return;
       }
@@ -277,6 +306,40 @@ export class InputHandler {
       };
       this.selectedId = null;
       this.cb.onSelect(null);
+      this.cb.onChange();
+      return;
+    }
+
+    // Pinned notes live in screen space — check them first against the raw
+    // screen point so a click that visually lands on a pinned note never
+    // falls through to whatever is "below" it in logical coords.
+    const pinned = this.hitPinnedNote(screen);
+    if (pinned && pinned.object && pinned.object.type === 'note') {
+      const note = pinned.object;
+      this.selectedId = note.id;
+      this.cb.onSelect(note.id);
+      this.pendingHistorySnap = this.snapshotScene();
+      if (pinned.handle === 'note-resize') {
+        this.dragging = {
+          kind: 'resize-note',
+          objectId: note.id,
+          startLogical: logical,
+          startScreen: screen,
+          lastScreen: screen,
+          origin: { width: note.width, pos: { ...note.pos } },
+          pinned: true,
+        };
+      } else {
+        this.dragging = {
+          kind: 'move-object',
+          objectId: note.id,
+          startLogical: logical,
+          startScreen: screen,
+          lastScreen: screen,
+          origin: { pos: { ...note.pos } },
+          pinned: true,
+        };
+      }
       this.cb.onChange();
       return;
     }
@@ -475,6 +538,17 @@ export class InputHandler {
     }
     if (drag.kind === 'move-object' && drag.objectId && drag.origin) {
       this.flushPendingHistory();
+      if (drag.pinned) {
+        // Pinned-note drag: screen-space delta applied to the screen-space pos.
+        const dxS = screen.x - drag.startScreen.x;
+        const dyS = screen.y - drag.startScreen.y;
+        const orig = drag.origin as { pos: Vec };
+        this.store.update(drag.objectId, (o) => {
+          if (o.type !== 'note') return;
+          o.pos = { x: orig.pos.x + dxS, y: orig.pos.y + dyS };
+        });
+        return;
+      }
       const startLogical = drag.startLogical;
       const dxLog = logical.x - startLogical.x;
       const dyLog = logical.y - startLogical.y;
@@ -497,9 +571,12 @@ export class InputHandler {
     if (drag.kind === 'resize-note' && drag.objectId && drag.origin) {
       this.flushPendingHistory();
       const orig = drag.origin as { width: number; pos: Vec };
+      // Use screen-space delta for pinned notes (their width is in screen
+      // pixels); logical otherwise.
+      const refX = drag.pinned ? screen.x : logical.x;
       const nextWidth = Math.max(
         NOTE_MIN_WIDTH,
-        Math.min(NOTE_MAX_WIDTH, logical.x - orig.pos.x),
+        Math.min(NOTE_MAX_WIDTH, refX - orig.pos.x),
       );
       this.store.update(drag.objectId, (o) => {
         if (o.type !== 'note') return;
@@ -562,7 +639,17 @@ export class InputHandler {
     this.cb.onChange();
   }
 
-  private handleDoubleTap(logical: Vec): void {
+  private handleDoubleTap(logical: Vec, screen?: Vec): void {
+    // Pinned notes live in screen space — check them first so a dbl-click
+    // visually on a pinned note edits its text (instead of falling through
+    // to whatever sits in logical coords below).
+    if (screen) {
+      const pinned = this.hitPinnedNote(screen);
+      if (pinned && pinned.object && pinned.object.type === 'note') {
+        this.cb.onDoubleClickNote(pinned.object);
+        return;
+      }
+    }
     const tol = this.toleranceLogical();
     const hit = this.store.hitTest(logical, tol);
     if (hit.object && hit.object.type === 'text') {

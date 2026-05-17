@@ -135,8 +135,11 @@
         for (var j = 0; j < o.points.length; j++) {
           o.points[j].x += dx; o.points[j].y += dy;
         }
+      } else if (o.type === 'note' && o.pinned) {
+        // Pinned notes live in screen space — world migration does not apply.
+        continue;
       } else {
-        // text + note both anchor on pos
+        // text + (unpinned) note both anchor on pos
         o.pos.x += dx; o.pos.y += dy;
       }
     }
@@ -321,6 +324,7 @@
       promptName: '작업 이름', promptSaveAs: '새 이름으로 작업 저장', promptRename: '새 이름',
       promptText: '글자를 입력하세요',
       promptNote: '메모를 입력하세요 (최대 255자, Ctrl+Enter 또는 OK)',
+      pinNote: '메모 핀 고정 (화면 위에 고정)',
       confirmDelete: '정말 삭제할까요?', confirmDeleteSelected: '선택한 객체를 삭제할까요?',
       zoomIn: '확대', zoomOut: '축소', fit: '맞춤',
       selectColor: '색상', thickness: '굵기', fontSize: '글자크기',
@@ -365,6 +369,7 @@
       promptName: 'Work name', promptSaveAs: 'Save work as new name', promptRename: 'New name',
       promptText: 'Enter text',
       promptNote: 'Enter a note (max 255 chars; Ctrl+Enter or OK)',
+      pinNote: 'Pin note (stick to viewport)',
       confirmDelete: 'Delete this work?', confirmDeleteSelected: 'Delete the selected object?',
       zoomIn: 'Zoom In', zoomOut: 'Zoom Out', fit: 'Fit',
       selectColor: 'Color', thickness: 'Thickness', fontSize: 'Font Size',
@@ -706,9 +711,21 @@
     if (opts.draftHighlighter) this._drawHighlighter(opts.draftHighlighter, false, true);
     for (var i = 0; i < scene.objects.length; i++) {
       var o2 = scene.objects[i];
-      if (o2.type !== 'highlighter') this._drawObject(o2, o2.id === opts.selectedId, false);
+      if (o2.type === 'highlighter') continue;
+      if (o2.type === 'note' && o2.pinned) continue; // separate pass below
+      this._drawObject(o2, o2.id === opts.selectedId, false);
     }
     if (opts.draftArrow) this._drawArrow(opts.draftArrow, false, true);
+    // Pinned notes are viewport-fixed — drawn last in screen space so they
+    // float on top regardless of pan/zoom. ctx here only has the DPR
+    // transform applied (no view scale), so feeding pos/width/font directly
+    // in screen pixels is correct.
+    for (var pi = 0; pi < scene.objects.length; pi++) {
+      var po = scene.objects[pi];
+      if (po.type === 'note' && po.pinned) {
+        this._drawPinnedNote(po, po.id === opts.selectedId);
+      }
+    }
     ctx.restore();
   };
   // Render to an offscreen canvas sized to the **content** bbox (with
@@ -737,12 +754,17 @@
     tmpView.offset = { x: b.x, y: b.y };
     this.ctx = ctx; this.view = tmpView;
     this._drawCenter(scene);
+    // Pinned notes are viewport overlay — skip in PNG export so the file is
+    // a clean snapshot of the diagram. Users can un-pin if they want them
+    // captured.
     for (var ei = 0; ei < scene.objects.length; ei++) {
       var eo = scene.objects[ei];
+      if (eo.type === 'note' && eo.pinned) continue;
       if (eo.type === 'highlighter') this._drawHighlighter(eo, false, false);
     }
     for (var i = 0; i < scene.objects.length; i++) {
       var io = scene.objects[i];
+      if (io.type === 'note' && io.pinned) continue;
       if (io.type !== 'highlighter') this._drawObject(io, false, false);
     }
     this.ctx = realCtx; this.view = realView;
@@ -753,6 +775,7 @@
     var maxX = MAX_CANVAS_SIZE / 2 + 120, maxY = MAX_CANVAS_SIZE / 2 + 120;
     for (var i = 0; i < scene.objects.length; i++) {
       var o = scene.objects[i];
+      if (o.type === 'note' && o.pinned) continue; // viewport overlay
       if (o.type === 'arrow') {
         minX = Math.min(minX, o.from.x, o.to.x);
         minY = Math.min(minY, o.from.y, o.to.y);
@@ -928,6 +951,53 @@
       ctx.setLineDash([]);
       ctx.restore();
       this._drawHandle(pos.x + wScreen, pos.y + hScreen, false);
+    }
+  };
+  // Render a pinned (viewport-fixed) note. pos/width/fontSize are screen
+  // pixels — no view transform. Drawn after everything else so the note
+  // floats on top regardless of pan/zoom. The 📌 glyph in the corner marks
+  // the pinned state visually.
+  Renderer.prototype._drawPinnedNote = function (n, selected) {
+    var ctx = this.ctx;
+    var innerW = Math.max(1, n.width - NOTE_PADDING * 2);
+    var laid = this._layoutNoteText(n.text, innerW, n.fontSize);
+    var w = n.width;
+    var h = laid.height;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.28)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = n.bgColor || NOTE_DEFAULT_BG;
+    ctx.fillRect(n.pos.x, n.pos.y, w, h);
+    ctx.restore();
+    if (n.fontSize >= NOTE_MIN_RENDER_PX) {
+      ctx.save();
+      ctx.fillStyle = n.color || '#222';
+      ctx.font = n.fontSize + 'px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      var lh = n.fontSize * NOTE_LINE_HEIGHT_FACTOR;
+      for (var i = 0; i < laid.lines.length; i++) {
+        ctx.fillText(laid.lines[i], n.pos.x + NOTE_PADDING, n.pos.y + NOTE_PADDING + i * lh);
+      }
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText('\uD83D\uDCCC', n.pos.x + w - 2, n.pos.y + 2);
+    ctx.restore();
+    if (selected) {
+      ctx.save();
+      ctx.strokeStyle = '#3a7afe';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(n.pos.x - 2, n.pos.y - 2, w + 4, h + 4);
+      ctx.setLineDash([]);
+      ctx.restore();
+      this._drawHandle(n.pos.x + w, n.pos.y + h, false);
     }
   };
   Renderer.prototype._drawHighlighter = function (hl, selected, isDraft) {
@@ -1113,6 +1183,9 @@
   SceneStore.prototype.hitTest = function (point, tolerance) {
     for (var i = this.scene.objects.length - 1; i >= 0; i--) {
       var obj = this.scene.objects[i];
+      // Pinned notes live in screen space — InputHandler tests them
+      // separately against the raw screen point before falling back here.
+      if (obj.type === 'note' && obj.pinned) continue;
       var handle = this._hitObject(obj, point, tolerance);
       if (handle !== 'none') return { object: obj, handle: handle };
     }
@@ -1314,6 +1387,31 @@
     return { x: ev.clientX - rect.left, y: ev.clientY - rect.top };
   };
   InputHandler.prototype._tolLogical = function () { return 12 / this.view.scale; };
+  // Screen-space hit test against pinned notes. Called from _begin and
+  // _handleDoubleTap so a click that visually lands on a pinned note never
+  // falls through to logical-space objects below.
+  InputHandler.prototype._hitPinnedNote = function (screen) {
+    var tol = 12;
+    var objs = this.store.get().objects;
+    for (var i = objs.length - 1; i >= 0; i--) {
+      var o = objs[i];
+      if (o.type !== 'note' || !o.pinned) continue;
+      var box = estimateNoteBox(o);
+      if (
+        Math.abs(screen.x - (o.pos.x + box.w)) <= tol &&
+        Math.abs(screen.y - (o.pos.y + box.h)) <= tol
+      ) {
+        return { object: o, handle: 'note-resize' };
+      }
+      if (
+        screen.x >= o.pos.x - 2 && screen.x <= o.pos.x + box.w + 2 &&
+        screen.y >= o.pos.y - 2 && screen.y <= o.pos.y + box.h + 2
+      ) {
+        return { object: o, handle: 'note-body' };
+      }
+    }
+    return null;
+  };
   InputHandler.prototype._onMouseDown = function (e) {
     e.preventDefault();
     var screen = this._screenFromEvent(e);
@@ -1352,8 +1450,9 @@
   };
   InputHandler.prototype._onDblClick = function (e) {
     e.preventDefault();
-    var logical = this.view.screenToLogical(this._screenFromEvent(e));
-    this._handleDoubleTap(logical);
+    var screen = this._screenFromEvent(e);
+    var logical = this.view.screenToLogical(screen);
+    this._handleDoubleTap(logical, screen);
   };
   InputHandler.prototype._onTouchStart = function (e) {
     e.preventDefault();
@@ -1362,7 +1461,7 @@
       var logical = this.view.screenToLogical(screen);
       var now = performance.now();
       if (now - this.lastTapTime < DOUBLE_TAP_TIME && vecDist(screen, this.lastTapPos) < 16) {
-        this._handleDoubleTap(logical);
+        this._handleDoubleTap(logical, screen);
         this.lastTapTime = 0;
         return;
       }
@@ -1421,6 +1520,37 @@
       this.drag = { kind: 'draft-highlighter', draft: hldraft, lastScreen: screen };
       this.selectedId = null;
       this.cb.onSelect(null);
+      this.cb.onChange();
+      return;
+    }
+    // Pinned notes first — screen-space test so they intercept clicks
+    // before logical-coord objects below.
+    var pinnedHit = this._hitPinnedNote(screen);
+    if (pinnedHit && pinnedHit.object && pinnedHit.object.type === 'note') {
+      var pn = pinnedHit.object;
+      this.selectedId = pn.id;
+      this.cb.onSelect(pn.id);
+      this.pendingHistorySnap = this._snapshotScene();
+      if (pinnedHit.handle === 'note-resize') {
+        this.drag = {
+          kind: 'resize-note',
+          objectId: pn.id,
+          origin: { width: pn.width, pos: { x: pn.pos.x, y: pn.pos.y } },
+          startScreen: screen,
+          lastScreen: screen,
+          pinned: true
+        };
+      } else {
+        this.drag = {
+          kind: 'move-object',
+          objectId: pn.id,
+          origin: { pos: { x: pn.pos.x, y: pn.pos.y } },
+          startScreen: screen,
+          startLogical: logical,
+          lastScreen: screen,
+          pinned: true
+        };
+      }
       this.cb.onChange();
       return;
     }
@@ -1586,6 +1716,17 @@
     }
     if (d.kind === 'move-object') {
       this._flushPendingHistory();
+      if (d.pinned) {
+        // Pinned-note drag: screen-space delta on screen-space pos.
+        var dxS = screen.x - d.startScreen.x;
+        var dyS = screen.y - d.startScreen.y;
+        var po = d.origin;
+        this.store.update(d.objectId, function (o) {
+          if (o.type !== 'note') return;
+          o.pos = { x: po.pos.x + dxS, y: po.pos.y + dyS };
+        });
+        return;
+      }
       var dxLog = logical.x - d.startLogical.x;
       var dyLog = logical.y - d.startLogical.y;
       var origin = d.origin;
@@ -1609,7 +1750,9 @@
     if (d.kind === 'resize-note') {
       this._flushPendingHistory();
       var nOrig = d.origin;
-      var nextW = Math.max(NOTE_MIN_WIDTH, Math.min(NOTE_MAX_WIDTH, logical.x - nOrig.pos.x));
+      // Pinned notes resize in screen space; unpinned in logical.
+      var refX = d.pinned ? screen.x : logical.x;
+      var nextW = Math.max(NOTE_MIN_WIDTH, Math.min(NOTE_MAX_WIDTH, refX - nOrig.pos.x));
       this.store.update(d.objectId, function (o) {
         if (o.type !== 'note') return;
         o.width = nextW;
@@ -1660,7 +1803,15 @@
     this.drag = { kind: 'none' };
     this.cb.onChange();
   };
-  InputHandler.prototype._handleDoubleTap = function (logical) {
+  InputHandler.prototype._handleDoubleTap = function (logical, screen) {
+    // Pinned notes first — screen-space test.
+    if (screen) {
+      var pinHit = this._hitPinnedNote(screen);
+      if (pinHit && pinHit.object && pinHit.object.type === 'note') {
+        if (this.cb.onDoubleClickNote) this.cb.onDoubleClickNote(pinHit.object);
+        return;
+      }
+    }
     var tol = this._tolLogical();
     var hit = this.store.hitTest(logical, tol);
     if (hit.object && hit.object.type === 'text') {
@@ -1943,6 +2094,39 @@
     }
     return null;
   };
+  // Toggle pin state of the selected note. Pinning converts pos/width/font
+  // from logical → screen so visible size/position survives the transition;
+  // unpinning reverses. Pinned notes float on top of everything in screen
+  // space and ignore pan/zoom; unpinned notes live in the canvas world.
+  App.prototype.togglePinSelectedNote = function () {
+    var sel = this._getSelectedObject();
+    if (!sel || sel.type !== 'note') return;
+    this.pushHistory();
+    var scale = this.view.scale;
+    var offset = this.view.offset;
+    if (!sel.pinned) {
+      var sx = (sel.pos.x - offset.x) * scale;
+      var sy = (sel.pos.y - offset.y) * scale;
+      this.store.update(sel.id, function (o) {
+        if (o.type !== 'note') return;
+        o.pos = { x: sx, y: sy };
+        o.width = o.width * scale;
+        o.fontSize = Math.max(8, Math.round(o.fontSize * scale));
+        o.pinned = true;
+      });
+    } else {
+      var lx = sel.pos.x / scale + offset.x;
+      var ly = sel.pos.y / scale + offset.y;
+      this.store.update(sel.id, function (o) {
+        if (o.type !== 'note') return;
+        o.pos = { x: lx, y: ly };
+        o.width = o.width / scale;
+        o.fontSize = Math.max(8, Math.round(o.fontSize / scale));
+        o.pinned = false;
+      });
+    }
+    this._updateSelectionUi();
+  };
   // Mirror the font-size input to the selected text's size so the user sees
   // the current value and edits it in place; otherwise show the default.
   App.prototype._syncFontInputToSelection = function () {
@@ -2062,6 +2246,10 @@
       self._requestRender();
     });
     byId('btnDelete').addEventListener('click', function () { self._deleteSelected(); });
+    var btnPin = document.getElementById('btnPinNote');
+    if (btnPin) btnPin.addEventListener('click', function () {
+      self.togglePinSelectedNote();
+    });
     byId('btnWorks').addEventListener('click', function () { self._openWorksModal(); });
     byId('btnHelp').addEventListener('click', function () { self._openHelpModal(); });
     // Chain icon — opens a popup with a single-line input. Typing
@@ -2306,6 +2494,14 @@
       if (this.selectedId) btn.removeAttribute('disabled');
       else btn.setAttribute('disabled', '');
     }
+    var pin = document.getElementById('btnPinNote');
+    if (pin) {
+      var sel = this._getSelectedObject();
+      var isNote = !!sel && sel.type === 'note';
+      if (isNote) pin.removeAttribute('disabled');
+      else pin.setAttribute('disabled', '');
+      pin.classList.toggle('active', isNote && !!sel.pinned);
+    }
   };
   // Header title follows the center topic when it has content; otherwise it
   // falls back to the saved scene name, and finally to the i18n "untitled"
@@ -2345,6 +2541,7 @@
     setTip('btnZoomIn', 'zoomIn');
     setTip('btnZoomOut', 'zoomOut');
     setTip('btnDelete', 'delete');
+    setTip('btnPinNote', 'pinNote');
     setTip('btnWorks', 'works');
     setTip('btnHelp', 'help');
     setTip('btnVirtualCtrl', 'cloneToggle');
@@ -2792,6 +2989,7 @@
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (var i = 0; i < scene.objects.length; i++) {
       var o = scene.objects[i];
+      if (o.type === 'note' && o.pinned) continue; // viewport overlay
       if (o.type === 'arrow') {
         minX = Math.min(minX, o.from.x, o.to.x);
         minY = Math.min(minY, o.from.y, o.to.y);

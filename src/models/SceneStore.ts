@@ -166,10 +166,13 @@ export class SceneStore {
   }
 
   // Hit test in logical coordinates. Returns the topmost (latest drawn) object
-  // and which handle was hit, if any.
+  // and which handle was hit, if any. Pinned notes live in screen space and
+  // are skipped here — the InputHandler tests them separately against the raw
+  // screen point before falling back to this logical pass.
   hitTest(point: Vec, tolerance: number): HitResult {
     for (let i = this.scene.objects.length - 1; i >= 0; i--) {
       const obj = this.scene.objects[i];
+      if (obj.type === 'note' && obj.pinned) continue;
       const hit = this.hitObject(obj, point, tolerance);
       if (hit.handle !== 'none') return { object: obj, handle: hit.handle };
     }
