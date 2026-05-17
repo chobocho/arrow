@@ -193,8 +193,6 @@
     </div>
     <div class="spacer"></div>
     <div class="group">
-      <button class="tool icon" id="btnZoomIn" title="확대">➕</button>
-      <button class="tool icon" id="btnZoomOut" title="축소">➖</button>
       <button class="tool icon" id="btnFit" title="맞춤">🔳</button>
     </div>
     <div class="group">
@@ -3141,14 +3139,6 @@
     const btnRedo = document.getElementById("btnRedo");
     if (btnRedo) btnRedo.addEventListener("click", () => app.redo());
     $("#btnFit").addEventListener("click", () => fitToScreen(app));
-    $("#btnZoomIn").addEventListener("click", () => {
-      app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, 1.2);
-      app.requestRender();
-    });
-    $("#btnZoomOut").addEventListener("click", () => {
-      app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, 1 / 1.2);
-      app.requestRender();
-    });
     $("#btnDelete").addEventListener("click", () => void deleteSelected(app));
     const btnPin = document.getElementById("btnPinNote");
     if (btnPin) btnPin.addEventListener("click", () => {
@@ -3341,6 +3331,10 @@
   function bindEditMenu(app) {
     const trigger = document.getElementById("btnEdit");
     if (!trigger) return;
+    const zoomAtCenter = (factor) => {
+      app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, factor);
+      app.requestRender();
+    };
     const items = [
       {
         emoji: "\u{1F520}",
@@ -3365,8 +3359,11 @@
             const n = insertChain(app, raw);
             if (n > 0) app.flashStatus("+ chain (" + n + ")");
           });
-        }
-      }
+        },
+        separatorAfter: true
+      },
+      { emoji: "\u2795", label: () => t("zoomIn"), onSelect: () => zoomAtCenter(1.2) },
+      { emoji: "\u2796", label: () => t("zoomOut"), onSelect: () => zoomAtCenter(1 / 1.2) }
     ];
     createDropdownMenu(trigger, items);
   }
@@ -3440,8 +3437,6 @@
     setTip("btnUndo", "undo");
     setTip("btnRedo", "redo");
     setTip("btnFit", "fit");
-    setTip("btnZoomIn", "zoomIn");
-    setTip("btnZoomOut", "zoomOut");
     setTip("btnDelete", "delete");
     setTip("btnPinNote", "pinNote");
     setTip("btnFile", "menuFile");

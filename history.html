@@ -56,6 +56,15 @@ nav.toc a { text-decoration: none; }
 <body>
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
+<h2 id="2026-05-17e">2026-05-17 — 확대/축소(➕➖)를 편집 메뉴로 이동</h2>
+<h3 id="zoom-into-edit-menu">툴바 ➕/➖ 버튼을 ✏️ 편집 메뉴 항목으로 통합</h3>
+<ul>
+<li>의도: 헤더 가로 폭을 한 단계 더 줄임. 🔳 맞춤은 단일 액션이라 툴바에 남김(휠/핀치로도 가능한 ±는 메뉴로 충분).
+<li>편집 메뉴 끝에 ➕ 확대 / ➖ 축소 항목 추가. 핸들러는 기존 <code>view.zoomAt(viewport center, 1.2 또는 1/1.2)</code> 그대로 — <code>zoomAtCenter</code> 헬퍼로 묶음.
+<li>정리: <code>btnZoomIn</code>/<code>btnZoomOut</code> 직접 클릭 핸들러와 i18n tip 제거.
+<li>80/80 통과.
+</li>
+</ul>
 <h2 id="2026-05-17d">2026-05-17 — ✏️ 편집 메뉴 추가</h2>
 <h3 id="편집-메뉴-주제크기-체인">툴바의 주제 크기 입력 + 🦀 체인 버튼을 편집 메뉴로 이동</h3>
 <ul>

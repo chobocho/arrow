@@ -44,14 +44,6 @@ export function bindUi(app: App): void {
   const btnRedo = document.getElementById('btnRedo');
   if (btnRedo) btnRedo.addEventListener('click', () => app.redo());
   ($('#btnFit')).addEventListener('click', () => fitToScreen(app));
-  ($('#btnZoomIn')).addEventListener('click', () => {
-    app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, 1.2);
-    app.requestRender();
-  });
-  ($('#btnZoomOut')).addEventListener('click', () => {
-    app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, 1 / 1.2);
-    app.requestRender();
-  });
   ($('#btnDelete')).addEventListener('click', () => void deleteSelected(app));
   const btnPin = document.getElementById('btnPinNote');
   if (btnPin) btnPin.addEventListener('click', () => {
@@ -281,6 +273,10 @@ function bindFileMenu(app: App): void {
 function bindEditMenu(app: App): void {
   const trigger = document.getElementById('btnEdit') as HTMLButtonElement | null;
   if (!trigger) return;
+  const zoomAtCenter = (factor: number): void => {
+    app.view.zoomAt({ x: app.view.width / 2, y: app.view.height / 2 }, factor);
+    app.requestRender();
+  };
   const items: DropdownItem[] = [
     {
       emoji: '🔠',
@@ -307,7 +303,10 @@ function bindEditMenu(app: App): void {
           if (n > 0) app.flashStatus('+ chain (' + n + ')');
         });
       },
+      separatorAfter: true,
     },
+    { emoji: '➕', label: () => t('zoomIn'), onSelect: () => zoomAtCenter(1.2) },
+    { emoji: '➖', label: () => t('zoomOut'), onSelect: () => zoomAtCenter(1 / 1.2) },
   ];
   createDropdownMenu(trigger, items);
 }
@@ -397,8 +396,6 @@ export function applyLangToUi(app: App): void {
   setTip('btnUndo', 'undo');
   setTip('btnRedo', 'redo');
   setTip('btnFit', 'fit');
-  setTip('btnZoomIn', 'zoomIn');
-  setTip('btnZoomOut', 'zoomOut');
   setTip('btnDelete', 'delete');
   setTip('btnPinNote', 'pinNote');
   setTip('btnFile', 'menuFile');
