@@ -709,6 +709,103 @@
     assert(A.clampNoteText(long).length === 255, 'long text capped at 255');
   });
 
+  // ---- coverage gaps (added on test audit) ----
+  test('estimateNoteBox returns box width = note.width and at least 1 line', function () {
+    if (!A.estimateNoteBox) return;
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: 0, y: 0 }, 'short');
+    var box = A.estimateNoteBox(n);
+    assert(box.w === n.width, 'w matches stored width');
+    assert(box.lines >= 1, 'at least one rendered line');
+    assert(box.h > 0, 'positive height');
+  });
+  test('estimateNoteBox grows with explicit \\n line breaks', function () {
+    if (!A.estimateNoteBox) return;
+    var s = new A.SceneStore();
+    var one = s.addNote({ x: 0, y: 0 }, 'a');
+    var three = s.addNote({ x: 0, y: 0 }, 'a\nb\nc');
+    var b1 = A.estimateNoteBox(one);
+    var b3 = A.estimateNoteBox(three);
+    assert(b3.lines > b1.lines, '\\n bumps line count, got ' + b1.lines + ' → ' + b3.lines);
+    assert(b3.h > b1.h, 'taller box for taller text');
+  });
+
+  test('SceneStore.replace swaps the live scene and emits to subscribers', function () {
+    var s = new A.SceneStore();
+    s.addArrow({ x: 0, y: 0 }, { x: 10, y: 0 }, '#000', 4);
+    var calls = 0;
+    s.subscribe(function () { calls++; });
+    var fresh = A.emptyScene('replaced');
+    fresh.centerText = 'X';
+    s.replace(fresh);
+    assert(s.get().name === 'replaced', 'name swapped');
+    assert(s.get().centerText === 'X', 'centerText swapped');
+    assert(s.get().objects.length === 0, 'objects cleared');
+    assert(calls === 1, 'replace emits exactly once, got ' + calls);
+  });
+
+  test('migrateSceneWorld with arbitrary saved worldSize shifts to current MAX', function () {
+    if (!A.migrateSceneWorld) return;
+    var saved = A.MAX_CANVAS_SIZE / 2;
+    if (saved === A.MAX_CANVAS_SIZE) return; // pathological env
+    var scene = {
+      id: 'a', name: 'a', centerText: '', worldSize: saved,
+      objects: [{ id: 't', type: 'text', pos: { x: 10, y: 20 }, text: 'x', fontSize: 16, color: '#000' }],
+      createdAt: 0, updatedAt: 0, viewOffsetX: 0, viewOffsetY: 0, viewScale: 1
+    };
+    var did = A.migrateSceneWorld(scene);
+    assert(did === true, 'migration ran');
+    var shift = (A.MAX_CANVAS_SIZE - saved) / 2;
+    assert(scene.objects[0].pos.x === 10 + shift, 'text shifted by (MAX-saved)/2');
+    assert(scene.worldSize === A.MAX_CANVAS_SIZE, 'worldSize bumped to MAX');
+    // Calling again is a no-op now.
+    var did2 = A.migrateSceneWorld(scene);
+    assert(did2 === false, 'second call is no-op');
+  });
+
+  test('clampNoteText returns empty string for non-string input', function () {
+    if (!A.clampNoteText) return;
+    assert(A.clampNoteText(null) === '', 'null → ""');
+    assert(A.clampNoteText(undefined) === '', 'undefined → ""');
+    assert(A.clampNoteText(123) === '', 'number → ""');
+    assert(A.clampNoteText({ x: 1 }) === '', 'object → ""');
+  });
+
+  test('pickReadableTextColor handles null / undefined / empty string', function () {
+    if (!A.pickReadableTextColor) return;
+    assert(A.pickReadableTextColor(null) === '#222222', 'null → dark default');
+    assert(A.pickReadableTextColor(undefined) === '#222222', 'undefined → dark default');
+    assert(A.pickReadableTextColor('') === '#222222', 'empty string → dark default');
+  });
+
+  test('floorFontSize clamps negative input to the 1px floor', function () {
+    if (!A.floorFontSize) return;
+    // floor of a negative value would be e.g. -5, but the helper enforces a
+    // minimum of 1 so the renderer never sees zero / negative font sizes.
+    assert(A.floorFontSize(-5) === 1, '-5 → 1');
+    assert(A.floorFontSize(-0.4) === 1, '-0.4 → 1');
+    assert(A.floorFontSize(0) === 1, '0 → 1');
+  });
+
+  test('normalizeSceneFontSizes repairs decimal fontSize on note objects', function () {
+    if (!A.normalizeSceneFontSizes) return;
+    var scene = {
+      id: 'n', name: 'n', centerText: '',
+      objects: [
+        { id: 'n1', type: 'note', pos: { x: 0, y: 0 }, text: 'a', width: 200,
+          fontSize: 19.7, color: '#222', bgColor: '#ff0' },
+        { id: 'n2', type: 'note', pos: { x: 0, y: 0 }, text: 'b', width: 200,
+          fontSize: 'oops', color: '#222', bgColor: '#ff0' }
+      ],
+      createdAt: 0, updatedAt: 0, viewOffsetX: 0, viewOffsetY: 0, viewScale: 1
+    };
+    A.normalizeSceneFontSizes(scene);
+    assert(scene.objects[0].fontSize === 19, 'note 19.7 floored to 19');
+    assert(typeof scene.objects[1].fontSize === 'number'
+      && Number.isInteger(scene.objects[1].fontSize)
+      && scene.objects[1].fontSize >= 1, 'bad note fontSize replaced with integer ≥ 1');
+  });
+
   // ---- summary ----
   var ok = results.length - failed;
   var msg = 'TOTAL ' + results.length + ' / PASS ' + ok + ' / FAIL ' + failed;
