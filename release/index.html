@@ -2947,12 +2947,8 @@
     stylesInjected2 = true;
     const style = document.createElement("style");
     style.textContent = `
-    .ap-menu-wrap { position: relative; display: inline-block; }
     .ap-menu-panel {
-      position: absolute;
-      top: 100%;
-      right: 0;
-      margin-top: 4px;
+      position: fixed;
       min-width: 180px;
       background: #fff;
       border: 1px solid #e2e2ea;
@@ -2992,21 +2988,30 @@
   `;
     document.head.appendChild(style);
   }
-  function wrapTrigger(trigger) {
-    const parent = trigger.parentElement;
-    if (parent && parent.classList.contains("ap-menu-wrap")) return parent;
-    const wrap = document.createElement("div");
-    wrap.className = "ap-menu-wrap";
-    if (parent) parent.insertBefore(wrap, trigger);
-    wrap.appendChild(trigger);
-    return wrap;
+  function positionPanel(panel, trigger) {
+    const rect = trigger.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 4;
+    panel.style.left = "0px";
+    panel.style.top = "-9999px";
+    const panelRect = panel.getBoundingClientRect();
+    let left = rect.right - panelRect.width;
+    if (left < margin) left = Math.min(rect.left, vw - panelRect.width - margin);
+    if (left < margin) left = margin;
+    let top = rect.bottom + margin;
+    if (top + panelRect.height > vh - margin) {
+      top = Math.max(margin, rect.top - panelRect.height - margin);
+    }
+    panel.style.left = left + "px";
+    panel.style.top = top + "px";
   }
   function createDropdownMenu(trigger, items) {
     injectStyles2();
-    const wrap = wrapTrigger(trigger);
     let panel = null;
     let onDocPointerDown = null;
     let onDocKeyDown = null;
+    let onViewportChange = null;
     function close() {
       if (!panel) return;
       panel.remove();
@@ -3018,6 +3023,11 @@
       if (onDocKeyDown) {
         document.removeEventListener("keydown", onDocKeyDown, true);
         onDocKeyDown = null;
+      }
+      if (onViewportChange) {
+        window.removeEventListener("resize", onViewportChange);
+        window.removeEventListener("scroll", onViewportChange, true);
+        onViewportChange = null;
       }
     }
     function render() {
@@ -3042,7 +3052,7 @@
         btn.addEventListener("click", () => {
           if (item.disabled && item.disabled()) return;
           close();
-          Promise.resolve().then(() => item.onSelect());
+          item.onSelect();
         });
         p.appendChild(btn);
         if (item.separatorAfter) {
@@ -3056,7 +3066,8 @@
     function open() {
       if (panel) return;
       panel = render();
-      wrap.appendChild(panel);
+      document.body.appendChild(panel);
+      positionPanel(panel, trigger);
       onDocPointerDown = (ev) => {
         const target = ev.target;
         if (!target) return;
@@ -3072,8 +3083,11 @@
           trigger.focus();
         }
       };
+      onViewportChange = () => close();
       document.addEventListener("pointerdown", onDocPointerDown, true);
       document.addEventListener("keydown", onDocKeyDown, true);
+      window.addEventListener("resize", onViewportChange);
+      window.addEventListener("scroll", onViewportChange, true);
     }
     trigger.addEventListener("click", (ev) => {
       ev.preventDefault();
@@ -3842,7 +3856,8 @@
     App,
     setLang,
     getLang,
-    t
+    t,
+    createDropdownMenu
   };
   globalThis.ArrowApp = ArrowApp;
   function boot() {

@@ -56,6 +56,15 @@ nav.toc a { text-decoration: none; }
 <body>
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
+<h2 id="2026-05-17c">2026-05-17 — 드롭다운 클리핑 버그 수정</h2>
+<h3 id="dropdown-fixed-positioning">툴바 메뉴 패널이 헤더에 가려 보이지 않던 문제 수정</h3>
+<ul>
+<li>증상: 📁/❓ 버튼을 눌러도 메뉴가 나타나지 않음.
+<li>원인: <code>header</code>가 <code>overflow-x: auto</code>라 자식 영역의 세로 overflow도 강제 clip — <code>position: absolute; top: 100%</code>로 헤더 바깥으로 나가는 패널이 잘림. (CSS: overflow-x가 visible이 아닐 때 overflow-y도 visible이 아님으로 동작)
+<li>수정: 패널을 트리거 옆이 아니라 <code>document.body</code>에 부착하고 <code>position: fixed</code>로 변경. 좌표는 <code>getBoundingClientRect()</code>로 매 open 시 계산. 우측 정렬을 우선하되 뷰포트 좌우/하단에 가까울 때 자동으로 좌측 정렬·위쪽 배치로 폴백. window resize/scroll 발생 시 자동 close.
+<li>트리거 래핑 (.ap-menu-wrap) 제거 — 더는 positioned ancestor가 필요 없음. 80/80 통과 유지.
+</li>
+</ul>
 <h2 id="2026-05-17b">2026-05-17 — 툴바 메뉴 통합</h2>
 <h3 id="파일-도움말-메뉴-통합">📁 파일 / ❓ 도움말 드롭다운 메뉴로 9개 버튼을 2개로 통합</h3>
 <ul>

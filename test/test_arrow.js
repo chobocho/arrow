@@ -817,9 +817,7 @@
     return btn;
   }
   function cleanupTrigger(btn) {
-    var wrap = btn.parentElement;
-    if (wrap && wrap.classList.contains('ap-menu-wrap')) wrap.remove();
-    else btn.remove();
+    btn.remove();
   }
 
   test('Dropdown: trigger click opens the panel', function () {

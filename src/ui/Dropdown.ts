@@ -1,7 +1,13 @@
 // Lightweight dropdown menu used by the File / Help toolbar buttons.
 // The toolbar carries one trigger button per menu; clicking it opens a panel
-// below the button with one row per action. The panel closes on outside
-// click, Esc, or after a menu item runs.
+// below the button. The panel closes on outside click, Esc, scroll/resize,
+// or after a menu item runs.
+//
+// The panel is mounted on document.body with position: fixed so it escapes
+// the header's overflow clipping (the toolbar sets overflow-x: auto, which
+// also clips overflow-y for descendants). Coordinates are computed from
+// the trigger's bounding rect each open so right-edge alignment still works
+// at any zoom / viewport size.
 //
 // No CSS file — styles are injected once on first open so the artifact stays
 // a single index.html + dist/bundle.js (no extra fetches).
@@ -31,12 +37,8 @@ function injectStyles(): void {
   stylesInjected = true;
   const style = document.createElement('style');
   style.textContent = `
-    .ap-menu-wrap { position: relative; display: inline-block; }
     .ap-menu-panel {
-      position: absolute;
-      top: 100%;
-      right: 0;
-      margin-top: 4px;
+      position: fixed;
       min-width: 180px;
       background: #fff;
       border: 1px solid #e2e2ea;
@@ -77,17 +79,28 @@ function injectStyles(): void {
   document.head.appendChild(style);
 }
 
-// Wrap an existing trigger button in a positioned container so the menu
-// panel can sit directly under it. Returns the wrapper so the caller can
-// reuse it if needed (e.g. when restyling the trigger).
-function wrapTrigger(trigger: HTMLButtonElement): HTMLElement {
-  const parent = trigger.parentElement;
-  if (parent && parent.classList.contains('ap-menu-wrap')) return parent;
-  const wrap = document.createElement('div');
-  wrap.className = 'ap-menu-wrap';
-  if (parent) parent.insertBefore(wrap, trigger);
-  wrap.appendChild(trigger);
-  return wrap;
+// Anchor the panel under the trigger, aligned to its right edge. Falls back
+// to left-align when right-align would overflow the viewport (common with
+// narrow phones in landscape). Vertical placement clamps to keep the panel
+// fully on-screen.
+function positionPanel(panel: HTMLDivElement, trigger: HTMLElement): void {
+  const rect = trigger.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const margin = 4;
+  // Measure after a layout pass so width is real.
+  panel.style.left = '0px';
+  panel.style.top = '-9999px';
+  const panelRect = panel.getBoundingClientRect();
+  let left = rect.right - panelRect.width;
+  if (left < margin) left = Math.min(rect.left, vw - panelRect.width - margin);
+  if (left < margin) left = margin;
+  let top = rect.bottom + margin;
+  if (top + panelRect.height > vh - margin) {
+    top = Math.max(margin, rect.top - panelRect.height - margin);
+  }
+  panel.style.left = left + 'px';
+  panel.style.top = top + 'px';
 }
 
 export function createDropdownMenu(
@@ -95,10 +108,10 @@ export function createDropdownMenu(
   items: DropdownItem[],
 ): DropdownHandle {
   injectStyles();
-  const wrap = wrapTrigger(trigger);
   let panel: HTMLDivElement | null = null;
   let onDocPointerDown: ((ev: Event) => void) | null = null;
   let onDocKeyDown: ((ev: KeyboardEvent) => void) | null = null;
+  let onViewportChange: (() => void) | null = null;
 
   function close(): void {
     if (!panel) return;
@@ -111,6 +124,11 @@ export function createDropdownMenu(
     if (onDocKeyDown) {
       document.removeEventListener('keydown', onDocKeyDown, true);
       onDocKeyDown = null;
+    }
+    if (onViewportChange) {
+      window.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('scroll', onViewportChange, true);
+      onViewportChange = null;
     }
   }
 
@@ -151,7 +169,8 @@ export function createDropdownMenu(
   function open(): void {
     if (panel) return;
     panel = render();
-    wrap.appendChild(panel);
+    document.body.appendChild(panel);
+    positionPanel(panel, trigger);
     onDocPointerDown = (ev: Event): void => {
       const target = ev.target as Node | null;
       if (!target) return;
@@ -167,8 +186,11 @@ export function createDropdownMenu(
         trigger.focus();
       }
     };
+    onViewportChange = (): void => close();
     document.addEventListener('pointerdown', onDocPointerDown, true);
     document.addEventListener('keydown', onDocKeyDown, true);
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, true);
   }
 
   trigger.addEventListener('click', (ev) => {
