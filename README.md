@@ -170,8 +170,8 @@ arrow/
 ├─ build.sh / build.bat
 ├─ docs/                     # 아키텍처 다이어그램 + intro 마인드맵 (SVG/JSON)
 │  └─ examples/spec.arrow    # .arrow 포맷 샘플
-├─ history.md                # 작업 이력
-├─ TODO.md                   # 작업 항목 체크리스트
+├─ history.html              # 작업 이력 (브라우저에서 바로 열림)
+├─ todo.html                 # 작업 항목 체크리스트 (브라우저에서 바로 열림)
 └─ release/index.html        # 빌드 산출물 (단일 파일)
 ```
 
@@ -230,4 +230,4 @@ python -m http.server 8001
 
 ## 작업 이력
 
-`history.md` 참고. 작업 항목 체크리스트는 `TODO.md`.
+`history.html` 참고 (브라우저에서 바로 열림). 작업 항목 체크리스트는 `todo.html`.
