@@ -1993,9 +1993,12 @@
         var created = this.store.addArrow(draft.from, draft.to, draft.color, draft.thickness);
         this.selectedId = created.id;
         this.cb.onSelect(created.id);
+        // After a successful commit, drop back to Select so the just-drawn
+        // arrow is immediately moveable / resizable — matches the text/note
+        // flow.
+        if (this.cb.setMode) this.cb.setMode('select');
       }
       this.cb.onDraftChange(null);
-      // Stay in arrow mode to allow chaining multiple arrows.
     } else if (d.kind === 'draft-highlighter') {
       var hdraft = d.draft;
       var total = 0;

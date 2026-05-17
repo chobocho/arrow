@@ -625,10 +625,13 @@ export class InputHandler {
         const created = this.store.addArrow(draft.from, draft.to, draft.color, draft.thickness);
         this.selectedId = created.id;
         this.cb.onSelect(created.id);
+        // After a successful commit, drop back to Select so the just-drawn
+        // arrow is immediately moveable / resizable — matches the text/note
+        // flow. (Earlier builds stayed in arrow mode for chained drawing; the
+        // user reversed that preference — see history 2026-05-17.)
+        if (this.cb.setMode) this.cb.setMode('select');
       }
       this.cb.onDraftChange(null);
-      // Stay in arrow mode so users can chain multiple arrows without
-      // re-selecting the tool each time.
     } else if (drag.kind === 'draft-highlighter' && drag.origin?.draft) {
       const draft: HighlighterObject = drag.origin.draft;
       // Single tap (one point) still commits as a dot; multi-point strokes
