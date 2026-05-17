@@ -1417,7 +1417,17 @@
     var screen = this._screenFromEvent(e);
     var logical = this.view.screenToLogical(screen);
     if (e.button === 2) {
-      // Right-click: select the object under the cursor (or deselect on empty).
+      // Right-click: pinned-note hit → select + unpin. Otherwise fall through
+      // to the normal logical hit-test (select or deselect on empty).
+      var pinHit = this._hitPinnedNote(screen);
+      if (pinHit && pinHit.object && pinHit.object.type === 'note') {
+        this.selectedId = pinHit.object.id;
+        this.cb.onSelect(this.selectedId);
+        if (this.cb.onUnpinNote) this.cb.onUnpinNote(pinHit.object);
+        this.drag = { kind: 'none', lastScreen: screen };
+        this.cb.onChange();
+        return;
+      }
       var tol = this._tolLogical();
       var hit = this.store.hitTest(logical, tol);
       this.selectedId = hit.object ? hit.object.id : null;
@@ -1919,6 +1929,11 @@
             self.store.update(obj.id, function (o) { if (o.type === 'text') o.text = txt; });
           }
         });
+      },
+      onUnpinNote: function () {
+        // Selection already moved to the pinned note by the right-click
+        // handler — togglePin flips its pinned flag off.
+        self.togglePinSelectedNote();
       },
       onDoubleClickNote: function (obj) {
         customPrompt(t('promptNote'), obj.text, '', { multiline: true, maxLength: NOTE_MAX_LENGTH }).then(function (txt) {

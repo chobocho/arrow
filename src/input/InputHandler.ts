@@ -28,6 +28,9 @@ export interface InputCallbacks {
   onDoubleClickEmpty: (logical: Vec) => void;
   onDoubleClickText: (text: TextObject) => void;
   onDoubleClickNote: (note: NoteObject) => void;
+  // Right-click on a pinned note → unpin it. Empty / non-pinned right-click
+  // keeps its normal select-or-deselect behavior.
+  onUnpinNote?: (note: NoteObject) => void;
   onDraftChange: (draft: ArrowObject | null) => void;
   onDraftHighlighter: (draft: HighlighterObject | null) => void;
   // Returns true when a "clone modifier" is active (mobile virtual Ctrl button).
@@ -163,7 +166,17 @@ export class InputHandler {
     const screen = this.getScreenFromEvent(e);
     const logical = this.view.screenToLogical(screen);
     if (e.button === 2) {
-      // Right-click: select the object under the cursor (or deselect on empty).
+      // Right-click: pinned-note hit → select + unpin. Otherwise fall through
+      // to the normal logical hit-test (select or deselect on empty).
+      const pinned = this.hitPinnedNote(screen);
+      if (pinned && pinned.object && pinned.object.type === 'note') {
+        this.selectedId = pinned.object.id;
+        this.cb.onSelect(this.selectedId);
+        if (this.cb.onUnpinNote) this.cb.onUnpinNote(pinned.object);
+        this.dragging = { kind: 'none', startLogical: logical, startScreen: screen, lastScreen: screen };
+        this.cb.onChange();
+        return;
+      }
       const tol = this.toleranceLogical();
       const hit = this.store.hitTest(logical, tol);
       this.selectedId = hit.object ? hit.object.id : null;

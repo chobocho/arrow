@@ -122,6 +122,11 @@ export class App {
           }
         });
       },
+      onUnpinNote: () => {
+        // Selection has already been updated to the pinned note by the
+        // right-click handler — togglePin then flips its pinned flag off.
+        this.togglePinSelectedNote();
+      },
       onDoubleClickNote: (obj) => {
         void customPrompt(t('promptNote'), obj.text, '', { multiline: true, maxLength: 255 }).then((txt) => {
           if (txt !== null) {
