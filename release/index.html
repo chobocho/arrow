@@ -1050,6 +1050,7 @@
       thickness: "\uAD75\uAE30",
       fontSize: "\uAE00\uC790 \uD06C\uAE30",
       saved: "\uC800\uC7A5\uB428",
+      noChanges: "\uBCC0\uACBD \uC5C6\uC74C",
       importedCount: "\uAC1C \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4",
       invalidJson: "\uC798\uBABB\uB41C JSON \uD615\uC2DD\uC785\uB2C8\uB2E4",
       invalidArrow: "\uC798\uBABB\uB41C .arrow \uD30C\uC77C \uD615\uC2DD\uC785\uB2C8\uB2E4 (\uCCAB \uC904\uC740 arrow, \uB458\uC9F8 \uC904\uC740 \uC8FC\uC81C)",
@@ -1130,6 +1131,7 @@
       thickness: "Thickness",
       fontSize: "Font Size",
       saved: "Saved",
+      noChanges: "No changes",
       importedCount: " imported",
       invalidJson: "Invalid JSON",
       invalidArrow: 'Invalid .arrow file (line 1 must be "arrow", line 2 the topic)',
@@ -2599,6 +2601,10 @@
     return true;
   }
   async function save(app) {
+    if (!app.dirty) {
+      app.flashStatus(t("noChanges"));
+      return;
+    }
     const name = await ensureName(app);
     if (name === null) return;
     const scene = app.store.get();

@@ -53,6 +53,14 @@ export async function confirmUnsaved(app: App): Promise<boolean> {
 }
 
 export async function save(app: App): Promise<void> {
+  // Skip the round-trip when nothing has changed since the last save —
+  // pressing 💾 / Ctrl+S on a clean scene shouldn't re-write IndexedDB or
+  // bump updatedAt. The status flash confirms the click registered so the
+  // button doesn't feel dead.
+  if (!app.dirty) {
+    app.flashStatus(t('noChanges'));
+    return;
+  }
   const name = await ensureName(app);
   if (name === null) return;
   const scene = app.store.get();

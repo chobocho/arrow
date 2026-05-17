@@ -56,6 +56,15 @@ nav.toc a { text-decoration: none; }
 <body>
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
+<h2 id="2026-05-17g">2026-05-17 — 변경 없을 때 저장 스킵</h2>
+<h3 id="save-skips-when-clean">💾/Ctrl+S: <code>app.dirty</code>가 false면 IndexedDB 라운드트립 생략</h3>
+<ul>
+<li>의도: 변화 없을 때 누른 저장이 <code>updatedAt</code>을 갱신하거나 작업 목록 정렬을 흔드는 부수효과를 막음. 클릭이 무반응처럼 보이지 않도록 <code>flashStatus('변경 없음')</code>으로 피드백.
+<li><code>save()</code> 진입부에 <code>if (!app.dirty) { flashStatus(t('noChanges')); return; }</code> 추가. 키보드 단축키와 <code>confirmUnsaved → save</code> 경로 모두 동일하게 적용(원래 confirmUnsaved는 dirty일 때만 들어오므로 무해).
+<li>i18n: <code>noChanges</code> 추가 (한 '변경 없음' / 영 'No changes').
+<li>80/80 통과.
+</li>
+</ul>
 <h2 id="2026-05-17f">2026-05-17 — 모바일 툴바 간격 축소</h2>
 <h3 id="mobile-toolbar-tight">@max-width 720px에서 아이콘 간 갭/패딩 축소</h3>
 <ul>
