@@ -5,10 +5,14 @@ import {
   HighlighterObject,
   HIGHLIGHTER_OPACITY,
   HIGHLIGHTER_WIDTH_MULT,
+  NOTE_LINE_HEIGHT_FACTOR,
+  NOTE_PADDING,
+  NoteObject,
   SceneData,
   SceneObject,
   TextObject,
 } from '../models/types.js';
+import { estimateNoteBox } from '../models/SceneStore.js';
 import { CanvasView } from './CanvasView.js';
 
 export interface RenderOptions {
@@ -116,6 +120,12 @@ export class Renderer {
           maxX = Math.max(maxX, p.x + pad);
           maxY = Math.max(maxY, p.y + pad);
         }
+      } else if (o.type === 'note') {
+        const box = estimateNoteBox(o);
+        minX = Math.min(minX, o.pos.x);
+        minY = Math.min(minY, o.pos.y);
+        maxX = Math.max(maxX, o.pos.x + box.w);
+        maxY = Math.max(maxY, o.pos.y + box.h);
       } else {
         minX = Math.min(minX, o.pos.x);
         minY = Math.min(minY, o.pos.y);
@@ -207,7 +217,88 @@ export class Renderer {
   private drawObject(obj: SceneObject, selected: boolean): void {
     if (obj.type === 'arrow') this.drawArrow(obj, selected, false);
     else if (obj.type === 'highlighter') this.drawHighlighter(obj, selected, false);
+    else if (obj.type === 'note') this.drawNote(obj, selected);
     else this.drawText(obj, selected);
+  }
+
+  // Lay out a note's text into wrapped lines using the live 2D context. Honors
+  // explicit \n and soft-wraps long words mid-string (no whitespace assumed —
+  // matches Korean/CJK behavior). Returns the rendered lines and the final
+  // box height in logical units.
+  private layoutNoteText(text: string, innerWidth: number, fontSize: number): { lines: string[]; height: number } {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = `${fontSize}px sans-serif`;
+    const lines: string[] = [];
+    const segments = (text || '').split('\n');
+    for (const seg of segments) {
+      if (seg.length === 0) { lines.push(''); continue; }
+      let current = '';
+      for (const ch of seg) {
+        const test = current + ch;
+        if (ctx.measureText(test).width > innerWidth && current.length > 0) {
+          lines.push(current);
+          current = ch;
+        } else {
+          current = test;
+        }
+      }
+      if (current.length > 0) lines.push(current);
+    }
+    ctx.restore();
+    const lineHeight = fontSize * NOTE_LINE_HEIGHT_FACTOR;
+    const height = Math.max(1, lines.length) * lineHeight + NOTE_PADDING * 2;
+    return { lines, height };
+  }
+
+  private drawNote(n: NoteObject, selected: boolean): void {
+    const { ctx, view } = this;
+    const pos = view.logicalToScreen(n.pos);
+    const wScreen = n.width * view.scale;
+    const fsScreen = Math.max(8, n.fontSize * view.scale);
+    const padScreen = NOTE_PADDING * view.scale;
+    const innerW = Math.max(1, wScreen - padScreen * 2);
+    const { lines, height } = this.layoutNoteText(n.text, innerW, fsScreen);
+    const hScreen = height;
+
+    // Subtle drop shadow — keeps post-it feel without obscuring siblings.
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur = 6 * view.scale;
+    ctx.shadowOffsetX = 1 * view.scale;
+    ctx.shadowOffsetY = 2 * view.scale;
+    ctx.fillStyle = n.bgColor;
+    ctx.fillRect(pos.x, pos.y, wScreen, hScreen);
+    ctx.restore();
+
+    // Text — top-left within the inner padded area.
+    ctx.save();
+    ctx.fillStyle = n.color;
+    ctx.font = `${fsScreen}px sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const lineHeight = fsScreen * NOTE_LINE_HEIGHT_FACTOR;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i], pos.x + padScreen, pos.y + padScreen + i * lineHeight);
+    }
+    ctx.restore();
+
+    // Persist the measured height back to the model so the SceneStore's cheap
+    // estimate stays close to the rendered truth between frames. (Read-only on
+    // its own — moving / resizing still owns the source of truth.)
+    (n as { _renderedHeight?: number })._renderedHeight = hScreen / view.scale;
+
+    if (selected) {
+      ctx.save();
+      ctx.strokeStyle = '#3a7afe';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(pos.x - 2, pos.y - 2, wScreen + 4, hScreen + 4);
+      ctx.setLineDash([]);
+      ctx.restore();
+      // Resize handle at the bottom-right corner — drag to change box width.
+      this.drawHandle(pos.x + wScreen, pos.y + hScreen);
+    }
   }
 
   private drawHighlighter(hl: HighlighterObject, selected: boolean, isDraft: boolean): void {

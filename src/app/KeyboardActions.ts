@@ -105,7 +105,7 @@ export const CHAIN_MAX_SEGMENTS = 10;
 // uniform "x, y of this object" so cascading insertions (e.g. chain anchored
 // to the last-edited object) work the same regardless of object type.
 function objectTopLeft(obj: SceneObject): Vec {
-  if (obj.type === 'text') return { x: obj.pos.x, y: obj.pos.y };
+  if (obj.type === 'text' || obj.type === 'note') return { x: obj.pos.x, y: obj.pos.y };
   if (obj.type === 'arrow') {
     return { x: Math.min(obj.from.x, obj.to.x), y: Math.min(obj.from.y, obj.to.y) };
   }

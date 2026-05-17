@@ -28,6 +28,38 @@
   var DEFAULT_CENTER_FONT_SIZE = 28;
   var HIGHLIGHTER_OPACITY = 0.35;
   var HIGHLIGHTER_WIDTH_MULT = 4;
+  // Note (sticky post-it) constants — kept here so renderer, store, and input
+  // all agree.
+  var NOTE_MAX_LENGTH = 255;
+  var NOTE_DEFAULT_BG = '#FFF59D';
+  var NOTE_DEFAULT_FONT_SIZE = 16;
+  var NOTE_DEFAULT_WIDTH = 200;
+  var NOTE_MIN_WIDTH = 80;
+  var NOTE_MAX_WIDTH = 1200;
+  var NOTE_PADDING = 10;
+  var NOTE_LINE_HEIGHT_FACTOR = 1.3;
+  function clampNoteText(text) {
+    var s = (typeof text === 'string') ? text : '';
+    return s.length > NOTE_MAX_LENGTH ? s.slice(0, NOTE_MAX_LENGTH) : s;
+  }
+  // Cheap, ctx-free estimate of a note's bounding box. Splits on \n, soft-wraps
+  // by an average-char-width heuristic. The renderer measures pixel-accurate
+  // wrapping via ctx.measureText; this helper covers hit-testing & fit.
+  function estimateNoteBox(note) {
+    var lineHeight = note.fontSize * NOTE_LINE_HEIGHT_FACTOR;
+    var innerW = Math.max(1, note.width - NOTE_PADDING * 2);
+    var avgCharW = Math.max(1, note.fontSize * 0.55);
+    var charsPerLine = Math.max(1, Math.floor(innerW / avgCharW));
+    var text = note.text || '';
+    var segments = text.split('\n');
+    var lines = 0;
+    for (var i = 0; i < segments.length; i++) {
+      lines += Math.max(1, Math.ceil(segments[i].length / charsPerLine));
+    }
+    if (lines === 0) lines = 1;
+    var h = lines * lineHeight + NOTE_PADDING * 2;
+    return { w: note.width, h: h, lines: lines };
+  }
   // Font sizes are integers only. Floor inputs (and silently repair legacy
   // decimals loaded from DB/JSON) so the renderer never sees fractional sizes.
   function floorFontSize(n, fallback) {
@@ -46,6 +78,8 @@
         var o = scene.objects[i];
         if (o && o.type === 'text') {
           o.fontSize = floorFontSize(o.fontSize, DEFAULT_CENTER_FONT_SIZE);
+        } else if (o && o.type === 'note') {
+          o.fontSize = floorFontSize(o.fontSize, NOTE_DEFAULT_FONT_SIZE);
         }
       }
     }
@@ -223,7 +257,7 @@
   var STRINGS = {
     ko: {
       appTitle: '화살표 마인드맵',
-      modeSelect: '선택', modeArrow: '화살표', modeText: '글자', modeHighlighter: '형광펜', modePan: '이동',
+      modeSelect: '선택', modeArrow: '화살표', modeText: '글자', modeHighlighter: '형광펜', modeNote: '메모', modePan: '이동',
       save: '저장', saveAs: '새이름저장', newWork: '새 작업',
       delete: '삭제', rename: '이름변경',
       exportPng: 'PNG 내보내기', exportJson: 'JSON 내보내기', importJson: 'JSON 가져오기',
@@ -232,6 +266,7 @@
       promptCenter: '가운데 주제를 입력하세요',
       promptName: '작업 이름', promptSaveAs: '새 이름으로 작업 저장', promptRename: '새 이름',
       promptText: '글자를 입력하세요',
+      promptNote: '메모를 입력하세요 (최대 255자, Ctrl+Enter 또는 OK)',
       confirmDelete: '정말 삭제할까요?', confirmDeleteSelected: '선택한 객체를 삭제할까요?',
       zoomIn: '확대', zoomOut: '축소', fit: '맞춤',
       selectColor: '색상', thickness: '굵기', fontSize: '글자크기',
@@ -253,7 +288,7 @@
       helpSecMouse: '마우스', helpSecMobile: '모바일',
       helpSecToolbar: '툴바 동작', helpSecTools: '도구',
       helpSecFormat: '.arrow 텍스트 포맷',
-      helpModes: 'V — 선택\nA — 화살표\nT — 글자\nG — 형광펜\nH — 이동',
+      helpModes: 'V — 선택\nA — 화살표\nT — 글자\nG — 형광펜\nN — 메모\nH — 이동',
       helpKeys: 'Insert / + — 화면 중앙에 화살표 추가\nEnter — 화면 중앙에 글자 추가\nDelete / Backspace — 선택 객체 삭제\nCtrl/⌘ + C / V — 선택 객체 복사 / 붙여넣기\nCtrl/⌘ + Z — 실행 취소 (최근 8단계)\nCtrl/⌘ + Y / Ctrl+Shift+Z — 다시 실행\nCtrl/⌘ + S — 저장\nAlt + N — 새 문서\nAlt + L — 목록 보기\nF1 — 도움말',
       helpMouse: '빈 곳 더블클릭 — 가운데 주제 편집\n객체 클릭 — 선택 및 핸들 표시\n객체 더블클릭 — 글자/주제 내용 편집\n마우스 휠 — 확대/축소\nShift + 드래그 / 가운데 버튼 / 이동 모드 — 패닝\nCtrl + 드래그 (형광펜) — 직선 형광펜',
       helpMobile: '두 손가락 핀치 — 확대/축소\n두 손가락 드래그 — 패닝\nCtrl 토글 + 객체 드래그 — 객체 복제 후 이동\nCtrl 토글 + 형광펜 드래그 — 직선 형광펜',
@@ -266,7 +301,7 @@
     },
     en: {
       appTitle: 'Arrow Mind Map',
-      modeSelect: 'Select', modeArrow: 'Arrow', modeText: 'Text', modeHighlighter: 'Highlighter', modePan: 'Pan',
+      modeSelect: 'Select', modeArrow: 'Arrow', modeText: 'Text', modeHighlighter: 'Highlighter', modeNote: 'Note', modePan: 'Pan',
       save: 'Save', saveAs: 'Save As', newWork: 'New Work',
       delete: 'Delete', rename: 'Rename',
       exportPng: 'Export PNG', exportJson: 'Export JSON', importJson: 'Import JSON',
@@ -275,6 +310,7 @@
       promptCenter: 'Enter the center topic',
       promptName: 'Work name', promptSaveAs: 'Save work as new name', promptRename: 'New name',
       promptText: 'Enter text',
+      promptNote: 'Enter a note (max 255 chars; Ctrl+Enter or OK)',
       confirmDelete: 'Delete this work?', confirmDeleteSelected: 'Delete the selected object?',
       zoomIn: 'Zoom In', zoomOut: 'Zoom Out', fit: 'Fit',
       selectColor: 'Color', thickness: 'Thickness', fontSize: 'Font Size',
@@ -296,7 +332,7 @@
       helpSecMouse: 'Mouse', helpSecMobile: 'Mobile',
       helpSecToolbar: 'Toolbar', helpSecTools: 'Tools',
       helpSecFormat: '.arrow text format',
-      helpModes: 'V — Select\nA — Arrow\nT — Text\nG — Highlighter\nH — Pan',
+      helpModes: 'V — Select\nA — Arrow\nT — Text\nG — Highlighter\nN — Note\nH — Pan',
       helpKeys: 'Insert / + — Add arrow at viewport center\nEnter — Add text at viewport center\nDelete / Backspace — Remove selected\nCtrl/⌘ + C / V — Copy / paste selected object\nCtrl/⌘ + Z — Undo (up to 8 steps)\nCtrl/⌘ + Y / Ctrl+Shift+Z — Redo\nCtrl/⌘ + S — Save\nAlt + N — New work\nAlt + L — Open works list\nF1 — Help',
       helpMouse: 'Double-click empty — Edit center topic\nClick object — Select & show handles\nDouble-click object — Edit text content\nMouse wheel — Zoom\nShift + drag / Middle button / Pan mode — Pan\nCtrl + drag (highlighter) — Straight stroke',
       helpMobile: 'Two-finger pinch — Zoom\nTwo-finger drag — Pan\nCtrl toggle + drag object — Clone-and-move\nCtrl toggle + highlighter drag — Straight stroke',
@@ -352,8 +388,11 @@
       '.ap-sort-btn.active{background:#3a7afe;border-color:#3a7afe;color:#fff;}';
     document.head.appendChild(style);
   }
-  function customPrompt(message, defaultValue, placeholder) {
+  function customPrompt(message, defaultValue, placeholder, options) {
     injectCustomPromptStyles();
+    var opts = options || {};
+    var multiline = !!opts.multiline;
+    var maxLength = opts.maxLength && opts.maxLength > 0 ? opts.maxLength : 0;
     return new Promise(function (resolve) {
       var overlay = document.createElement('div');
       overlay.className = 'ap-overlay';
@@ -362,11 +401,33 @@
       var title = document.createElement('div');
       title.className = 'ap-title';
       title.textContent = message;
-      var input = document.createElement('input');
-      input.type = 'text';
+      var input = multiline
+        ? document.createElement('textarea')
+        : document.createElement('input');
+      if (!multiline) input.type = 'text';
       input.className = 'ap-input';
       input.value = defaultValue == null ? '' : defaultValue;
       if (placeholder) input.placeholder = placeholder;
+      if (multiline) {
+        input.rows = 5;
+        input.style.resize = 'vertical';
+        input.style.minHeight = '96px';
+      }
+      if (maxLength) input.maxLength = maxLength;
+      var counter = null;
+      if (maxLength) {
+        counter = document.createElement('div');
+        counter.className = 'ap-counter';
+        counter.style.fontSize = '11px';
+        counter.style.color = '#888';
+        counter.style.textAlign = 'right';
+        counter.style.marginTop = '4px';
+        var updateCounter = function () {
+          counter.textContent = input.value.length + ' / ' + maxLength;
+        };
+        input.addEventListener('input', updateCounter);
+        updateCounter();
+      }
       var actions = document.createElement('div');
       actions.className = 'ap-actions';
       var cancelBtn = document.createElement('button');
@@ -381,6 +442,7 @@
       actions.appendChild(okBtn);
       card.appendChild(title);
       card.appendChild(input);
+      if (counter) card.appendChild(counter);
       card.appendChild(actions);
       overlay.appendChild(card);
       document.body.appendChild(overlay);
@@ -397,6 +459,13 @@
         if (ev.key === 'Enter') {
           // Skip Enter that just commits an IME composition (Korean/Japanese).
           if (ev.isComposing || ev.keyCode === 229) return;
+          if (multiline) {
+            // Multiline: plain Enter inserts a newline (default textarea
+            // behavior); submit only on Ctrl/⌘+Enter.
+            if (!(ev.ctrlKey || ev.metaKey)) return;
+            ev.preventDefault(); ev.stopPropagation(); finish(input.value);
+            return;
+          }
           ev.preventDefault(); ev.stopPropagation(); finish(input.value);
         } else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(null); }
       }
@@ -406,7 +475,10 @@
       overlay.addEventListener('mousedown', function (ev) {
         if (ev.target === overlay) finish(null);
       });
-      requestAnimationFrame(function () { input.focus(); input.select(); });
+      requestAnimationFrame(function () {
+        input.focus();
+        if (!multiline) input.select();
+      });
     });
   }
   // Replacement for window.confirm — resolves true on OK, false on cancel/Esc/backdrop.
@@ -643,6 +715,12 @@
           if (hp.x + hpad > maxX) maxX = hp.x + hpad;
           if (hp.y + hpad > maxY) maxY = hp.y + hpad;
         }
+      } else if (o.type === 'note') {
+        var nb = estimateNoteBox(o);
+        minX = Math.min(minX, o.pos.x);
+        minY = Math.min(minY, o.pos.y);
+        maxX = Math.max(maxX, o.pos.x + nb.w);
+        maxY = Math.max(maxY, o.pos.y + nb.h);
       } else {
         minX = Math.min(minX, o.pos.x);
         minY = Math.min(minY, o.pos.y);
@@ -716,7 +794,78 @@
   Renderer.prototype._drawObject = function (obj, selected, _isDraft) {
     if (obj.type === 'arrow') this._drawArrow(obj, selected, false);
     else if (obj.type === 'highlighter') this._drawHighlighter(obj, selected, false);
+    else if (obj.type === 'note') this._drawNote(obj, selected);
     else this._drawText(obj, selected);
+  };
+  // Lay out a note's text into wrapped lines using the live 2D context. Honors
+  // explicit \n and soft-wraps character-by-character so CJK without spaces
+  // still flows. Returns the rendered lines plus the box height (screen px).
+  Renderer.prototype._layoutNoteText = function (text, innerWidth, fontSize) {
+    var ctx = this.ctx;
+    ctx.save();
+    ctx.font = fontSize + 'px sans-serif';
+    var lines = [];
+    var segments = String(text || '').split('\n');
+    for (var s = 0; s < segments.length; s++) {
+      var seg = segments[s];
+      if (seg.length === 0) { lines.push(''); continue; }
+      var current = '';
+      for (var i = 0; i < seg.length; i++) {
+        var ch = seg.charAt(i);
+        var test = current + ch;
+        if (ctx.measureText(test).width > innerWidth && current.length > 0) {
+          lines.push(current);
+          current = ch;
+        } else {
+          current = test;
+        }
+      }
+      if (current.length > 0) lines.push(current);
+    }
+    ctx.restore();
+    var lineHeight = fontSize * NOTE_LINE_HEIGHT_FACTOR;
+    var height = Math.max(1, lines.length) * lineHeight + NOTE_PADDING * 2;
+    return { lines: lines, height: height };
+  };
+  Renderer.prototype._drawNote = function (n, selected) {
+    var ctx = this.ctx, view = this.view;
+    var pos = view.logicalToScreen(n.pos);
+    var wScreen = n.width * view.scale;
+    var fsScreen = Math.max(8, n.fontSize * view.scale);
+    var padScreen = NOTE_PADDING * view.scale;
+    var innerW = Math.max(1, wScreen - padScreen * 2);
+    var laid = this._layoutNoteText(n.text, innerW, fsScreen);
+    var hScreen = laid.height;
+    // Subtle drop shadow keeps the post-it feel.
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur = 6 * view.scale;
+    ctx.shadowOffsetX = 1 * view.scale;
+    ctx.shadowOffsetY = 2 * view.scale;
+    ctx.fillStyle = n.bgColor || NOTE_DEFAULT_BG;
+    ctx.fillRect(pos.x, pos.y, wScreen, hScreen);
+    ctx.restore();
+    // Text — top-left within the inner padded area.
+    ctx.save();
+    ctx.fillStyle = n.color || '#222';
+    ctx.font = fsScreen + 'px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    var lineHeight = fsScreen * NOTE_LINE_HEIGHT_FACTOR;
+    for (var i = 0; i < laid.lines.length; i++) {
+      ctx.fillText(laid.lines[i], pos.x + padScreen, pos.y + padScreen + i * lineHeight);
+    }
+    ctx.restore();
+    if (selected) {
+      ctx.save();
+      ctx.strokeStyle = '#3a7afe';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(pos.x - 2, pos.y - 2, wScreen + 4, hScreen + 4);
+      ctx.setLineDash([]);
+      ctx.restore();
+      this._drawHandle(pos.x + wScreen, pos.y + hScreen, false);
+    }
   };
   Renderer.prototype._drawHighlighter = function (hl, selected, isDraft) {
     var ctx = this.ctx, view = this.view;
@@ -859,6 +1008,27 @@
     this.scene.objects.push(o); this._touch(); this._emit();
     return o;
   };
+  SceneStore.prototype.addNote = function (pos, text, options) {
+    var opt = options || {};
+    var width = Math.max(NOTE_MIN_WIDTH, Math.min(NOTE_MAX_WIDTH,
+      (opt.width != null ? opt.width : NOTE_DEFAULT_WIDTH)));
+    var fontSize = floorFontSize(
+      opt.fontSize != null ? opt.fontSize : NOTE_DEFAULT_FONT_SIZE,
+      NOTE_DEFAULT_FONT_SIZE
+    );
+    var o = {
+      id: newId('note'),
+      type: 'note',
+      pos: clampToCanvas(pos),
+      text: clampNoteText(text),
+      width: width,
+      fontSize: fontSize,
+      color: opt.color != null ? opt.color : '#222222',
+      bgColor: opt.bgColor != null ? opt.bgColor : NOTE_DEFAULT_BG
+    };
+    this.scene.objects.push(o); this._touch(); this._emit();
+    return o;
+  };
   SceneStore.prototype.addHighlighter = function (points, color, thickness) {
     var clamped = [];
     for (var i = 0; i < points.length; i++) clamped.push(clampToCanvas(points[i]));
@@ -892,6 +1062,16 @@
       var mid = { x: (obj.from.x + obj.to.x) / 2, y: (obj.from.y + obj.to.y) / 2 };
       if (vecDist(p, mid) <= tol) return 'arrow-mid';
       if (pointToSegmentDistance(p, obj.from, obj.to) <= Math.max(tol, obj.thickness)) return 'arrow-body';
+    } else if (obj.type === 'note') {
+      var box = estimateNoteBox(obj);
+      var corner =
+        Math.abs(p.x - (obj.pos.x + box.w)) <= tol &&
+        Math.abs(p.y - (obj.pos.y + box.h)) <= tol;
+      if (corner) return 'note-resize';
+      var insideNote =
+        p.x >= obj.pos.x - 2 && p.x <= obj.pos.x + box.w + 2 &&
+        p.y >= obj.pos.y - 2 && p.y <= obj.pos.y + box.h + 2;
+      if (insideNote) return 'note-body';
     } else if (obj.type === 'highlighter') {
       var margin = Math.max(tol, obj.thickness * 2);
       if (obj.points.length === 1) {
@@ -1193,6 +1373,16 @@
         this.drag = { kind: 'resize-arrow', objectId: hit.object.id, end: handle, lastScreen: screen };
         return;
       }
+      if (handle === 'note-resize') {
+        this.pendingHistorySnap = this._snapshotScene();
+        this.drag = {
+          kind: 'resize-note',
+          objectId: hit.object.id,
+          origin: { width: hit.object.width, pos: { x: hit.object.pos.x, y: hit.object.pos.y } },
+          lastScreen: screen
+        };
+        return;
+      }
       if (handle === 'text-resize') {
         // Stash snapshot for resize-text; flushed on first mutating move.
         this.pendingHistorySnap = this._snapshotScene();
@@ -1256,6 +1446,23 @@
           // After commit, drop back to Select so the new text is immediately
           // moveable / resizable — matches the keyboard Enter insert path.
           if (self.cb.setMode) self.cb.setMode('select');
+        }
+      });
+      return;
+    }
+    if (mode === 'note') {
+      this.drag = { kind: 'none' };
+      var selfNote = this;
+      customPrompt(t('promptNote'), '', '', { multiline: true, maxLength: NOTE_MAX_LENGTH }).then(function (txt) {
+        if (txt != null && txt.length > 0) {
+          if (selfNote.cb.commitHistorySnapshot) selfNote.cb.commitHistorySnapshot(selfNote._snapshotScene());
+          var created = selfNote.store.addNote(logical, clampNoteText(txt), { color: selfNote.cb.getColor() });
+          selfNote.selectedId = created.id;
+          selfNote.cb.onSelect(created.id);
+          selfNote.cb.onChange();
+          // Drop back to Select like the text-mode flow so the new note is
+          // immediately moveable / resizable.
+          if (selfNote.cb.setMode) selfNote.cb.setMode('select');
         }
       });
       return;
@@ -1336,6 +1543,16 @@
       });
       return;
     }
+    if (d.kind === 'resize-note') {
+      this._flushPendingHistory();
+      var nOrig = d.origin;
+      var nextW = Math.max(NOTE_MIN_WIDTH, Math.min(NOTE_MAX_WIDTH, logical.x - nOrig.pos.x));
+      this.store.update(d.objectId, function (o) {
+        if (o.type !== 'note') return;
+        o.width = nextW;
+      });
+      return;
+    }
     if (d.kind === 'resize-text') {
       this._flushPendingHistory();
       var orig = d.origin;
@@ -1387,6 +1604,10 @@
       this.cb.onDoubleClickText(hit.object);
       return;
     }
+    if (hit.object && hit.object.type === 'note') {
+      if (this.cb.onDoubleClickNote) this.cb.onDoubleClickNote(hit.object);
+      return;
+    }
     if (!hit.object) this.cb.onDoubleClickEmpty(logical);
   };
   InputHandler.prototype._snap = function (obj) {
@@ -1412,6 +1633,13 @@
       var pts = [];
       for (var i = 0; i < obj.points.length; i++) pts.push({ x: obj.points[i].x, y: obj.points[i].y });
       return this.store.addHighlighter(pts, obj.color, obj.thickness);
+    }
+    if (obj.type === 'note') {
+      return this.store.addNote(
+        { x: obj.pos.x, y: obj.pos.y },
+        obj.text,
+        { width: obj.width, fontSize: obj.fontSize, color: obj.color, bgColor: obj.bgColor }
+      );
     }
     return this.store.addText(
       { x: obj.pos.x, y: obj.pos.y },
@@ -1475,6 +1703,16 @@
           if (txt !== null) {
             self.pushHistory();
             self.store.update(obj.id, function (o) { if (o.type === 'text') o.text = txt; });
+          }
+        });
+      },
+      onDoubleClickNote: function (obj) {
+        customPrompt(t('promptNote'), obj.text, '', { multiline: true, maxLength: NOTE_MAX_LENGTH }).then(function (txt) {
+          if (txt !== null) {
+            self.pushHistory();
+            self.store.update(obj.id, function (o) {
+              if (o.type === 'note') o.text = clampNoteText(txt);
+            });
           }
         });
       },
@@ -1722,6 +1960,8 @@
     byId('btnArrow').addEventListener('click', function () { self.setMode('arrow'); });
     byId('btnText').addEventListener('click', function () { self.setMode('text'); });
     byId('btnHighlighter').addEventListener('click', function () { self.setMode('highlighter'); });
+    var btnNoteEl = byId('btnNote');
+    if (btnNoteEl) btnNoteEl.addEventListener('click', function () { self.setMode('note'); });
     byId('btnPan').addEventListener('click', function () { self.setMode('pan'); });
     byId('btnSave').addEventListener('click', function () { self._save(); });
     byId('btnSaveAs').addEventListener('click', function () { self._saveAs(); });
@@ -1974,7 +2214,7 @@
   };
   App.prototype.setMode = function (m) { this.mode = m; this._updateModeUi(); };
   App.prototype._updateModeUi = function () {
-    var map = { select: 'btnSelect', arrow: 'btnArrow', text: 'btnText', highlighter: 'btnHighlighter', pan: 'btnPan' };
+    var map = { select: 'btnSelect', arrow: 'btnArrow', text: 'btnText', highlighter: 'btnHighlighter', note: 'btnNote', pan: 'btnPan' };
     for (var k in map) {
       var el = document.getElementById(map[k]);
       if (!el) continue;
@@ -2012,6 +2252,7 @@
     setTip('btnArrow', 'modeArrow');
     setTip('btnText', 'modeText');
     setTip('btnHighlighter', 'modeHighlighter');
+    setTip('btnNote', 'modeNote');
     setTip('btnPan', 'modePan');
     setTip('btnSave', 'save');
     setTip('btnSaveAs', 'saveAs');
@@ -2487,6 +2728,12 @@
           if (fp.x + fpad > maxX) maxX = fp.x + fpad;
           if (fp.y + fpad > maxY) maxY = fp.y + fpad;
         }
+      } else if (o.type === 'note') {
+        var fb = estimateNoteBox(o);
+        minX = Math.min(minX, o.pos.x);
+        minY = Math.min(minY, o.pos.y);
+        maxX = Math.max(maxX, o.pos.x + fb.w);
+        maxY = Math.max(maxY, o.pos.y + fb.h);
       } else {
         minX = Math.min(minX, o.pos.x);
         minY = Math.min(minY, o.pos.y);
@@ -2550,6 +2797,7 @@
     } else if (e.key === 'a' || e.key === 'A') this.setMode('arrow');
     else if (e.key === 't' || e.key === 'T') this.setMode('text');
     else if (e.key === 'g' || e.key === 'G') this.setMode('highlighter');
+    else if (e.key === 'n' || e.key === 'N') this.setMode('note');
     else if (e.key === 'v' || e.key === 'V') this.setMode('select');
     else if (e.key === 'h' || e.key === 'H') this.setMode('pan');
   };
@@ -2579,6 +2827,12 @@
       }
       created = this.store.addHighlighter(shifted, clip.color, clip.thickness);
       clip.points = shifted;
+    } else if (clip.type === 'note') {
+      var npos = { x: clip.pos.x + offset, y: clip.pos.y + offset };
+      created = this.store.addNote(npos, clip.text, {
+        width: clip.width, fontSize: clip.fontSize, color: clip.color, bgColor: clip.bgColor
+      });
+      clip.pos = npos;
     } else {
       var pos = { x: clip.pos.x + offset, y: clip.pos.y + offset };
       created = this.store.addText(pos, clip.text, clip.fontSize, clip.color);
@@ -2756,6 +3010,14 @@
     parseArrowFile: parseArrowFile,
     floorFontSize: floorFontSize,
     normalizeSceneFontSizes: normalizeSceneFontSizes,
+    clampNoteText: clampNoteText,
+    estimateNoteBox: estimateNoteBox,
+    NOTE_MAX_LENGTH: NOTE_MAX_LENGTH,
+    NOTE_DEFAULT_BG: NOTE_DEFAULT_BG,
+    NOTE_DEFAULT_FONT_SIZE: NOTE_DEFAULT_FONT_SIZE,
+    NOTE_DEFAULT_WIDTH: NOTE_DEFAULT_WIDTH,
+    NOTE_MIN_WIDTH: NOTE_MIN_WIDTH,
+    NOTE_MAX_WIDTH: NOTE_MAX_WIDTH,
     DEFAULT_CENTER_FONT_SIZE: DEFAULT_CENTER_FONT_SIZE,
     CanvasView: CanvasView,
     Renderer: Renderer,

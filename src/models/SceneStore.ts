@@ -1,9 +1,18 @@
 import {
   ArrowObject,
   HighlighterObject,
+  NoteObject,
+  NOTE_DEFAULT_BG,
+  NOTE_DEFAULT_FONT_SIZE,
+  NOTE_DEFAULT_WIDTH,
+  NOTE_LINE_HEIGHT_FACTOR,
+  NOTE_MAX_WIDTH,
+  NOTE_MIN_WIDTH,
+  NOTE_PADDING,
   SceneData,
   SceneObject,
   TextObject,
+  clampNoteText,
   emptyScene,
   floorFontSize,
   newId,
@@ -101,6 +110,30 @@ export class SceneStore {
     return obj;
   }
 
+  addNote(
+    pos: Vec,
+    text: string,
+    options?: { width?: number; fontSize?: number; color?: string; bgColor?: string },
+  ): NoteObject {
+    const opt = options || {};
+    const width = Math.max(NOTE_MIN_WIDTH, Math.min(NOTE_MAX_WIDTH, opt.width ?? NOTE_DEFAULT_WIDTH));
+    const fontSize = floorFontSize(opt.fontSize ?? NOTE_DEFAULT_FONT_SIZE, NOTE_DEFAULT_FONT_SIZE);
+    const obj: NoteObject = {
+      id: newId('note'),
+      type: 'note',
+      pos: clampToCanvas(pos),
+      text: clampNoteText(text),
+      width,
+      fontSize,
+      color: opt.color ?? '#222222',
+      bgColor: opt.bgColor ?? NOTE_DEFAULT_BG,
+    };
+    this.scene.objects.push(obj);
+    this.touch();
+    this.emit();
+    return obj;
+  }
+
   addText(pos: Vec, text: string, fontSize: number, color: string): TextObject {
     const obj: TextObject = {
       id: newId('text'),
@@ -151,6 +184,18 @@ export class SceneStore {
       if (vecDist(point, mid) <= tolerance) return { handle: 'arrow-mid' };
       const d = pointToSegmentDistance(point, obj.from, obj.to);
       if (d <= Math.max(tolerance, obj.thickness)) return { handle: 'arrow-body' };
+    } else if (obj.type === 'note') {
+      const { w, h } = estimateNoteBox(obj);
+      const cornerHit =
+        Math.abs(point.x - (obj.pos.x + w)) <= tolerance &&
+        Math.abs(point.y - (obj.pos.y + h)) <= tolerance;
+      if (cornerHit) return { handle: 'note-resize' };
+      const inside =
+        point.x >= obj.pos.x - 2 &&
+        point.x <= obj.pos.x + w + 2 &&
+        point.y >= obj.pos.y - 2 &&
+        point.y <= obj.pos.y + h + 2;
+      if (inside) return { handle: 'note-body' };
     } else if (obj.type === 'highlighter') {
       const margin = Math.max(tolerance, obj.thickness * 2);
       if (obj.points.length === 1) {
@@ -189,7 +234,29 @@ export type HitHandle =
   | 'arrow-body'
   | 'text-body'
   | 'text-resize'
+  | 'note-body'
+  | 'note-resize'
   | 'highlighter-body';
+
+// Cheap, ctx-free estimate of a note's bounding box. Splits on explicit \n,
+// then soft-wraps each segment by an average char-width heuristic. The
+// renderer uses its own ctx.measureText pass for pixel-accurate wrapping, but
+// hit-testing and fit-to-screen run without a 2D context.
+export function estimateNoteBox(note: NoteObject): { w: number; h: number; lines: number } {
+  const padding = NOTE_PADDING;
+  const lineHeight = note.fontSize * NOTE_LINE_HEIGHT_FACTOR;
+  const innerW = Math.max(1, note.width - padding * 2);
+  const avgCharW = Math.max(1, note.fontSize * 0.55);
+  const charsPerLine = Math.max(1, Math.floor(innerW / avgCharW));
+  const segments = (note.text || '').split('\n');
+  let lines = 0;
+  for (const s of segments) {
+    lines += Math.max(1, Math.ceil(s.length / charsPerLine));
+  }
+  if (lines === 0) lines = 1;
+  const h = lines * lineHeight + padding * 2;
+  return { w: note.width, h, lines };
+}
 
 export interface HitResult {
   object: SceneObject | null;

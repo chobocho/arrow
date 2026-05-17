@@ -227,7 +227,7 @@ function buildObjects(
 function recenterToCanvas(objects: SceneObject[]): void {
   const shift = MAX_CANVAS_SIZE / 2;
   for (const o of objects) {
-    if (o.type === 'text') {
+    if (o.type === 'text' || o.type === 'note') {
       o.pos.x += shift;
       o.pos.y += shift;
     } else if (o.type === 'arrow') {

@@ -30,6 +30,8 @@ export function bindUi(app: App): void {
   ($('#btnArrow')).addEventListener('click', () => setMode(app, 'arrow'));
   ($('#btnText')).addEventListener('click', () => setMode(app, 'text'));
   ($('#btnHighlighter')).addEventListener('click', () => setMode(app, 'highlighter'));
+  const btnNote = document.getElementById('btnNote');
+  if (btnNote) btnNote.addEventListener('click', () => setMode(app, 'note'));
   ($('#btnPan')).addEventListener('click', () => setMode(app, 'pan'));
   ($('#btnSave')).addEventListener('click', () => void save(app));
   ($('#btnSaveAs')).addEventListener('click', () => void saveAs(app));
@@ -286,6 +288,7 @@ export function updateModeUi(app: App): void {
     arrow: 'btnArrow',
     text: 'btnText',
     highlighter: 'btnHighlighter',
+    note: 'btnNote',
     pan: 'btnPan',
   };
   for (const k of Object.keys(map) as EditorMode[]) {
@@ -326,6 +329,7 @@ export function applyLangToUi(app: App): void {
   setTip('btnArrow', 'modeArrow');
   setTip('btnText', 'modeText');
   setTip('btnHighlighter', 'modeHighlighter');
+  setTip('btnNote', 'modeNote');
   setTip('btnPan', 'modePan');
   setTip('btnSave', 'save');
   setTip('btnSaveAs', 'saveAs');

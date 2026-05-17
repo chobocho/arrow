@@ -1,11 +1,21 @@
 import { Vec, clampToCanvas, vecDist } from '../utils/geometry.js';
 import { CanvasView } from '../canvas/CanvasView.js';
 import { SceneStore, HitHandle } from '../models/SceneStore.js';
-import { ArrowObject, HighlighterObject, SceneData, SceneObject, TextObject } from '../models/types.js';
+import {
+  ArrowObject,
+  HighlighterObject,
+  NOTE_MAX_WIDTH,
+  NOTE_MIN_WIDTH,
+  NoteObject,
+  SceneData,
+  SceneObject,
+  TextObject,
+  clampNoteText,
+} from '../models/types.js';
 import { customPrompt } from '../ui/CustomPrompt.js';
 import { t } from '../i18n/lang.js';
 
-export type EditorMode = 'select' | 'arrow' | 'text' | 'pan' | 'highlighter';
+export type EditorMode = 'select' | 'arrow' | 'text' | 'pan' | 'highlighter' | 'note';
 
 export interface InputCallbacks {
   getMode: () => EditorMode;
@@ -17,6 +27,7 @@ export interface InputCallbacks {
   onSelect: (id: string | null) => void;
   onDoubleClickEmpty: (logical: Vec) => void;
   onDoubleClickText: (text: TextObject) => void;
+  onDoubleClickNote: (note: NoteObject) => void;
   onDraftChange: (draft: ArrowObject | null) => void;
   onDraftHighlighter: (draft: HighlighterObject | null) => void;
   // Returns true when a "clone modifier" is active (mobile virtual Ctrl button).
@@ -29,7 +40,7 @@ export interface InputCallbacks {
 }
 
 interface DragState {
-  kind: 'pan' | 'draft-arrow' | 'draft-highlighter' | 'move-object' | 'resize-arrow' | 'resize-text' | 'none';
+  kind: 'pan' | 'draft-arrow' | 'draft-highlighter' | 'move-object' | 'resize-arrow' | 'resize-text' | 'resize-note' | 'none';
   objectId?: string;
   startLogical: Vec;
   startScreen: Vec;
@@ -290,6 +301,20 @@ export class InputHandler {
         };
         return;
       }
+      if (handle === 'note-resize') {
+        const note = hit.object as NoteObject;
+        // Stash snapshot for resize-note; flushed on first mutating move.
+        this.pendingHistorySnap = this.snapshotScene();
+        this.dragging = {
+          kind: 'resize-note',
+          objectId: hit.object.id,
+          startLogical: logical,
+          startScreen: screen,
+          lastScreen: screen,
+          origin: { width: note.width, pos: { ...note.pos } },
+        };
+        return;
+      }
       if (handle === 'text-resize') {
         const t = hit.object as TextObject;
         // Stash snapshot for resize-text; flushed on first mutating move.
@@ -375,6 +400,22 @@ export class InputHandler {
       });
       return;
     }
+    if (mode === 'note') {
+      this.dragging = { kind: 'none', startLogical: logical, startScreen: screen, lastScreen: screen };
+      void customPrompt(t('promptNote'), '', '', { multiline: true, maxLength: 255 }).then((text) => {
+        if (text != null && text.length > 0) {
+          if (this.cb.commitHistorySnapshot) this.cb.commitHistorySnapshot(this.snapshotScene());
+          const obj = this.store.addNote(logical, clampNoteText(text), { color: this.cb.getColor() });
+          this.selectedId = obj.id;
+          this.cb.onSelect(obj.id);
+          this.cb.onChange();
+          // Matches the text-mode commit flow: switch back to Select so the
+          // brand-new note is immediately moveable / resizable.
+          if (this.cb.setMode) this.cb.setMode('select');
+        }
+      });
+      return;
+    }
     // select / pan default: deselect + start a pan
     this.selectedId = null;
     this.cb.onSelect(null);
@@ -446,9 +487,23 @@ export class InputHandler {
           const orig = drag.origin as { points: Vec[] };
           o.points = orig.points.map((p) => clampToCanvas({ x: p.x + dxLog, y: p.y + dyLog }));
         } else {
+          // text and note both anchor on pos.
           const orig = drag.origin as { pos: Vec };
           o.pos = clampToCanvas({ x: orig.pos.x + dxLog, y: orig.pos.y + dyLog });
         }
+      });
+      return;
+    }
+    if (drag.kind === 'resize-note' && drag.objectId && drag.origin) {
+      this.flushPendingHistory();
+      const orig = drag.origin as { width: number; pos: Vec };
+      const nextWidth = Math.max(
+        NOTE_MIN_WIDTH,
+        Math.min(NOTE_MAX_WIDTH, logical.x - orig.pos.x),
+      );
+      this.store.update(drag.objectId, (o) => {
+        if (o.type !== 'note') return;
+        o.width = nextWidth;
       });
       return;
     }
@@ -514,6 +569,10 @@ export class InputHandler {
       this.cb.onDoubleClickText(hit.object);
       return;
     }
+    if (hit.object && hit.object.type === 'note') {
+      this.cb.onDoubleClickNote(hit.object);
+      return;
+    }
     if (!hit.object) {
       this.cb.onDoubleClickEmpty(logical);
     }
@@ -533,6 +592,11 @@ export class InputHandler {
     }
     if (obj.type === 'highlighter') {
       return this.store.addHighlighter(obj.points.map((p) => ({ ...p })), obj.color, obj.thickness);
+    }
+    if (obj.type === 'note') {
+      return this.store.addNote({ ...obj.pos }, obj.text, {
+        width: obj.width, fontSize: obj.fontSize, color: obj.color, bgColor: obj.bgColor,
+      });
     }
     return this.store.addText({ ...obj.pos }, obj.text, obj.fontSize, obj.color);
   }

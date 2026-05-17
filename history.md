@@ -2,6 +2,19 @@
 
 본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위에 추가합니다.
 
+## 2026-05-17
+
+### 포스트잇 컨셉의 메모(Note) 객체 추가
+
+- 데이터 모델: `NoteObject` 신설 (`type: 'note'`, `pos`, `text`, `width`, `fontSize`, `color`, `bgColor`). 최대 255자(`NOTE_MAX_LENGTH`)로 자동 트림. `normalizeSceneFontSizes`가 note의 fontSize 정수화도 처리.
+- 입력: 툴바 🗒️ 메모 모드 + 단축키 `N`. 모드에서 캔버스 클릭 → 멀티라인 입력창(textarea, Ctrl+Enter 또는 OK로 확정) → 입력 후 자동으로 선택 모드 전환.
+- 편집: 메모 더블클릭 시 동일 입력창 재오픈. 글자수 카운터(`N / 255`) 라이브 표시.
+- 렌더: 포스트잇 풍의 노란 배경(`#FFF59D`) + 옅은 드롭 섀도. `\n` 명시 줄바꿈 + 너비 기반 소프트 랩(글자 단위, CJK 안전).
+- 조작: 본문 드래그 이동, 우하단 핸들 드래그로 박스 너비 조정(폰트 크기는 툴바 글자 크기 입력으로 변경). Ctrl/⌘+드래그 또는 가상 Ctrl로 복제-드래그 지원. 복사/붙여넣기(Ctrl+C/V)도 동작.
+- 직렬화: IndexedDB/JSON 내보내기·가져오기/Undo·Redo에 모두 자연스럽게 통합.
+- 테스트: `test/test_arrow.js`에 7건 추가(addNote, 255자 트림, 위치/너비 클램프, update, hit-test body/resize/miss, `clampNoteText`) — 58/58 통과.
+- 도움말 모달 모드 설명과 i18n(ko/en) 문자열 갱신.
+
 ## 2026-05-16
 
 ### 도움말 모달에 "툴바 동작" 섹션 추가 — 최근 UX 누적 정리

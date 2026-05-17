@@ -87,6 +87,7 @@
   body[data-mode="pan"] canvas#mainCanvas { cursor: grab; }
   body[data-mode="text"] canvas#mainCanvas { cursor: text; }
   body[data-mode="highlighter"] canvas#mainCanvas { cursor: cell; }
+  body[data-mode="note"] canvas#mainCanvas { cursor: copy; }
   #statusBar {
     position: absolute;
     bottom: 16px; left: 50%; transform: translateX(-50%);
@@ -155,6 +156,7 @@
       <button class="tool icon" id="btnArrow" title="화살표">➡️</button>
       <button class="tool icon" id="btnText" title="글자">🔤</button>
       <button class="tool icon" id="btnHighlighter" title="형광펜">🖍️</button>
+      <button class="tool icon" id="btnNote" title="메모">🗒️</button>
       <button class="tool icon" id="btnPan" title="이동">✋</button>
     </div>
     <div class="group">

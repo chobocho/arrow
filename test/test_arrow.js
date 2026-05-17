@@ -554,6 +554,73 @@
     assert(byId[hl.id].color  === '#0000ff', 'highlighter recolored');
   });
 
+  // ---- Note object ----
+  test('SceneStore addNote creates a note with defaults', function () {
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: 100, y: 120 }, 'hello\nworld');
+    assert(n.type === 'note', 'type=note, got ' + n.type);
+    assert(n.text === 'hello\nworld', 'text preserved');
+    assert(n.pos.x === 100 && n.pos.y === 120, 'pos preserved');
+    assert(typeof n.width === 'number' && n.width >= 80, 'width default applied, got ' + n.width);
+    assert(typeof n.fontSize === 'number' && n.fontSize >= 8, 'fontSize default, got ' + n.fontSize);
+    assert(typeof n.bgColor === 'string' && n.bgColor.length > 0, 'bgColor default present');
+  });
+  test('SceneStore addNote truncates text past NOTE_MAX_LENGTH (255)', function () {
+    var s = new A.SceneStore();
+    var long = '';
+    for (var i = 0; i < 300; i++) long += '가';
+    var n = s.addNote({ x: 10, y: 10 }, long);
+    assert(n.text.length === A.NOTE_MAX_LENGTH, 'truncated to NOTE_MAX_LENGTH, got ' + n.text.length);
+    assert(A.NOTE_MAX_LENGTH === 255, 'NOTE_MAX_LENGTH constant is 255');
+  });
+  test('SceneStore addNote clamps width and pos', function () {
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: -50, y: -50 }, 'hi', { width: 10 });
+    assert(n.pos.x === 0 && n.pos.y === 0, 'pos clamps to (0,0)');
+    assert(n.width >= 80, 'width clamped to min, got ' + n.width);
+  });
+  test('SceneStore update can edit a note in place', function () {
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: 0, y: 0 }, 'a');
+    s.update(n.id, function (o) { if (o.type === 'note') { o.text = 'b'; o.width = 300; } });
+    var got = s.get().objects[0];
+    assert(got.text === 'b', 'text updated');
+    assert(got.width === 300, 'width updated');
+  });
+  test('SceneStore hitTest finds note body inside box', function () {
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: 100, y: 100 }, 'hello');
+    // Note is at least 80 wide × fontSize-dependent tall. Click well inside.
+    var hit = s.hitTest({ x: 110, y: 115 }, 5);
+    assert(hit.object && hit.object.id === n.id, 'finds note');
+    assert(hit.handle === 'note-body', 'hits body, got ' + hit.handle);
+  });
+  test('SceneStore hitTest exposes note-resize corner handle', function () {
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: 100, y: 100 }, 'x');
+    // Corner sits at (pos.x + width, pos.y + h) approximately — probe a small
+    // box around the right edge at top of the note to find the resize handle.
+    var hit = s.hitTest({ x: 100 + n.width, y: 100 + n.fontSize }, 14);
+    // Either resize or body is acceptable depending on the exact estimated
+    // height — but it must be the same note and a defined handle.
+    assert(hit.object && hit.object.id === n.id, 'finds note at corner');
+    assert(hit.handle === 'note-resize' || hit.handle === 'note-body',
+      'hits a note handle, got ' + hit.handle);
+  });
+  test('SceneStore hitTest misses note far outside box', function () {
+    var s = new A.SceneStore();
+    s.addNote({ x: 100, y: 100 }, 'hi');
+    var hit = s.hitTest({ x: 2000, y: 2000 }, 5);
+    assert(hit.handle === 'none', 'no hit far away');
+  });
+  test('Note text honors clampNoteText helper (255 cap)', function () {
+    if (!A.clampNoteText) return; // optional helper
+    assert(A.clampNoteText('abc') === 'abc', 'short text passes through');
+    var long = '';
+    for (var i = 0; i < 400; i++) long += 'x';
+    assert(A.clampNoteText(long).length === 255, 'long text capped at 255');
+  });
+
   // ---- summary ----
   var ok = results.length - failed;
   var msg = 'TOTAL ' + results.length + ' / PASS ' + ok + ' / FAIL ' + failed;

@@ -28,10 +28,39 @@ export interface HighlighterObject {
   thickness: number; // base thickness in logical units; renderer multiplies for marker width
 }
 
-export type SceneObject = ArrowObject | TextObject | HighlighterObject;
+// Post-it style sticky note. Multi-line text with explicit \n breaks plus
+// soft-wrapping by width. Hard-capped to NOTE_MAX_LENGTH characters so a
+// runaway paste cannot fill the canvas.
+export interface NoteObject {
+  id: ObjectId;
+  type: 'note';
+  pos: Vec;          // top-left in logical coordinates
+  text: string;      // \n for explicit line breaks; capped at NOTE_MAX_LENGTH
+  width: number;     // box width in logical units; height auto from wrapped text
+  fontSize: number;
+  color: string;     // text color
+  bgColor: string;   // sticky-note background color
+}
+
+export type SceneObject = ArrowObject | TextObject | HighlighterObject | NoteObject;
 
 export const HIGHLIGHTER_OPACITY = 0.35;
 export const HIGHLIGHTER_WIDTH_MULT = 4;
+
+// Note (sticky) constants — kept here so renderer, store, and input agree.
+export const NOTE_MAX_LENGTH = 255;
+export const NOTE_DEFAULT_BG = '#FFF59D';   // post-it yellow
+export const NOTE_DEFAULT_FONT_SIZE = 16;
+export const NOTE_DEFAULT_WIDTH = 200;
+export const NOTE_MIN_WIDTH = 80;
+export const NOTE_MAX_WIDTH = 1200;
+export const NOTE_PADDING = 10;             // inner padding in logical units
+export const NOTE_LINE_HEIGHT_FACTOR = 1.3;
+
+export function clampNoteText(text: unknown): string {
+  const s = typeof text === 'string' ? text : '';
+  return s.length > NOTE_MAX_LENGTH ? s.slice(0, NOTE_MAX_LENGTH) : s;
+}
 
 export interface SceneData {
   id: string;
@@ -67,6 +96,8 @@ export function normalizeSceneFontSizes(scene: SceneData): void {
     for (const obj of scene.objects) {
       if (obj && obj.type === 'text') {
         obj.fontSize = floorFontSize(obj.fontSize, DEFAULT_CENTER_FONT_SIZE);
+      } else if (obj && obj.type === 'note') {
+        obj.fontSize = floorFontSize(obj.fontSize, NOTE_DEFAULT_FONT_SIZE);
       }
     }
   }

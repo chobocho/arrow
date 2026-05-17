@@ -121,6 +121,16 @@ export class App {
           }
         });
       },
+      onDoubleClickNote: (obj) => {
+        void customPrompt(t('promptNote'), obj.text, '', { multiline: true, maxLength: 255 }).then((txt) => {
+          if (txt !== null) {
+            this.pushHistory();
+            this.store.update(obj.id, (o) => {
+              if (o.type === 'note') o.text = txt.length > 255 ? txt.slice(0, 255) : txt;
+            });
+          }
+        });
+      },
       onDraftChange: (draft) => { this.draftArrow = draft; },
       onDraftHighlighter: (draft) => { this.draftHighlighter = draft; },
       getModifierClone: () => this.modifierClone,

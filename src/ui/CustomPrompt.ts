@@ -81,7 +81,21 @@ function injectStyles(): void {
   document.head.appendChild(style);
 }
 
-export function customPrompt(message: string, defaultValue: string = '', placeholder: string = ''): Promise<string | null> {
+export interface PromptOptions {
+  // Use a <textarea> instead of a single-line <input>. Enter inserts a newline;
+  // submit happens via Ctrl/⌘+Enter or the OK button.
+  multiline?: boolean;
+  // Hard cap on text length. Live character counter is shown beneath the field
+  // when set. Pasting past the cap is truncated.
+  maxLength?: number;
+}
+
+export function customPrompt(
+  message: string,
+  defaultValue: string = '',
+  placeholder: string = '',
+  options: PromptOptions = {},
+): Promise<string | null> {
   injectStyles();
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
@@ -91,11 +105,37 @@ export function customPrompt(message: string, defaultValue: string = '', placeho
     const title = document.createElement('div');
     title.className = 'ap-title';
     title.textContent = message;
-    const input = document.createElement('input');
-    input.type = 'text';
+    const multiline = !!options.multiline;
+    const input: HTMLInputElement | HTMLTextAreaElement = multiline
+      ? document.createElement('textarea')
+      : document.createElement('input');
+    if (!multiline) (input as HTMLInputElement).type = 'text';
     input.className = 'ap-input';
     input.value = defaultValue ?? '';
     if (placeholder) input.placeholder = placeholder;
+    if (multiline) {
+      (input as HTMLTextAreaElement).rows = 5;
+      (input as HTMLTextAreaElement).style.resize = 'vertical';
+      (input as HTMLTextAreaElement).style.minHeight = '96px';
+    }
+    if (options.maxLength && options.maxLength > 0) {
+      input.maxLength = options.maxLength;
+    }
+    let counter: HTMLDivElement | null = null;
+    if (options.maxLength && options.maxLength > 0) {
+      counter = document.createElement('div');
+      counter.className = 'ap-counter';
+      counter.style.fontSize = '11px';
+      counter.style.color = '#888';
+      counter.style.textAlign = 'right';
+      counter.style.marginTop = '4px';
+      const updateCounter = (): void => {
+        if (!counter) return;
+        counter.textContent = input.value.length + ' / ' + options.maxLength;
+      };
+      input.addEventListener('input', updateCounter);
+      updateCounter();
+    }
     const actions = document.createElement('div');
     actions.className = 'ap-actions';
     const cancelBtn = document.createElement('button');
@@ -110,6 +150,7 @@ export function customPrompt(message: string, defaultValue: string = '', placeho
     actions.appendChild(okBtn);
     card.appendChild(title);
     card.appendChild(input);
+    if (counter) card.appendChild(counter);
     card.appendChild(actions);
     overlay.appendChild(card);
     document.body.appendChild(overlay);
@@ -127,6 +168,15 @@ export function customPrompt(message: string, defaultValue: string = '', placeho
         // Korean/Japanese IME fires an Enter to commit composition. Ignore that
         // first Enter so users don't accidentally submit while still composing.
         if (ev.isComposing || ev.keyCode === 229) return;
+        if (multiline) {
+          // Plain Enter inserts a newline (default textarea behavior). Submit
+          // only on Ctrl/⌘+Enter so users can type multi-line notes freely.
+          if (!(ev.ctrlKey || ev.metaKey)) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          finish(input.value);
+          return;
+        }
         ev.preventDefault();
         ev.stopPropagation();
         finish(input.value);
@@ -144,7 +194,10 @@ export function customPrompt(message: string, defaultValue: string = '', placeho
     });
 
     // Focus on next frame so the modal is mounted before focus moves.
-    requestAnimationFrame(() => { input.focus(); input.select(); });
+    requestAnimationFrame(() => {
+      input.focus();
+      if (!multiline) (input as HTMLInputElement).select();
+    });
   });
 }
 
