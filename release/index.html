@@ -162,8 +162,13 @@
   }
   @media (max-width: 720px) {
     #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-    header { flex-wrap: wrap; height: auto; padding: 6px; }
+    /* Tight toolbar on mobile — give the canvas more vertical room and let
+       the icon row read as one continuous strip rather than islands. */
+    header { flex-wrap: wrap; height: auto; padding: 4px 4px; gap: 2px; }
+    header .group { gap: 0; }
+    header .title { margin-right: 4px; }
     button.tool { font-size: 12px; padding: 5px 8px; }
+    button.tool.icon { padding: 5px 6px; min-width: 30px; }
   }
 </style>
 </head>
