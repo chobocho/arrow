@@ -1,6 +1,6 @@
 import { Vec, clampToCanvas, vecDist } from '../utils/geometry.js';
 import { CanvasView } from '../canvas/CanvasView.js';
-import { SceneStore, HitHandle, HitResult, estimateNoteBox } from '../models/SceneStore.js';
+import { SceneStore, HitHandle, HitResult, measureNoteBox } from '../models/SceneStore.js';
 import {
   ArrowObject,
   HighlighterObject,
@@ -118,16 +118,24 @@ export class InputHandler {
     return 12 / this.view.scale;
   }
 
+  // Cached 2D context for measureText-based note hit testing. measureNoteBox
+  // needs a live context to compute the actual wrapped height (the avg-char-
+  // width heuristic mislocates the resize corner for CJK / mixed text).
+  private measureCtx(): CanvasRenderingContext2D | null {
+    return this.canvas.getContext('2d');
+  }
+
   // Screen-space hit test that ONLY considers pinned notes. Called before the
   // logical store.hitTest so pinned-note clicks short-circuit the canvas-
   // coordinate path. 12 px tolerance matches the visible handle radius.
   private hitPinnedNote(screen: Vec): HitResult | null {
     const tol = 12;
     const objs = this.store.get().objects;
+    const ctx = this.measureCtx();
     for (let i = objs.length - 1; i >= 0; i--) {
       const o = objs[i];
       if (o.type !== 'note' || !o.pinned) continue;
-      const box = estimateNoteBox(o);
+      const box = measureNoteBox(o, ctx);
       if (
         Math.abs(screen.x - (o.pos.x + box.w)) <= tol &&
         Math.abs(screen.y - (o.pos.y + box.h)) <= tol
@@ -178,7 +186,7 @@ export class InputHandler {
         return;
       }
       const tol = this.toleranceLogical();
-      const hit = this.store.hitTest(logical, tol);
+      const hit = this.store.hitTest(logical, tol, this.measureCtx());
       this.selectedId = hit.object ? hit.object.id : null;
       this.cb.onSelect(this.selectedId);
       this.dragging = { kind: 'none', startLogical: logical, startScreen: screen, lastScreen: screen };
@@ -358,7 +366,7 @@ export class InputHandler {
     }
 
     const tol = this.toleranceLogical();
-    const hit = this.store.hitTest(logical, tol);
+    const hit = this.store.hitTest(logical, tol, this.measureCtx());
 
     if (hit.object) {
       this.selectedId = hit.object.id;
@@ -669,7 +677,7 @@ export class InputHandler {
       }
     }
     const tol = this.toleranceLogical();
-    const hit = this.store.hitTest(logical, tol);
+    const hit = this.store.hitTest(logical, tol, this.measureCtx());
     if (hit.object && hit.object.type === 'text') {
       this.cb.onDoubleClickText(hit.object);
       return;

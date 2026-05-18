@@ -613,6 +613,35 @@
     var hit = s.hitTest({ x: 2000, y: 2000 }, 5);
     assert(hit.handle === 'none', 'no hit far away');
   });
+  test('measureNoteBox(ctx) measures CJK text taller than the ASCII heuristic', function () {
+    if (!A.measureNoteBox) return;
+    var n = { id: 'n', type: 'note', pos: { x: 0, y: 0 }, width: 200, fontSize: 16,
+              text: '안녕하세요 이것은 한글 메모입니다', color: '#000', bgColor: '#fff' };
+    var heuristic = A.measureNoteBox(n, null);
+    // Stub ctx whose measureText returns ~16px per CJK char (real Canvas behavior).
+    var fakeCtx = {
+      save: function () {}, restore: function () {}, font: '',
+      measureText: function (s) { return { width: s.length * 14 }; },
+    };
+    var measured = A.measureNoteBox(n, fakeCtx);
+    assert(measured.h > heuristic.h,
+      'measured h (' + measured.h + ') should exceed heuristic h (' + heuristic.h + ')');
+  });
+  test('SceneStore hitTest with ctx hits the actual rendered note-resize corner', function () {
+    // Regression: heuristic estimateNoteBox places the corner too high for CJK,
+    // so clicking the visible bottom-right handle missed entirely. With a ctx,
+    // hit-test must agree with what the renderer paints.
+    var s = new A.SceneStore();
+    var n = s.addNote({ x: 100, y: 100 }, '안녕하세요 이것은 한글 메모입니다');
+    var fakeCtx = {
+      save: function () {}, restore: function () {}, font: '',
+      measureText: function (s) { return { width: s.length * 14 }; },
+    };
+    var box = A.measureNoteBox(n, fakeCtx);
+    var hit = s.hitTest({ x: 100 + box.w, y: 100 + box.h }, 12, fakeCtx);
+    assert(hit.object && hit.object.id === n.id, 'finds note at rendered corner');
+    assert(hit.handle === 'note-resize', 'hits resize handle, got ' + hit.handle);
+  });
   test('pickReadableTextColor returns dark on light bg and vice versa', function () {
     if (!A.pickReadableTextColor) return;
     // The default sticky-yellow is light enough to demand dark text.

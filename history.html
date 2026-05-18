@@ -56,6 +56,13 @@ nav.toc a { text-decoration: none; }
 <body>
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
+<h2 id="2026-05-18c">2026-05-18 — PC에서 메모 크기 조절 안 되던 문제 수정</h2>
+<h3 id="note-resize-cjk">우하단 핸들이 보이지만 클릭 시 리사이즈가 시작되지 않던 버그</h3>
+<ul>
+  <li><strong>원인:</strong> 히트 테스트가 사용하던 <code>estimateNoteBox</code>는 글자 폭을 <code>fontSize × 0.55</code> 로 가정하는 휴리스틱이라, 한글(CJK ~1.0배) 텍스트에서는 줄 수를 절반 정도로 과소 추정했음. 렌더러는 <code>ctx.measureText</code> 로 실제 폭을 측정해 박스를 그리기 때문에, 화면에 보이는 우하단 핸들 좌표가 추정 좌표보다 한 줄 이상 아래로 내려가 클릭이 허용 오차(12px) 밖으로 빠져나갔음.</li>
+  <li><strong>수정:</strong> 캔버스 2D 컨텍스트를 인자로 받아 렌더러와 동일한 줄바꿈 알고리즘으로 박스 높이를 계산하는 <code>measureNoteBox(note, ctx)</code> 추가. <code>SceneStore.hitTest</code> 와 <code>InputHandler.hitPinnedNote</code> 가 캔버스 ctx 를 넘기도록 변경. ctx 가 없는 환경(노드 테스트, PNG 바운드 계산)에서는 기존 휴리스틱으로 폴백.</li>
+  <li><strong>회귀 테스트:</strong> CJK 텍스트에서 ctx 측정값이 휴리스틱보다 크게 나오는지, 그리고 실제 렌더된 우하단 좌표에서 hitTest 가 <code>note-resize</code> 를 반환하는지 검증하는 테스트 2건 추가 (총 82/82 통과).</li>
+</ul>
 <h2 id="2026-05-18b">2026-05-18 — 메모/텍스트 입력 중 전역 단축키 누수 수정</h2>
 <h3 id="textarea-key-leak">멀티라인 프롬프트에서 Backspace·Enter가 전역 핸들러로 흘러 들어가던 문제</h3>
 <ul>

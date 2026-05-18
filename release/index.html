@@ -533,16 +533,20 @@
     // and which handle was hit, if any. Pinned notes live in screen space and
     // are skipped here — the InputHandler tests them separately against the raw
     // screen point before falling back to this logical pass.
-    hitTest(point, tolerance) {
+    //
+    // The optional `ctx` enables measureText-based note box sizing so the
+    // resize-corner hit area lines up with what the renderer actually paints
+    // (CJK/wide chars vs the avg-char-width heuristic in estimateNoteBox).
+    hitTest(point, tolerance, ctx) {
       for (let i = this.scene.objects.length - 1; i >= 0; i--) {
         const obj = this.scene.objects[i];
         if (obj.type === "note" && obj.pinned) continue;
-        const hit = this.hitObject(obj, point, tolerance);
+        const hit = this.hitObject(obj, point, tolerance, ctx);
         if (hit.handle !== "none") return { object: obj, handle: hit.handle };
       }
       return { object: null, handle: "none" };
     }
-    hitObject(obj, point, tolerance) {
+    hitObject(obj, point, tolerance, ctx) {
       if (obj.type === "arrow") {
         if (vecDist(point, obj.from) <= tolerance) return { handle: "arrow-from" };
         if (vecDist(point, obj.to) <= tolerance) return { handle: "arrow-to" };
@@ -551,7 +555,7 @@
         const d = pointToSegmentDistance(point, obj.from, obj.to);
         if (d <= Math.max(tolerance, obj.thickness)) return { handle: "arrow-body" };
       } else if (obj.type === "note") {
-        const { w, h } = estimateNoteBox(obj);
+        const { w, h } = measureNoteBox(obj, ctx);
         const cornerHit = Math.abs(point.x - (obj.pos.x + w)) <= tolerance && Math.abs(point.y - (obj.pos.y + h)) <= tolerance;
         if (cornerHit) return { handle: "note-resize" };
         const inside = point.x >= obj.pos.x - 2 && point.x <= obj.pos.x + w + 2 && point.y >= obj.pos.y - 2 && point.y <= obj.pos.y + h + 2;
@@ -578,20 +582,48 @@
       return { handle: "none" };
     }
   };
-  function estimateNoteBox(note) {
+  function measureNoteBox(note, ctx) {
     const padding = NOTE_PADDING;
     const lineHeight = note.fontSize * NOTE_LINE_HEIGHT_FACTOR;
     const innerW = Math.max(1, note.width - padding * 2);
-    const avgCharW = Math.max(1, note.fontSize * 0.55);
-    const charsPerLine = Math.max(1, Math.floor(innerW / avgCharW));
     const segments = (note.text || "").split("\n");
     let lines = 0;
-    for (const s of segments) {
-      lines += Math.max(1, Math.ceil(s.length / charsPerLine));
+    if (ctx) {
+      ctx.save();
+      ctx.font = `${note.fontSize}px sans-serif`;
+      for (const seg of segments) {
+        if (seg.length === 0) {
+          lines += 1;
+          continue;
+        }
+        let current = "";
+        let segLines = 0;
+        for (const ch of seg) {
+          const test = current + ch;
+          if (ctx.measureText(test).width > innerW && current.length > 0) {
+            segLines += 1;
+            current = ch;
+          } else {
+            current = test;
+          }
+        }
+        if (current.length > 0) segLines += 1;
+        lines += Math.max(1, segLines);
+      }
+      ctx.restore();
+    } else {
+      const avgCharW = Math.max(1, note.fontSize * 0.55);
+      const charsPerLine = Math.max(1, Math.floor(innerW / avgCharW));
+      for (const s of segments) {
+        lines += Math.max(1, Math.ceil(s.length / charsPerLine));
+      }
     }
     if (lines === 0) lines = 1;
     const h = lines * lineHeight + padding * 2;
     return { w: note.width, h, lines };
+  }
+  function estimateNoteBox(note) {
+    return measureNoteBox(note, null);
   }
 
   // src/canvas/Renderer.ts
@@ -1506,7 +1538,7 @@
             return;
           }
           const tol = this.toleranceLogical();
-          const hit = this.store.hitTest(logical, tol);
+          const hit = this.store.hitTest(logical, tol, this.measureCtx());
           this.selectedId = hit.object ? hit.object.id : null;
           this.cb.onSelect(this.selectedId);
           this.dragging = { kind: "none", startLogical: logical, startScreen: screen, lastScreen: screen };
@@ -1638,16 +1670,23 @@
     toleranceLogical() {
       return 12 / this.view.scale;
     }
+    // Cached 2D context for measureText-based note hit testing. measureNoteBox
+    // needs a live context to compute the actual wrapped height (the avg-char-
+    // width heuristic mislocates the resize corner for CJK / mixed text).
+    measureCtx() {
+      return this.canvas.getContext("2d");
+    }
     // Screen-space hit test that ONLY considers pinned notes. Called before the
     // logical store.hitTest so pinned-note clicks short-circuit the canvas-
     // coordinate path. 12 px tolerance matches the visible handle radius.
     hitPinnedNote(screen) {
       const tol = 12;
       const objs = this.store.get().objects;
+      const ctx = this.measureCtx();
       for (let i = objs.length - 1; i >= 0; i--) {
         const o = objs[i];
         if (o.type !== "note" || !o.pinned) continue;
-        const box = estimateNoteBox(o);
+        const box = measureNoteBox(o, ctx);
         if (Math.abs(screen.x - (o.pos.x + box.w)) <= tol && Math.abs(screen.y - (o.pos.y + box.h)) <= tol) {
           return { object: o, handle: "note-resize" };
         }
@@ -1726,7 +1765,7 @@
         return;
       }
       const tol = this.toleranceLogical();
-      const hit = this.store.hitTest(logical, tol);
+      const hit = this.store.hitTest(logical, tol, this.measureCtx());
       if (hit.object) {
         this.selectedId = hit.object.id;
         this.cb.onSelect(this.selectedId);
@@ -1993,7 +2032,7 @@
         }
       }
       const tol = this.toleranceLogical();
-      const hit = this.store.hitTest(logical, tol);
+      const hit = this.store.hitTest(logical, tol, this.measureCtx());
       if (hit.object && hit.object.type === "text") {
         this.cb.onDoubleClickText(hit.object);
         return;
@@ -3848,6 +3887,7 @@
     migrateSceneWorld,
     clampNoteText,
     estimateNoteBox,
+    measureNoteBox,
     pickReadableTextColor,
     NOTE_MAX_LENGTH,
     NOTE_DEFAULT_BG,

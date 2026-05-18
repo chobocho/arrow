@@ -169,17 +169,21 @@ export class SceneStore {
   // and which handle was hit, if any. Pinned notes live in screen space and
   // are skipped here — the InputHandler tests them separately against the raw
   // screen point before falling back to this logical pass.
-  hitTest(point: Vec, tolerance: number): HitResult {
+  //
+  // The optional `ctx` enables measureText-based note box sizing so the
+  // resize-corner hit area lines up with what the renderer actually paints
+  // (CJK/wide chars vs the avg-char-width heuristic in estimateNoteBox).
+  hitTest(point: Vec, tolerance: number, ctx?: CanvasRenderingContext2D | null): HitResult {
     for (let i = this.scene.objects.length - 1; i >= 0; i--) {
       const obj = this.scene.objects[i];
       if (obj.type === 'note' && obj.pinned) continue;
-      const hit = this.hitObject(obj, point, tolerance);
+      const hit = this.hitObject(obj, point, tolerance, ctx);
       if (hit.handle !== 'none') return { object: obj, handle: hit.handle };
     }
     return { object: null, handle: 'none' };
   }
 
-  private hitObject(obj: SceneObject, point: Vec, tolerance: number): { handle: HitHandle } {
+  private hitObject(obj: SceneObject, point: Vec, tolerance: number, ctx?: CanvasRenderingContext2D | null): { handle: HitHandle } {
     if (obj.type === 'arrow') {
       if (vecDist(point, obj.from) <= tolerance) return { handle: 'arrow-from' };
       if (vecDist(point, obj.to) <= tolerance) return { handle: 'arrow-to' };
@@ -188,7 +192,7 @@ export class SceneStore {
       const d = pointToSegmentDistance(point, obj.from, obj.to);
       if (d <= Math.max(tolerance, obj.thickness)) return { handle: 'arrow-body' };
     } else if (obj.type === 'note') {
-      const { w, h } = estimateNoteBox(obj);
+      const { w, h } = measureNoteBox(obj, ctx);
       const cornerHit =
         Math.abs(point.x - (obj.pos.x + w)) <= tolerance &&
         Math.abs(point.y - (obj.pos.y + h)) <= tolerance;
@@ -241,24 +245,58 @@ export type HitHandle =
   | 'note-resize'
   | 'highlighter-body';
 
-// Cheap, ctx-free estimate of a note's bounding box. Splits on explicit \n,
-// then soft-wraps each segment by an average char-width heuristic. The
-// renderer uses its own ctx.measureText pass for pixel-accurate wrapping, but
-// hit-testing and fit-to-screen run without a 2D context.
-export function estimateNoteBox(note: NoteObject): { w: number; h: number; lines: number } {
+// Pixel-accurate note box when a 2D context is available, falling back to a
+// cheap avg-char-width heuristic when one isn't. Both branches share the same
+// wrap algorithm as Renderer.layoutNoteText so hit-tested geometry matches
+// painted geometry — critical for the bottom-right resize handle, which the
+// heuristic would mislocate for CJK / mixed-width text (chars ~1.0×fontSize
+// wide vs the 0.55 assumption).
+export function measureNoteBox(
+  note: NoteObject,
+  ctx?: CanvasRenderingContext2D | null,
+): { w: number; h: number; lines: number } {
   const padding = NOTE_PADDING;
   const lineHeight = note.fontSize * NOTE_LINE_HEIGHT_FACTOR;
   const innerW = Math.max(1, note.width - padding * 2);
-  const avgCharW = Math.max(1, note.fontSize * 0.55);
-  const charsPerLine = Math.max(1, Math.floor(innerW / avgCharW));
   const segments = (note.text || '').split('\n');
   let lines = 0;
-  for (const s of segments) {
-    lines += Math.max(1, Math.ceil(s.length / charsPerLine));
+  if (ctx) {
+    ctx.save();
+    ctx.font = `${note.fontSize}px sans-serif`;
+    for (const seg of segments) {
+      if (seg.length === 0) { lines += 1; continue; }
+      let current = '';
+      let segLines = 0;
+      for (const ch of seg) {
+        const test = current + ch;
+        if (ctx.measureText(test).width > innerW && current.length > 0) {
+          segLines += 1;
+          current = ch;
+        } else {
+          current = test;
+        }
+      }
+      if (current.length > 0) segLines += 1;
+      lines += Math.max(1, segLines);
+    }
+    ctx.restore();
+  } else {
+    const avgCharW = Math.max(1, note.fontSize * 0.55);
+    const charsPerLine = Math.max(1, Math.floor(innerW / avgCharW));
+    for (const s of segments) {
+      lines += Math.max(1, Math.ceil(s.length / charsPerLine));
+    }
   }
   if (lines === 0) lines = 1;
   const h = lines * lineHeight + padding * 2;
   return { w: note.width, h, lines };
+}
+
+// Backwards-compatible heuristic wrapper. Retained because callers without a
+// 2D context (PNG bounds, tests) still need a serializable estimate. Prefer
+// measureNoteBox(note, ctx) at call sites that have a live context.
+export function estimateNoteBox(note: NoteObject): { w: number; h: number; lines: number } {
+  return measureNoteBox(note, null);
 }
 
 export interface HitResult {

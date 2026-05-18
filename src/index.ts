@@ -9,7 +9,7 @@ import { MAX_CANVAS_SIZE, vecDist, pointToSegmentDistance, clampToCanvas } from 
 import { App } from './app.js';
 import { CanvasView } from './canvas/CanvasView.js';
 import { Renderer } from './canvas/Renderer.js';
-import { SceneStore, estimateNoteBox } from './models/SceneStore.js';
+import { SceneStore, estimateNoteBox, measureNoteBox } from './models/SceneStore.js';
 import { InputHandler } from './input/InputHandler.js';
 import { IndexedDBStore } from './storage/IndexedDBStore.js';
 import { parseArrowFile } from './storage/ArrowFile.js';
@@ -46,6 +46,7 @@ const ArrowApp = {  // eslint-disable-line @typescript-eslint/no-redeclare
   migrateSceneWorld,
   clampNoteText,
   estimateNoteBox,
+  measureNoteBox,
   pickReadableTextColor,
   NOTE_MAX_LENGTH,
   NOTE_DEFAULT_BG,
