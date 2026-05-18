@@ -56,6 +56,23 @@ nav.toc a { text-decoration: none; }
 <body>
 <h1 id="작업-이력">작업 이력 (history.html)</h1>
 <p>본 파일은 한국어로 작업 이력을 기록합니다. 새 작업 항목은 가장 위(첫 <code>&lt;h2&gt;</code> 직전)에 추가합니다. 새 날짜 블록은 <code>&lt;h2&gt;</code>, 작업 단위는 <code>&lt;h3&gt;</code>, 세부는 <code>&lt;ul&gt;&lt;li&gt;</code> 패턴을 유지하세요.</p>
+<h2 id="2026-05-18b">2026-05-18 — 메모/텍스트 입력 중 전역 단축키 누수 수정</h2>
+<h3 id="textarea-key-leak">멀티라인 프롬프트에서 Backspace·Enter가 전역 핸들러로 흘러 들어가던 문제</h3>
+<ul>
+<li>증상: 🗒️ 메모(또는 글자) 입력 중 Backspace를 누르면 캔버스 선택 객체 삭제 확인 팝업, Enter를 누르면 또 다른 글자 입력 프롬프트가 뜸.
+<li>원인: <code>KeyboardActions.onKey</code>가 <code>INPUT</code> 태그만 early-return하고 <code>TEXTAREA</code>(<code>CustomPrompt</code>의 multiline 입력)는 무시. 또 <code>CustomPrompt</code>의 multiline Enter 분기는 <code>stopPropagation</code> 없이 <code>return</code>만 해서 같은 키가 전역까지 도달.
+<li>수정 (<code>src/app/KeyboardActions.ts</code>): early-return 조건을 <code>tag === 'INPUT' || tag === 'TEXTAREA'</code>로 확장. 추가로 <code>document.querySelector('.ap-overlay')</code>가 존재하면(=커스텀 모달이 떠 있으면) 전역 단축키를 모두 무시 — 모달이 자신의 키 처리를 소유.
+<li>검증: <code>tsc</code>·<code>build</code> 통과.
+</li>
+</ul>
+<h2 id="2026-05-18a">2026-05-18 — 단축키 <code>N</code>(메모 모드) 누락 수정</h2>
+<h3 id="key-n-note-mode">키보드 <code>N</code> → 메모 모드 매핑 추가</h3>
+<ul>
+<li>증상: 도움말(<code>helpModes</code>)과 이전 이력에는 <code>N — 메모</code>로 안내돼 있지만, <code>src/app/KeyboardActions.ts</code>의 <code>onKey</code>에서 <code>n</code> 키 분기만 빠져 있어 눌러도 메모 모드로 전환되지 않음.
+<li>수정: <code>a/t/g/v/h</code>와 같은 자리에 <code>else if (e.key === 'n') setMode(app, 'note');</code> 한 줄 추가. <code>Alt+N</code>(새 작업)은 그 위에서 먼저 체크되므로 충돌 없음.
+<li>검증: <code>npx tsc --noEmit</code> 무경고, <code>npm run build</code> 성공.
+</li>
+</ul>
 <h2 id="2026-05-17g">2026-05-17 — 변경 없을 때 저장 스킵</h2>
 <h3 id="save-skips-when-clean">💾/Ctrl+S: <code>app.dirty</code>가 false면 IndexedDB 라운드트립 생략</h3>
 <ul>

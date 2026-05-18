@@ -8,7 +8,16 @@ import { openHelpModal, openWorksModal } from '../ui/Modals.js';
 import { deleteSelected, newScene, save } from './FileActions.js';
 
 export function onKey(app: App, e: KeyboardEvent): void {
-  if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
+  // Don't fire global shortcuts while the user is typing into a form field.
+  // TEXTAREA covers the multiline note/text prompt — without this, Backspace
+  // would trigger deleteSelected and Enter would open another text prompt.
+  if (e.target) {
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  }
+  // Any custom modal (prompt, choice, confirm, works, help) is open: bail.
+  // The modal owns its own keyboard handling.
+  if (document.querySelector('.ap-overlay')) return;
   if (app.worksModalEl) return;
   if (app.helpModalEl) {
     if (e.key === 'F1') e.preventDefault();
@@ -51,6 +60,7 @@ export function onKey(app: App, e: KeyboardEvent): void {
     void newScene(app);
   } else if (e.key === 'a') setMode(app, 'arrow');
   else if (e.key === 't') setMode(app, 'text');
+  else if (e.key === 'n') setMode(app, 'note');
   else if (e.key === 'g') setMode(app, 'highlighter');
   else if (e.key === 'v') setMode(app, 'select');
   else if (e.key === 'h') setMode(app, 'pan');
